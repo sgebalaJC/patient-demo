@@ -1,0 +1,44 @@
+# Firebase App Hosting configuration
+# Secrets are stored in Cloud Secret Manager (safe to commit)
+# Plain env vars are non-sensitive config values
+#
+# TEMPLATE: Replace every YOUR_FIREBASE_PROJECT, REPLACE_*, and
+# REPLACE_WITH_MESSAGING_SENDER_ID placeholder with values from your
+# Firebase project console before deploying.
+
+env:
+  # Firebase config (non-sensitive project identifiers)
+  - variable: VITE_FIREBASE_AUTH_DOMAIN
+    value: YOUR_FIREBASE_PROJECT.firebaseapp.com
+  - variable: VITE_FIREBASE_PROJECT_ID
+    value: YOUR_FIREBASE_PROJECT
+  - variable: VITE_FIREBASE_STORAGE_BUCKET
+    value: YOUR_FIREBASE_PROJECT.firebasestorage.app
+  - variable: VITE_FIREBASE_MESSAGING_SENDER_ID
+    value: "REPLACE_WITH_MESSAGING_SENDER_ID"
+  - variable: VITE_FIREBASE_APP_ID
+    value: "REPLACE_WITH_FIREBASE_APP_ID"
+
+  # App config
+  - variable: VITE_SANDBOX_MODE
+    value: "false"
+  - variable: VITE_APP_ENV
+    value: production
+  - variable: VITE_SIDECAR_PROXY_URL
+    value: https://us-central1-YOUR_FIREBASE_PROJECT.cloudfunctions.net/sidecarProxy
+  - variable: VITE_AGENT_DASHBOARD_URL
+    value: http://YOUR_VPS_IP:18789
+
+  # Secrets (references to Cloud Secret Manager)
+  - variable: VITE_FIREBASE_API_KEY
+    secret: VITE_FIREBASE_API_KEY
+  - variable: VITE_RECAPTCHA_SITE_KEY
+    secret: VITE_RECAPTCHA_SITE_KEY
+  - variable: VITE_GOOGLE_MAPS_API_KEY
+    secret: VITE_GOOGLE_MAPS_API_KEY
+  - variable: VITE_SENTRY_DSN
+    secret: VITE_SENTRY_DSN
+  - variable: VITE_AGENT_GATEWAY_TOKEN
+    secret: VITE_AGENT_GATEWAY_TOKEN
+  - variable: VITE_STRIPE_PUBLIC_KEY
+    secret: VITE_STRIPE_PUBLIC_KEY

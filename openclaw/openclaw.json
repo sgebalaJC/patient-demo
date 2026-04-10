@@ -1,0 +1,162 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.13",
+    "lastTouchedAt": "2026-03-22T18:42:35.097Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-03-19T02:26:26.852Z",
+    "lastRunVersion": "2026.3.13",
+    "lastRunCommand": "onboard",
+    "lastRunMode": "local"
+  },
+  "auth": {
+    "profiles": {
+      "openai-codex:default": {
+        "provider": "openai-codex",
+        "mode": "oauth"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openai-codex/gpt-5.4"
+      },
+      "workspace": "/root/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      }
+    },
+    "list": [
+      {
+        "id": "main"
+      },
+      {
+        "id": "patient-support",
+        "name": "patient-support",
+        "workspace": "/root/.openclaw/agents/patient-support/workspace",
+        "agentDir": "/root/.openclaw/agents/patient-support/agent",
+        "model": "openai-codex/gpt-5.4",
+        "identity": {
+          "name": "{{PATIENT_AGENT_NAME}}",
+          "emoji": "\ud83c\udf3b"
+        }
+      }
+    ]
+  },
+  "tools": {
+    "profile": "coding"
+  },
+  "bindings": [
+    {
+      "type": "route",
+      "agentId": "patient-support",
+      "match": {
+        "channel": "web-chat",
+        "accountId": "patient"
+      }
+    }
+  ],
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "hooks": {
+    "internal": {
+      "enabled": true,
+      "entries": {
+        "boot-md": {
+          "enabled": true
+        },
+        "bootstrap-extra-files": {
+          "enabled": true
+        },
+        "command-logger": {
+          "enabled": true
+        },
+        "session-memory": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "channels": {
+    "whatsapp": {
+      "enabled": true,
+      "dmPolicy": "allowlist",
+      "selfChatMode": true,
+      "allowFrom": [
+        "+19493009720"
+      ],
+      "groupPolicy": "allowlist",
+      "debounceMs": 0,
+      "mediaMaxMb": 50
+    },
+    "web-chat": {
+      "webhookSecret": "fd959b01ce6ddb3ec98a4d1517c649ac0602a8e91deaaccb",
+      "enabled": true
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "fd959b01ce6ddb3ec98a4d1517c649ac0602a8e91deaaccb"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "nodes": {
+      "denyCommands": [
+        "camera.snap",
+        "camera.clip",
+        "screen.record",
+        "contacts.add",
+        "calendar.add",
+        "reminders.add",
+        "sms.send"
+      ]
+    }
+  },
+  "plugins": {
+    "entries": {
+      "whatsapp": {
+        "enabled": true
+      },
+      "web-chat": {
+        "enabled": true
+      }
+    },
+    "installs": {
+      "web-chat": {
+        "source": "path",
+        "sourcePath": "/root/web-chat",
+        "installPath": "/root/.openclaw/extensions/web-chat",
+        "version": "0.1.0",
+        "installedAt": "2026-03-22T18:26:12.027Z"
+      }
+    }
+  },
+  "memory": {
+    "backend": "qmd",
+    "citations": "auto",
+    "qmd": {
+      "includeDefaultMemory": true,
+      "update": {
+        "interval": "5m"
+      },
+      "limits": {
+        "maxResults": 6,
+        "timeoutMs": 4000
+      }
+    }
+  }
+}

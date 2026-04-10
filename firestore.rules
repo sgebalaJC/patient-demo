@@ -1,0 +1,168 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper function to check if user owns the resource
+    function isOwner(ownerId) {
+      return request.auth != null && request.auth.uid == ownerId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId) || isAdmin();
+      allow list, create: if isAdmin();
+    }
+
+    // Message threads — patient owns their threads, admins access all
+    match /message-threads/{threadId} {
+      allow read, list, write: if request.auth != null && (
+        isOwner(resource.data.patientId) || isAdmin()
+      );
+      allow create: if request.auth != null && (
+        isOwner(request.resource.data.patientId) || isAdmin()
+      );
+    }
+
+    // Thread messages — access via parent thread ownership or admin
+    match /thread-messages/{messageId} {
+      function hasThreadAccess() {
+        let thread = get(/databases/$(database)/documents/message-threads/$(resource.data.threadId));
+        return isOwner(thread.data.patientId) || isAdmin();
+      }
+
+      allow read, list, write: if request.auth != null && hasThreadAccess();
+      allow create: if request.auth != null && (
+        isOwner(request.resource.data.senderId) || isAdmin()
+      );
+    }
+
+    // Appointments
+    match /appointments/{appointmentId} {
+      allow read, list: if isAdmin();
+      allow read, write: if isOwner(resource.data.patientId) || isAdmin();
+      allow create: if isOwner(request.resource.data.patientId) || isAdmin();
+    }
+
+    // Specialist requests
+    match /specialist-requests/{requestId} {
+      allow read, write: if isOwner(resource.data.patientId) || isAdmin();
+      allow create: if isOwner(request.resource.data.patientId) || isAdmin();
+    }
+
+    // Prescription refills
+    match /prescription-refills/{refillId} {
+      allow read, update, delete: if isOwner(resource.data.patientId);
+      allow create: if isOwner(request.resource.data.patientId);
+      allow read, write: if isAdmin();
+    }
+
+    // Patient documents
+    match /patient-documents/{documentId} {
+      allow read, write: if isOwner(resource.data.patientId) || isAdmin();
+      allow create: if isOwner(request.resource.data.patientId) || isAdmin();
+    }
+
+    // Patient intake forms
+    match /patient-intake-forms/{formId} {
+      allow read, write: if isOwner(resource.data.patientId) || isAdmin();
+      allow create: if isOwner(request.resource.data.patientId) || isAdmin();
+    }
+
+    // Admin todos
+    match /admin-todos/{todoId} {
+      allow read, write, list, create: if isAdmin();
+    }
+
+    // Notifications — admins full access, patients can only see and update their own
+    match /notifications/{notificationId} {
+      allow read, list, write: if isAdmin();
+      allow create: if request.auth != null && (
+        request.resource.data.recipientRole == 'admin' ||
+        request.resource.data.recipientId == request.auth.uid
+      );
+      allow list: if request.auth != null &&
+        request.auth.uid != null;
+      allow get, update: if request.auth != null &&
+        resource.data.recipientId == request.auth.uid;
+    }
+
+    // Agent workflows — admin only
+    match /agent-workflows/{workflowId} {
+      allow read, list, write, create: if isAdmin();
+    }
+
+    // Workflow runs — admin only
+    match /workflow-runs/{runId} {
+      allow read, list, write, create: if isAdmin();
+    }
+
+    // Agent skills — admin only
+    match /agent-skills/{skillId} {
+      allow read, list, write: if isAdmin();
+    }
+
+    // Agent chat messages — admin only
+    match /agent-chat/{messageId} {
+      allow read, list, create: if isAdmin();
+      allow delete: if false; // cleanup via Cloud Function only
+    }
+
+    // Support chat messages — patients can read/create their own, admins can read all
+    match /support-chat/{messageId} {
+      allow create: if request.auth != null
+        && request.resource.data.patientId == request.auth.uid;
+      allow read: if request.auth != null && (
+        resource.data.patientId == request.auth.uid || isAdmin()
+      );
+      allow list: if request.auth != null && (
+        resource.data.patientId == request.auth.uid || isAdmin()
+      );
+      allow delete: if false;
+    }
+
+    // Phone verifications — server-side only (Cloud Functions)
+    match /phone-verifications/{docId} {
+      allow read, write: if false;
+    }
+
+    // Phone login codes — server-side only (Cloud Functions)
+    match /phone-login-codes/{docId} {
+      allow read, write: if false;
+    }
+
+    // System config — admin can read/write templates, rest server-only
+    match /system/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Rate limits — server-side only (Cloud Functions)
+    match /rate-limits/{docId} {
+      allow read, write: if false;
+    }
+
+    // Subscription plans — admins manage, all signed-in users can read
+    match /subscription-plans/{priceId} {
+      allow read, list: if request.auth != null;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Patient subscriptions — mirror of Stripe state, written only by the
+    // stripeWebhook Cloud Function. Patients read their own, admins read all.
+    match /patient-subscriptions/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create, update, delete: if false; // server-only
+    }
+
+    // Note: dormant patients (no contact info) are stored in the users collection
+    // with isActive: false — no separate collection needed
+  }
+}

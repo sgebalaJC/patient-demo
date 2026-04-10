@@ -1,0 +1,38 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Patient documents — owner can read/write, admins can read
+    match /patients/{patientId}/documents/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == patientId;
+      allow read: if request.auth != null &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Message attachments — only thread participants (patient or admin) can access
+    match /messages/{threadId}/attachments/{allPaths=**} {
+      // Read: must be the thread's patient or an admin
+      allow read: if request.auth != null && (
+        firestore.get(/databases/(default)/documents/message-threads/$(threadId)).data.patientId == request.auth.uid ||
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+      // Create: authenticated, max 25MB, must be thread participant
+      allow create: if request.auth != null
+        && request.resource.size < 25 * 1024 * 1024
+        && (
+          firestore.get(/databases/(default)/documents/message-threads/$(threadId)).data.patientId == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        );
+      // Delete: only the uploader (sender) — stored in path or admin
+      allow delete: if request.auth != null && (
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // Deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

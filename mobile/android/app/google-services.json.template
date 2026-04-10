@@ -1,0 +1,20 @@
+{
+  "_comment": "TEMPLATE — run `flutterfire configure` to generate the real google-services.json in this directory. Do NOT commit the generated file if it contains secrets.",
+  "project_info": {
+    "project_number": "REPLACE_WITH_MESSAGING_SENDER_ID",
+    "project_id": "YOUR_FIREBASE_PROJECT",
+    "storage_bucket": "YOUR_FIREBASE_PROJECT.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "REPLACE_WITH_ANDROID_APP_ID",
+        "android_client_info": {
+          "package_name": "com.example.patient"
+        }
+      },
+      "api_key": [{ "current_key": "REPLACE_WITH_ANDROID_API_KEY" }]
+    }
+  ],
+  "configuration_version": "1"
+}

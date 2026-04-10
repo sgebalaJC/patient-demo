@@ -1,0 +1,63 @@
+# Settings for Backend (on Cloud Run).
+# See https://firebase.google.com/docs/app-hosting/configure#cloud-run
+#
+# TEMPLATE: Replace every REPLACE_* placeholder with values from your Firebase
+# project console. For secrets (API keys, DSN), prefer using
+# `availability: [RUNTIME]` with Secret Manager references instead of
+# committing raw values here.
+runConfig:
+  minInstances: 0
+  maxInstances: 100
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  - variable: VITE_FIREBASE_API_KEY
+    value: REPLACE_WITH_FIREBASE_API_KEY
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_AUTH_DOMAIN
+    value: YOUR_FIREBASE_PROJECT.firebaseapp.com
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_PROJECT_ID
+    value: YOUR_FIREBASE_PROJECT
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_STORAGE_BUCKET
+    value: YOUR_FIREBASE_PROJECT.firebasestorage.app
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_MESSAGING_SENDER_ID
+    value: "REPLACE_WITH_MESSAGING_SENDER_ID"
+    availability:
+      - BUILD
+  - variable: VITE_FIREBASE_APP_ID
+    value: REPLACE_WITH_FIREBASE_APP_ID
+    availability:
+      - BUILD
+  - variable: VITE_RECAPTCHA_SITE_KEY
+    value: REPLACE_WITH_RECAPTCHA_V3_SITE_KEY
+    availability:
+      - BUILD
+  - variable: VITE_GOOGLE_MAPS_API_KEY
+    value: REPLACE_WITH_GOOGLE_MAPS_API_KEY
+    availability:
+      - BUILD
+  - variable: VITE_SENTRY_DSN
+    value: ""
+    availability:
+      - BUILD
+  - variable: VITE_SANDBOX_MODE
+    value: "true"
+    availability:
+      - BUILD
+  - variable: VITE_SIDECAR_PROXY_URL
+    value: https://us-central1-YOUR_FIREBASE_PROJECT.cloudfunctions.net/sidecarProxy
+    availability:
+      - BUILD
+  - variable: VITE_STRIPE_PUBLIC_KEY
+    value: REPLACE_WITH_STRIPE_PUBLISHABLE_KEY
+    availability:
+      - BUILD

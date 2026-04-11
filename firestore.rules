@@ -150,6 +150,31 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Bootstrap-first-admin request channel.
+    //
+    // Unauthenticated clients write a request doc on fresh installs; the
+    // `onBootstrapRequestCreated` Firestore trigger (running as the function's
+    // service account) processes it and writes the custom token back.
+    //
+    // Security model:
+    //  - `create` is allowed only when `system/settings.bootstrapped` is false
+    //    or missing. Once the flag flips, no new requests are accepted.
+    //  - `get` is allowed on any doc (to read the token after the trigger
+    //    completes) but `list` is denied — the doc ID is a client-generated
+    //    UUID with 128 bits of entropy, so an attacker can't enumerate to
+    //    steal tokens.
+    //  - `update` is denied from clients. Only the trigger (via Admin SDK,
+    //    which bypasses rules) can update status/token.
+    //  - `delete` is allowed so the client can clean up its own request
+    //    after successful sign-in.
+    match /bootstrap-requests/{requestId} {
+      allow create: if
+        !exists(/databases/$(database)/documents/system/settings) ||
+        get(/databases/$(database)/documents/system/settings).data.bootstrapped != true;
+      allow get, delete: if true;
+      allow list, update: if false;
+    }
+
     // Rate limits — server-side only (Cloud Functions)
     match /rate-limits/{docId} {
       allow read, write: if false;

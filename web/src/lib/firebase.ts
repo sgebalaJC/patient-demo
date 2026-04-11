@@ -122,35 +122,6 @@ export const firebaseService = {
         }
     },
 
-    /**
-     * Bootstrap the first admin on a fresh install. Unauthenticated callable.
-     * Returns a custom token; the caller should immediately
-     * `signInWithCustomToken(auth, token)` to land signed in.
-     */
-    bootstrapFirstAdmin: async (userData: {
-        email: string;
-        firstName: string;
-        lastName: string;
-        phoneNumber?: string;
-    }) => {
-        try {
-            const {httpsCallable} = await import('firebase/functions');
-            const fn = httpsCallable(functions, 'bootstrapFirstAdmin');
-            const result = await fn(userData);
-            return result.data as {
-                success: boolean;
-                uid?: string;
-                token?: string;
-                message?: string;
-                error?: string;
-                code?: string;
-            };
-        } catch (error: any) {
-            logger.error('Error bootstrapping first admin:', error);
-            throw error;
-        }
-    },
-
     updateUserAuth: async (uid: string, userData: {
         email?: string;
         firstName?: string;

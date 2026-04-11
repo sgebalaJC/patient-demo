@@ -18,7 +18,7 @@ import {FUNCTIONS_BRANDING} from "./branding.js";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onCall, onRequest} from "firebase-functions/v2/https";
-import {onDocumentWritten} from "firebase-functions/v2/firestore";
+import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
@@ -747,41 +747,90 @@ export const createUserWithAuth = onCall({
 /**
  * Bootstrap the very first administrator on a fresh install — WordPress-style.
  *
- * Unauthenticated callable. Inside a Firestore transaction:
- *  1. Reads `system/settings`. If `bootstrapped === true`, rejects immediately.
- *  2. Queries `users` for any active admin. If one exists, rejects AND
- *     self-heals by setting `bootstrapped = true`.
- *  3. Otherwise creates the Firebase Auth user (no password), sets the admin
- *     custom claim, writes the `users/{uid}` profile doc, and sets
- *     `system/settings.bootstrapped = true` — all in the same transaction.
+ * Implemented as a Firestore-triggered function (NOT an unauthenticated
+ * callable) so it works under GCP orgs that enforce
+ * `iam.allowedPolicyMemberDomains` — which blocks granting `run.invoker` to
+ * `allUsers` and would otherwise make a public callable unreachable.
  *
- * Returns a Firebase custom token so the caller (the person at the keyboard)
- * gets signed in immediately, without an email round-trip.
+ * Flow:
+ *  1. Unauthenticated client writes a request doc:
+ *     `bootstrap-requests/{uuid} = { email, firstName, lastName, phoneNumber, status: 'pending' }`
+ *     Firestore rules allow this create ONLY when `system/settings.bootstrapped`
+ *     is false or missing.
+ *  2. This trigger fires as the function's service account (no public
+ *     invocation needed — Firestore triggers bypass Cloud Run IAM).
+ *  3. Transactional gate: read `system/settings`, reject if already bootstrapped,
+ *     self-heal if an active admin exists, otherwise reserve the slot.
+ *  4. Create the Firebase Auth user (no password), set admin custom claim,
+ *     write the `users/{uid}` profile doc.
+ *  5. Write the resulting custom token back to the SAME request doc
+ *     (`{ status: 'ready', token, uid }`). The client is listening via
+ *     `onSnapshot` and immediately calls `signInWithCustomToken`.
  *
- * Race-safe: concurrent calls hit the same transaction, only one wins. The
- * `bootstrapped` flag is write-once; once set, this function refuses forever
- * even if all admins are later deleted (prevents takeover of an abandoned
- * install).
+ * Security: the request doc's ID is a client-generated UUID (128 bits of
+ * entropy). Firestore rules allow `get` but deny `list`, so an attacker can't
+ * enumerate pending requests to steal tokens. The token is a one-shot
+ * credential valid for ~1 hour; the request doc should be deleted by the
+ * client after successful sign-in.
+ *
+ * Race-safe: concurrent bootstrap attempts hit the same transaction, only one
+ * wins. The `bootstrapped` flag is write-once; once set, subsequent requests
+ * are rejected with `status: 'error', error: 'ALREADY_BOOTSTRAPPED'`.
  */
-export const bootstrapFirstAdmin = onCall({
-  cors: corsOptions,
-}, async (request) => {
-  try {
-    const email = validateStringField(request.data.email, 'email', { max: FIELD_LIMITS.email.max });
-    const firstName = validateStringField(request.data.firstName, 'firstName', FIELD_LIMITS.firstName);
-    const lastName = validateStringField(request.data.lastName, 'lastName', FIELD_LIMITS.lastName);
-    const phoneNumber = request.data.phoneNumber
-      ? validateStringField(request.data.phoneNumber, 'phoneNumber', { max: FIELD_LIMITS.phoneNumber.max })
-      : '';
+export const onBootstrapRequestCreated = onDocumentCreated({
+  document: 'bootstrap-requests/{requestId}',
+  region: 'us-central1',
+}, async (event) => {
+  const requestId = event.params.requestId;
+  const data = event.data?.data();
+  const requestRef = db.collection('bootstrap-requests').doc(requestId);
 
-    // Basic email shape sanity (full validation happens in Firebase Auth)
+  const writeError = async (code: string, message: string) => {
+    try {
+      await requestRef.update({
+        status: 'error',
+        errorCode: code,
+        error: message,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      logger.error('Failed to write error status to bootstrap request:', err);
+    }
+  };
+
+  if (!data) {
+    logger.warn('Bootstrap request doc has no data', { requestId });
+    return;
+  }
+
+  if (data.status && data.status !== 'pending') {
+    return;
+  }
+
+  try {
+    let email: string;
+    let firstName: string;
+    let lastName: string;
+    let phoneNumber: string;
+    try {
+      email = validateStringField(data.email, 'email', { max: FIELD_LIMITS.email.max });
+      firstName = validateStringField(data.firstName, 'firstName', FIELD_LIMITS.firstName);
+      lastName = validateStringField(data.lastName, 'lastName', FIELD_LIMITS.lastName);
+      phoneNumber = data.phoneNumber
+        ? validateStringField(data.phoneNumber, 'phoneNumber', { max: FIELD_LIMITS.phoneNumber.max })
+        : '';
+    } catch (validationErr: any) {
+      await writeError('VALIDATION_FAILED', validationErr.message || 'Invalid input');
+      return;
+    }
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return { success: false, error: 'Invalid email address', code: 'INVALID_EMAIL' };
+      await writeError('INVALID_EMAIL', 'Invalid email address');
+      return;
     }
 
     const settingsRef = db.collection('system').doc('settings');
 
-    // Phase 1: transactional gate. Check + flip the flag atomically.
     let reservedBootstrap = false;
     try {
       await db.runTransaction(async (tx) => {
@@ -808,27 +857,26 @@ export const bootstrapFirstAdmin = onCall({
       });
     } catch (err: any) {
       if (err.message === 'ALREADY_BOOTSTRAPPED') {
-        return {
-          success: false,
-          error: 'This system has already been set up. Please ask an administrator to invite you.',
-          code: 'ALREADY_BOOTSTRAPPED',
-        };
+        await writeError(
+          'ALREADY_BOOTSTRAPPED',
+          'This system has already been set up. Please ask an administrator to invite you.',
+        );
+        return;
       }
       throw err;
     }
 
-    // Phase 2: create auth user + profile. If anything fails, roll back the flag.
     try {
       try {
         await admin.auth().getUserByEmail(email);
         if (reservedBootstrap) {
           await settingsRef.set({ bootstrapped: false }, { merge: true });
         }
-        return {
-          success: false,
-          error: 'A user with this email already exists. Try signing in instead.',
-          code: 'USER_ALREADY_EXISTS',
-        };
+        await writeError(
+          'USER_ALREADY_EXISTS',
+          'A user with this email already exists. Try signing in instead.',
+        );
+        return;
       } catch (err: any) {
         if (err.code !== 'auth/user-not-found') throw err;
       }
@@ -866,12 +914,12 @@ export const bootstrapFirstAdmin = onCall({
         timestamp: new Date().toISOString(),
       });
 
-      return {
-        success: true,
-        uid: userRecord.uid,
+      await requestRef.update({
+        status: 'ready',
         token,
-        message: 'First administrator created. Signing you in...',
-      };
+        uid: userRecord.uid,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
     } catch (err: any) {
       if (reservedBootstrap) {
         try {
@@ -881,19 +929,11 @@ export const bootstrapFirstAdmin = onCall({
         }
       }
       logger.error('Bootstrap admin creation failed:', err);
-      return {
-        success: false,
-        error: err.message || 'Failed to create administrator',
-        code: err.code || 'BOOTSTRAP_FAILED',
-      };
+      await writeError(err.code || 'BOOTSTRAP_FAILED', err.message || 'Failed to create administrator');
     }
   } catch (error: any) {
-    logger.error('bootstrapFirstAdmin error:', { code: error.code, message: error.message });
-    return {
-      success: false,
-      error: error.message || 'An unexpected error occurred',
-      code: error.code || 'UNEXPECTED_ERROR',
-    };
+    logger.error('onBootstrapRequestCreated unexpected error:', { code: error.code, message: error.message });
+    await writeError('UNEXPECTED_ERROR', error.message || 'An unexpected error occurred');
   }
 });
 

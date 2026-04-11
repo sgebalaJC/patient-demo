@@ -107,8 +107,39 @@ not default.
   (functions). These three must stay in sync — Functions cannot import from
   the web workspace. Never hardcode the practice name in new code — import
   BRANDING and template it.
-- **Auth:** Firebase Auth (email/password, Google OAuth, email link, phone).
-  Roles: `patient`, `admin`, `assistant`.
+- **Auth:** Firebase Auth (email/password, Google OAuth, email link, phone OTP).
+  Roles: `patient`, `admin`, `assistant`. **Passwordless by default** —
+  admin-created users have no password; they sign in via email link, Google
+  OAuth, or phone OTP.
+- **App Settings:** Global knobs in `system/settings` Firestore doc
+  (`registrationEnabled`, `paginationSize`, `bootstrapped`). Publicly readable
+  so unauthenticated `/auth` can check them; admin-only write. Live
+  subscription via `AppSettingsProvider` + `useAppSettings()` hook. UI in
+  `AdminSettingsPage`. `registrationEnabled: false` by default — public
+  self-signup is blocked at every chokepoint (`createUserDocument`,
+  `verifyPhoneLogin`) when off.
+- **Admin invites:** `createUserWithAuth` creates passwordless users;
+  `UserForm` then calls `sendInviteLink()` from the admin's browser to send a
+  Firebase email-link invite. Optional welcome SMS via Twilio. "Resend
+  invite" button on every user row.
+- **Bootstrap first admin:** Fresh-install setup is WordPress-style.
+  `AuthPage` renders `BootstrapAdminForm` when
+  `system/settings.bootstrapped === false`. Client writes
+  `bootstrap-requests/{uuid}`, `onBootstrapRequestCreated` Firestore trigger
+  processes it, writes custom token back, client signs in via
+  `signInWithCustomToken`. **Firestore trigger (not `onCall`)** because
+  GCP orgs with `iam.allowedPolicyMemberDomains` (HIPAA-hardened orgs) block
+  public Cloud Run invocation. Trigger checks for ANY user (not just admins)
+  and auto-heals by flipping `bootstrapped: true` if any user exists.
+  `AuthPage` latches `bootstrapInFlight` to keep the form mounted through
+  the in-flight sign-in (race fix).
+- **Phone normalization:** All writes to `users.phoneNumber` MUST route
+  through a `formatPhoneNumber`/`normalizePhoneNumber` helper. Server:
+  `functions/src/index.ts formatPhoneNumber`. Web: `web/src/lib/phone.ts
+  normalizePhoneNumber`. Mobile: `mobile/lib/utils/phone.dart
+  normalizePhoneNumber`. All three produce identical canonical
+  `+1XXXXXXXXXX` output. Never write raw user input — phone-OTP login
+  queries will silently fail.
 - **Routing:** Protected routes redirect to `/auth`. Admins access `/admin/*`.
   Patients use `/dashboard`, `/messages`, `/refills`, `/billing`, etc.
 - **Data layer:** Firestore operations in `web/src/lib/firestore/` modules.
@@ -195,7 +226,9 @@ not default.
 `prescription-refills`, `patient-documents`, `patient-intake-forms`,
 `admin-todos`, `notifications`, `phone-verifications`, `rate-limits`,
 `agent-chat`, `support-chat`, `agent-skills`, `agent-workflows`,
-`workflow-runs`, `specialist-requests`, `daily-reminders`, `system`,
+`workflow-runs`, `specialist-requests`, `daily-reminders`,
+`system` (`system/settings` is publicly readable),
+`bootstrap-requests` (write-once channel for first-admin setup, UUID doc IDs, `list` denied),
 `subscription-plans`, `patient-subscriptions`
 
 ## Cloud Functions
@@ -204,7 +237,8 @@ not default.
   sends 24h SMS + queues 8AM reminder
 - `morningReminderScheduler` — daily 8AM PT, sends queued same-day reminders
 - `todoReminderScheduler` — every 30 min, sends SMS via Twilio for admin todos
-- `createUserWithAuth` / `updateUserAuth` — callable admin user management
+- `createUserWithAuth` / `updateUserAuth` — callable admin user management (passwordless, phone normalized)
+- `onBootstrapRequestCreated` — Firestore trigger on `bootstrap-requests/{uuid}`, runs the WordPress-style first-admin bootstrap flow as the function's SA (not a public callable — HIPAA-hardened orgs block public Cloud Run invocation via `iam.allowedPolicyMemberDomains`)
 - `sendPhoneVerificationCode` / `verifyPhoneCode` — phone verification via Twilio
 - `deleteAccount` — cascade delete user data (Firestore, Storage, Auth)
 - `logAuditEvent` — HIPAA-safe audit logging
@@ -264,8 +298,35 @@ $SSH "openclaw gateway restart"
 ## Deployment
 
 - **Frontend:** Firebase App Hosting (Cloud Run) — one backend per customer.
-  Update the project id in `apphosting.yaml` and `.firebaserc` before first
-  deploy.
+  Auto-deploys on push to `main` once the GitHub repo is linked to the
+  backend in Firebase Console. The demo fork uses backend `web-patient-demo`
+  on project `patient-demo-project` in `us-central1`. Before first deploy
+  per customer: update the project id in `.firebaserc`, update `apphosting.yaml`
+  with the new project's Firebase config values, and put
+  `VITE_FIREBASE_API_KEY` in Secret Manager (see below) — DO NOT put the key
+  directly in `apphosting.yaml` with `value:` (GitHub's secret scanner flags
+  it, and the key should be a `secret:` reference for consistency with
+  production posture).
+- **Secret Manager for Firebase Web API key:**
+  ```bash
+  echo -n "AIzaSy..." | gcloud secrets create VITE_FIREBASE_API_KEY \
+    --project=<PROJECT_ID> --data-file=-
+  firebase apphosting:secrets:grantaccess VITE_FIREBASE_API_KEY \
+    --project <PROJECT_ID> --backend <BACKEND_ID>
+  ```
+  (Web API keys are public routing identifiers per Google — real security
+  is via Firebase Rules + App Check — but routing through Secret Manager
+  keeps scanners quiet and makes rotation trivial.)
+- **Compute SA needs tokenCreator on itself** for `createCustomToken`
+  (used by phone-OTP sign-in and bootstrap trigger). Run once per project:
+  ```bash
+  gcloud iam service-accounts add-iam-policy-binding \
+    <PROJECT_NUMBER>-compute@developer.gserviceaccount.com \
+    --member=serviceAccount:<PROJECT_NUMBER>-compute@developer.gserviceaccount.com \
+    --role=roles/iam.serviceAccountTokenCreator \
+    --project=<PROJECT_ID>
+  ```
+  Without this, `createCustomToken` throws `Permission 'iam.serviceAccounts.signBlob' denied`.
 - **Functions:** `firebase deploy --only functions`
 - **Sidecar:** `cd sidecar && ./deploy.sh`
 - **OpenClaw update:** `./scripts/openclaw-update.sh [tag]` — creates backup

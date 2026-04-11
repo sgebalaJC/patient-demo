@@ -6,6 +6,7 @@ import { AccessDenied } from '../components/ui/AccessDenied';
 import { AgentChat } from '../components/agent/AgentChat';
 import { AgentSkills } from '../components/agent/AgentSkills';
 import { AgentIntegrations } from '../components/agent/AgentIntegrations';
+import { AgentChannels } from '../components/agent/AgentChannels';
 import { AgentBackups } from '../components/agent/AgentBackups';
 import { AgentHealth } from '../components/agent/AgentHealth';
 import { AdminWorkflowsPage } from './AdminWorkflowsPage';
@@ -19,14 +20,16 @@ import {
   Activity,
   Workflow,
   ExternalLink,
+  Radio,
   Bot,
 } from 'lucide-react';
 
-type Tab = 'chat' | 'skills' | 'integrations' | 'workflows' | 'backups' | 'health';
+type Tab = 'chat' | 'skills' | 'channels' | 'integrations' | 'workflows' | 'backups' | 'health';
 
 const NAV_ITEMS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'chat', label: 'Chat', icon: MessageSquare },
   { key: 'skills', label: 'Skills', icon: Star },
+  { key: 'channels', label: 'Channels', icon: Radio },
   { key: 'integrations', label: 'Integrations', icon: Link2 },
   { key: 'workflows', label: 'Workflows', icon: Workflow },
   { key: 'backups', label: 'Backups', icon: Archive },
@@ -113,6 +116,8 @@ export const AgentPage: React.FC = () => {
         return <AgentChat />;
       case 'skills':
         return <AgentSkills />;
+      case 'channels':
+        return <AgentChannels />;
       case 'integrations':
         return <AgentIntegrations />;
       case 'workflows':

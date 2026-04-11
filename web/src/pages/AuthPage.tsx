@@ -38,6 +38,14 @@ export const AuthPage: React.FC = () => {
   const { settings: appSettings, loading: settingsLoading } = useAppSettings();
   const navigate = useNavigate();
 
+  // Latch that keeps the bootstrap form mounted through the in-flight sign-in
+  // even after `appSettings.bootstrapped` flips to true. This prevents a race
+  // where the trigger commits `bootstrapped: true` BEFORE writing the token
+  // back to the bootstrap-requests doc — without this latch, the form would
+  // unmount as soon as the flag flips, the onSnapshot listener would be
+  // cleaned up, and the token would never be consumed.
+  const [bootstrapInFlight, setBootstrapInFlight] = useState(false);
+
   // Get query parameters for auth actions (both from /auth and /__/auth/action)
   const urlMode = searchParams.get('mode');
   const oobCode = searchParams.get('oobCode');
@@ -255,9 +263,11 @@ export const AuthPage: React.FC = () => {
     );
   }
 
-  // Fresh-install bootstrap: no admin exists yet — show the WordPress-style
-  // first-admin form instead of the regular login.
-  if (!appSettings.bootstrapped) {
+  // Fresh-install bootstrap: no admin exists yet OR bootstrap submission is
+  // mid-flight. Showing the form while `bootstrapInFlight` is true protects
+  // against the trigger→client race where `bootstrapped` flips before the
+  // token lands in the request doc.
+  if (!appSettings.bootstrapped || bootstrapInFlight) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full space-y-8">
@@ -265,7 +275,7 @@ export const AuthPage: React.FC = () => {
             <h1 className="text-4xl font-bold text-secondary-900">{BRANDING.shortName}</h1>
           </div>
           <Card className="p-8">
-            <BootstrapAdminForm />
+            <BootstrapAdminForm onSubmitStart={() => setBootstrapInFlight(true)} />
           </Card>
         </div>
       </div>

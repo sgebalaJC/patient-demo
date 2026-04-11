@@ -22,6 +22,7 @@ import {getStorage, connectStorageEmulator} from 'firebase/storage';
 import {getFunctions, connectFunctionsEmulator} from 'firebase/functions';
 import {UserRole, User as AppUser} from '../types';
 import logger from "./logger";
+import {normalizePhoneNumber} from "./phone";
 import { audit } from "./audit";
 
 // Firebase config from environment variables
@@ -195,7 +196,7 @@ const createUserDocument = async (user: User, additionalData: Partial<AppUser> =
         baseUserData.role = 'patient';
         baseUserData.isActive = isSandbox; // Sandbox: active immediately. Production: needs admin activation.
         baseUserData.createdAt = serverTimestamp();
-        baseUserData.phoneNumber = user.phoneNumber || additionalData.phoneNumber || '';
+        baseUserData.phoneNumber = normalizePhoneNumber(user.phoneNumber || additionalData.phoneNumber || '');
     }
     
     // Add any additional data, filtering out undefined values

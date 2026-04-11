@@ -562,7 +562,7 @@ export const createUserWithAuth = onCall({
     const firstName = validateStringField(request.data.firstName, 'firstName', FIELD_LIMITS.firstName);
     const lastName = validateStringField(request.data.lastName, 'lastName', FIELD_LIMITS.lastName);
     const role = validateStringField(request.data.role, 'role', FIELD_LIMITS.role);
-    const phoneNumber = request.data.phoneNumber
+    const rawPhoneNumber = request.data.phoneNumber
       ? validateStringField(request.data.phoneNumber, 'phoneNumber', { max: FIELD_LIMITS.phoneNumber.max })
       : '';
     const sendWelcomeSms = request.data.sendWelcomeSms === true;
@@ -570,6 +570,10 @@ export const createUserWithAuth = onCall({
     if (!VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
       throw new Error(`Invalid role. Must be one of: ${VALID_ROLES.join(', ')}`);
     }
+
+    // Normalize phone to the canonical +1XXXXXXXXXX format so later phone-OTP
+    // sign-ins can match on users.where('phoneNumber', '==', ...).
+    const phoneNumber = rawPhoneNumber ? formatPhoneNumber(rawPhoneNumber) : '';
 
     // Passwordless: admin-created users have no password set. They sign in via
     // the invite link (Firebase email link) sent from the admin's browser after
@@ -829,6 +833,11 @@ export const onBootstrapRequestCreated = onDocumentCreated({
       return;
     }
 
+    // Normalize phone number to the canonical +1XXXXXXXXXX format so that
+    // later phone-OTP sign-ins can match. formatPhoneNumber handles raw
+    // digits, leading 1, already-formatted, etc.
+    const normalizedPhone = phoneNumber ? formatPhoneNumber(phoneNumber) : '';
+
     const settingsRef = db.collection('system').doc('settings');
 
     let reservedBootstrap = false;
@@ -841,13 +850,13 @@ export const onBootstrapRequestCreated = onDocumentCreated({
           throw new Error('ALREADY_BOOTSTRAPPED');
         }
 
-        const adminQuery = await db.collection('users')
-          .where('role', '==', 'admin')
-          .where('isActive', '==', true)
-          .limit(1)
-          .get();
+        // Self-heal: if ANY user exists (not just admins), mark bootstrapped
+        // and reject. The bootstrap form is only valid for a truly fresh
+        // install — the presence of any leftover user record means the system
+        // has already been used and the bootstrap channel must be closed.
+        const anyUserQuery = await db.collection('users').limit(1).get();
 
-        if (!adminQuery.empty) {
+        if (!anyUserQuery.empty) {
           tx.set(settingsRef, { bootstrapped: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
           throw new Error('ALREADY_BOOTSTRAPPED');
         }
@@ -866,6 +875,13 @@ export const onBootstrapRequestCreated = onDocumentCreated({
       throw err;
     }
 
+    // Phase 2: create auth user + profile. Track everything created so the
+    // rollback path can delete all of it atomically on any failure — we must
+    // not leak orphan auth users or Firestore docs, since their presence would
+    // cause the hardened "no users exist" check in Phase 1 to permanently
+    // lock out future bootstrap attempts on retry.
+    let createdAuthUid: string | null = null;
+    let createdFirestoreDoc = false;
     try {
       try {
         await admin.auth().getUserByEmail(email);
@@ -886,6 +902,7 @@ export const onBootstrapRequestCreated = onDocumentCreated({
         displayName: `${firstName} ${lastName}`,
         emailVerified: true,
       });
+      createdAuthUid = userRecord.uid;
 
       await admin.auth().setCustomUserClaims(userRecord.uid, { role: 'admin' });
 
@@ -895,13 +912,14 @@ export const onBootstrapRequestCreated = onDocumentCreated({
         lastName,
         displayName: `${firstName} ${lastName}`,
         role: 'admin',
-        phoneNumber: phoneNumber || '',
+        phoneNumber: normalizedPhone,
         isActive: true,
         emailVerified: true,
         authUid: userRecord.uid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      createdFirestoreDoc = true;
 
       const token = await admin.auth().createCustomToken(userRecord.uid, { role: 'admin' });
 
@@ -921,6 +939,24 @@ export const onBootstrapRequestCreated = onDocumentCreated({
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } catch (err: any) {
+      // Atomic rollback: delete everything we created so the system returns
+      // to true fresh-install state and the user can retry cleanly. Order
+      // matters — delete Firestore doc before auth user so the `users` query
+      // in Phase 1 doesn't see an orphan on retry.
+      if (createdFirestoreDoc && createdAuthUid) {
+        try {
+          await db.collection('users').doc(createdAuthUid).delete();
+        } catch (rbErr) {
+          logger.error('Failed to rollback Firestore user doc:', rbErr);
+        }
+      }
+      if (createdAuthUid) {
+        try {
+          await admin.auth().deleteUser(createdAuthUid);
+        } catch (rbErr) {
+          logger.error('Failed to rollback auth user:', rbErr);
+        }
+      }
       if (reservedBootstrap) {
         try {
           await settingsRef.set({ bootstrapped: false }, { merge: true });

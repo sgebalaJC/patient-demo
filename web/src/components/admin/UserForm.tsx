@@ -12,6 +12,7 @@ import {Users, User as UserIcon, Mail, Shield, CheckCircle2, Phone, Calendar, Se
 import { FIELD_LIMITS } from '../../lib/validation';
 import { Modal } from '../ui/Modal';
 import { sendInviteLink } from '../../lib/firebase';
+import { normalizePhoneNumber } from '../../lib/phone';
 
 const userSchema = z.object({
     email: z.string().max(FIELD_LIMITS.email.max, 'Email is too long').email('Please enter a valid email'),
@@ -117,6 +118,10 @@ export const UserForm: React.FC<UserFormProps> = ({
         setLoading(true);
         setError('');
 
+        // Normalize phone to +1XXXXXXXXXX before any write path so server-side
+        // queries (phone OTP login, etc.) can match on exact string equality.
+        const normalizedPhone = normalizePhoneNumber(data.phoneNumber);
+
         try {
             if (editingUser) {
                 // Update existing user
@@ -124,7 +129,7 @@ export const UserForm: React.FC<UserFormProps> = ({
                     email: data.email,
                     firstName: data.firstName,
                     lastName: data.lastName,
-                    phoneNumber: data.phoneNumber,
+                    phoneNumber: normalizedPhone,
                     role: data.role,
                     isActive: data.isActive,
                 };
@@ -179,7 +184,7 @@ export const UserForm: React.FC<UserFormProps> = ({
                     firstName: data.firstName,
                     lastName: data.lastName,
                     role: data.role,
-                    phoneNumber: data.phoneNumber,
+                    phoneNumber: normalizedPhone,
                     sendWelcomeSms,
                 }) as {
                     success: boolean;

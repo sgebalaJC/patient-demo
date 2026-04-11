@@ -9,6 +9,7 @@ import '../widgets/phone_verification_sheet.dart';
 import '../widgets/page_header.dart';
 import '../widgets/theme_selector.dart';
 import '../widgets/subscription_status_card.dart';
+import '../utils/phone.dart';
 import 'intake/intake_forms_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -92,9 +93,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       };
 
       // Only include phone if NOT being updated via verification
-      // (verification Cloud Function handles the phone update + calendar sync)
+      // (verification Cloud Function handles the phone update + calendar sync).
+      // Normalize to canonical +1XXXXXXXXXX so phone-OTP lookups can match.
       if (!phoneVerifiedByCloudFunction) {
-        updates['phoneNumber'] = _phoneController.text.trim();
+        updates['phoneNumber'] = normalizePhoneNumber(_phoneController.text);
       }
 
       await FirebaseFirestore.instance

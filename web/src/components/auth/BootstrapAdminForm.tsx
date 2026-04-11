@@ -55,7 +55,18 @@ const makeRequestId = () => {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
 };
 
-export const BootstrapAdminForm: React.FC = () => {
+interface BootstrapAdminFormProps {
+  /**
+   * Called the moment the user clicks submit, BEFORE any async work begins.
+   * The parent uses this to latch a "bootstrap in flight" flag that keeps
+   * this form mounted even after `system/settings.bootstrapped` flips to
+   * true — without which the form would unmount mid-flow and the onSnapshot
+   * listener would miss the token the trigger writes back.
+   */
+  onSubmitStart?: () => void;
+}
+
+export const BootstrapAdminForm: React.FC<BootstrapAdminFormProps> = ({ onSubmitStart }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
@@ -83,6 +94,7 @@ export const BootstrapAdminForm: React.FC = () => {
   });
 
   const onSubmit = async (data: BootstrapFormData) => {
+    onSubmitStart?.();
     setLoading(true);
     setError('');
     cleanup();

@@ -1,63 +1,44 @@
-# Settings for Backend (on Cloud Run).
-# See https://firebase.google.com/docs/app-hosting/configure#cloud-run
+# Firebase App Hosting configuration for the demo project.
 #
-# TEMPLATE: Replace every REPLACE_* placeholder with values from your Firebase
-# project console. For secrets (API keys, DSN), prefer using
-# `availability: [RUNTIME]` with Secret Manager references instead of
-# committing raw values here.
-runConfig:
-  minInstances: 0
-  maxInstances: 100
-  concurrency: 80
-  cpu: 1
-  memoryMiB: 512
+# Firebase API keys and project identifiers are NOT secrets — they're public
+# routing identifiers. Real security lives in Firebase Security Rules and
+# App Check. Values here are safe to commit.
+#
+# For customer forks: copy this file, replace values with your customer's
+# Firebase project config, and move any sensitive keys (Stripe live keys,
+# third-party API tokens) to Secret Manager via `secret: NAME` instead of
+# `value:`. Omit any variables you don't use — App Hosting rejects empty
+# string values, so there's no "unset" sentinel.
 
 env:
+  # Firebase config
+  #
+  # VITE_FIREBASE_API_KEY is NOT actually secret (Firebase Web API keys are
+  # public routing identifiers — real security is via Firebase Rules + App
+  # Check). But we route it through Secret Manager anyway to:
+  #   1. avoid GitHub's secret scanner false positive
+  #   2. keep the same posture as showmd-patient production
+  #   3. make it easier to rotate without committing a new value
+  #
+  # To set the secret value: `echo -n "AIzaSy..." | gcloud secrets create \
+  #   VITE_FIREBASE_API_KEY --project=<project> --data-file=-`
   - variable: VITE_FIREBASE_API_KEY
-    value: REPLACE_WITH_FIREBASE_API_KEY
-    availability:
-      - BUILD
+    secret: VITE_FIREBASE_API_KEY
   - variable: VITE_FIREBASE_AUTH_DOMAIN
-    value: YOUR_FIREBASE_PROJECT.firebaseapp.com
-    availability:
-      - BUILD
+    value: patient-demo-project.firebaseapp.com
   - variable: VITE_FIREBASE_PROJECT_ID
-    value: YOUR_FIREBASE_PROJECT
-    availability:
-      - BUILD
+    value: patient-demo-project
   - variable: VITE_FIREBASE_STORAGE_BUCKET
-    value: YOUR_FIREBASE_PROJECT.firebasestorage.app
-    availability:
-      - BUILD
+    value: patient-demo-project.firebasestorage.app
   - variable: VITE_FIREBASE_MESSAGING_SENDER_ID
-    value: "REPLACE_WITH_MESSAGING_SENDER_ID"
-    availability:
-      - BUILD
+    value: "29134217143"
   - variable: VITE_FIREBASE_APP_ID
-    value: REPLACE_WITH_FIREBASE_APP_ID
-    availability:
-      - BUILD
-  - variable: VITE_RECAPTCHA_SITE_KEY
-    value: REPLACE_WITH_RECAPTCHA_V3_SITE_KEY
-    availability:
-      - BUILD
-  - variable: VITE_GOOGLE_MAPS_API_KEY
-    value: REPLACE_WITH_GOOGLE_MAPS_API_KEY
-    availability:
-      - BUILD
-  - variable: VITE_SENTRY_DSN
-    value: ""
-    availability:
-      - BUILD
+    value: "1:29134217143:web:070111ca71126265475232"
+
+  # App config
   - variable: VITE_SANDBOX_MODE
     value: "true"
-    availability:
-      - BUILD
-  - variable: VITE_SIDECAR_PROXY_URL
-    value: https://us-central1-YOUR_FIREBASE_PROJECT.cloudfunctions.net/sidecarProxy
-    availability:
-      - BUILD
+  - variable: VITE_APP_ENV
+    value: demo
   - variable: VITE_STRIPE_PUBLIC_KEY
-    value: REPLACE_WITH_STRIPE_PUBLISHABLE_KEY
-    availability:
-      - BUILD
+    value: pk_test_replace_me

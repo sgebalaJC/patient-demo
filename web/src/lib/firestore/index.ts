@@ -13,3 +13,5 @@ export { specialistRequestOperations } from './specialist-requests';
 export { smsTemplateOperations } from './sms-templates';
 export { dormantPatientOperations } from './pending-patients';
 export { subscriptionOperations } from './subscriptions';
+export { appSettingsOperations, APP_SETTINGS_DEFAULTS } from './app-settings';
+export type { AppSettings } from './app-settings';

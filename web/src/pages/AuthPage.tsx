@@ -5,6 +5,8 @@ import { Card } from '../components/ui/Card';
 import { LoginForm } from '../components/auth/LoginForm';
 import { EmailLinkLoginForm } from '../components/auth/EmailLinkLoginForm';
 import { SignupForm } from '../components/auth/SignupForm';
+import { BootstrapAdminForm } from '../components/auth/BootstrapAdminForm';
+import { useAppSettings } from '../contexts/AppSettingsContext';
 import { ForgotPasswordForm } from '../components/auth/ForgotPasswordForm';
 import { PhoneLoginForm } from '../components/auth/PhoneLoginForm';
 import { LegalModal } from '../components/ui/LegalModal';
@@ -33,6 +35,7 @@ export const AuthPage: React.FC = () => {
   const [emailForLink, setEmailForLink] = useState('');
   const [searchParams] = useSearchParams();
   const { user, userProfile, loading } = useAuth();
+  const { settings: appSettings, loading: settingsLoading } = useAppSettings();
   const navigate = useNavigate();
 
   // Get query parameters for auth actions (both from /auth and /__/auth/action)
@@ -67,6 +70,10 @@ export const AuthPage: React.FC = () => {
           if (error.message === 'EMAIL_REQUIRED') {
             // sessionStorage email lost (link opened in new tab) — ask user to confirm email
             setNeedsEmailForLink(true);
+          } else if (error.message === 'REGISTRATION_DISABLED') {
+            setEmailLinkError(
+              'New patient registration is currently closed. Please contact the office to request an account.'
+            );
           } else {
             logger.error('Email link sign-in error:', error);
             setEmailLinkError(
@@ -82,7 +89,7 @@ export const AuthPage: React.FC = () => {
     handleEmailLinkSignIn();
   }, [searchParams]);
 
-  if (loading) {
+  if (loading || settingsLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-100 flex items-center justify-center">
         <LoadingSpinner />
@@ -248,6 +255,31 @@ export const AuthPage: React.FC = () => {
     );
   }
 
+  // Fresh-install bootstrap: no admin exists yet — show the WordPress-style
+  // first-admin form instead of the regular login.
+  if (!appSettings.bootstrapped) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-secondary-900">{BRANDING.shortName}</h1>
+          </div>
+          <Card className="p-8">
+            <BootstrapAdminForm />
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // When public registration is disabled, force the auth page to non-signup modes
+  // and pass a flag to the child forms to hide their "Sign up here" links.
+  const allowSignup = appSettings.registrationEnabled;
+  const safeMode: AuthMode = !allowSignup && mode === 'signup' ? 'email-link' : mode;
+  const handleSwitchToSignup = () => {
+    if (allowSignup) setMode('signup');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full space-y-8">
@@ -263,33 +295,36 @@ export const AuthPage: React.FC = () => {
         <Card className="p-8">
           <ErrorAlert message={emailLinkError} className="mb-6" />
 
-          {mode === 'email-link' && (
+          {safeMode === 'email-link' && (
             <EmailLinkLoginForm
               onSuccess={handleAuthSuccess}
-              onSwitchToSignup={() => setMode('signup')}
+              onSwitchToSignup={handleSwitchToSignup}
               onSwitchToTraditional={() => setMode('login')}
               onSwitchToPhone={() => setMode('phone')}
+              allowSignup={allowSignup}
             />
           )}
 
-          {mode === 'phone' && (
+          {safeMode === 'phone' && (
             <PhoneLoginForm
               onSuccess={handleAuthSuccess}
               onSwitchToEmail={() => setMode('email-link')}
-              onSwitchToSignup={() => setMode('signup')}
+              onSwitchToSignup={handleSwitchToSignup}
+              allowSignup={allowSignup}
             />
           )}
 
-          {mode === 'login' && (
+          {safeMode === 'login' && (
             <LoginForm
               onSuccess={handleAuthSuccess}
               onForgotPassword={() => setMode('forgot-password')}
-              onSwitchToSignup={() => setMode('signup')}
+              onSwitchToSignup={handleSwitchToSignup}
               onSwitchToEmailLink={() => setMode('email-link')}
+              allowSignup={allowSignup}
             />
           )}
 
-          {mode === 'signup' && (
+          {safeMode === 'signup' && allowSignup && (
             <SignupForm
               onSuccess={handleAuthSuccess}
               onSwitchToLogin={() => setMode('email-link')}
@@ -297,7 +332,7 @@ export const AuthPage: React.FC = () => {
             />
           )}
 
-          {mode === 'forgot-password' && (
+          {safeMode === 'forgot-password' && (
             <ForgotPasswordForm
               onBack={() => setMode('email-link')}
             />

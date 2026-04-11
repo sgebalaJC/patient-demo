@@ -12,12 +12,15 @@ interface PhoneLoginFormProps {
   onSuccess: () => void;
   onSwitchToEmail: () => void;
   onSwitchToSignup: () => void;
+  /** When false, the "Sign up here" prompt is hidden (registration disabled). */
+  allowSignup?: boolean;
 }
 
 export const PhoneLoginForm: React.FC<PhoneLoginFormProps> = ({
   onSuccess,
   onSwitchToEmail,
   onSwitchToSignup,
+  allowSignup = true,
 }) => {
   const [step, setStep] = useState<Step>('phone');
   const [loading, setLoading] = useState(false);
@@ -249,12 +252,14 @@ export const PhoneLoginForm: React.FC<PhoneLoginFormProps> = ({
               Sign in with email instead
             </button>
           </p>
-          <p className="text-center text-sm text-secondary-600">
-            Don't have an account?{' '}
-            <button onClick={onSwitchToSignup} className="text-primary-600 hover:text-primary-800 font-medium">
-              Sign up
-            </button>
-          </p>
+          {allowSignup && (
+            <p className="text-center text-sm text-secondary-600">
+              Don't have an account?{' '}
+              <button onClick={onSwitchToSignup} className="text-primary-600 hover:text-primary-800 font-medium">
+                Sign up
+              </button>
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -17,7 +17,7 @@ import {
     updateProfile,
     User
 } from 'firebase/auth';
-import {getFirestore, connectFirestoreEmulator, doc, setDoc, serverTimestamp} from 'firebase/firestore';
+import {getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, serverTimestamp} from 'firebase/firestore';
 import {getStorage, connectStorageEmulator} from 'firebase/storage';
 import {getFunctions, connectFunctionsEmulator} from 'firebase/functions';
 import {UserRole, User as AppUser} from '../types';
@@ -108,7 +108,7 @@ export const firebaseService = {
         lastName: string;
         role: string;
         phoneNumber?: string;
-        password?: string;
+        sendWelcomeSms?: boolean;
     }) => {
         try {
             const {httpsCallable} = await import('firebase/functions');
@@ -118,6 +118,35 @@ export const firebaseService = {
             return result.data;
         } catch (error: any) {
             logger.error('Error creating user with auth:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Bootstrap the first admin on a fresh install. Unauthenticated callable.
+     * Returns a custom token; the caller should immediately
+     * `signInWithCustomToken(auth, token)` to land signed in.
+     */
+    bootstrapFirstAdmin: async (userData: {
+        email: string;
+        firstName: string;
+        lastName: string;
+        phoneNumber?: string;
+    }) => {
+        try {
+            const {httpsCallable} = await import('firebase/functions');
+            const fn = httpsCallable(functions, 'bootstrapFirstAdmin');
+            const result = await fn(userData);
+            return result.data as {
+                success: boolean;
+                uid?: string;
+                token?: string;
+                message?: string;
+                error?: string;
+                code?: string;
+            };
+        } catch (error: any) {
+            logger.error('Error bootstrapping first admin:', error);
             throw error;
         }
     },
@@ -142,9 +171,40 @@ export const firebaseService = {
     }
 };
 
-// Helper function to create user document in Firestore
+// Helper function to create user document in Firestore.
+//
+// Registration gate: when this is a new user (first sign-in via email/Google),
+// we check `system/settings.registrationEnabled` BEFORE writing the doc. If
+// registration is disabled, we delete the just-created Firebase Auth user and
+// throw — preventing self-signup even if a determined client bypasses the UI
+// gates. This is the single chokepoint for all new-user creation outside of
+// admin-created users (`createUserWithAuth`) and phone OTP (gated server-side
+// in `verifyPhoneLogin`).
 const createUserDocument = async (user: User, additionalData: Partial<AppUser> = {}, isNewUser: boolean = false) => {
     if (!user) return;
+
+    if (isNewUser) {
+        try {
+            const settingsSnap = await getDoc(doc(db, 'system', 'settings'));
+            const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+            // Default is closed: if doc missing OR field missing, registration is OFF.
+            const registrationEnabled = settings?.registrationEnabled === true;
+            if (!registrationEnabled) {
+                // Roll back the auth user we just created so we don't leak orphan accounts
+                try {
+                    await user.delete();
+                } catch (deleteErr) {
+                    logger.warn('Failed to delete auth user after blocked registration:', deleteErr);
+                }
+                throw new Error('REGISTRATION_DISABLED');
+            }
+        } catch (gateError: any) {
+            if (gateError.message === 'REGISTRATION_DISABLED') throw gateError;
+            // If the settings doc read failed for any other reason, fall through —
+            // we don't want a transient Firestore error to lock everyone out.
+            logger.warn('Could not read app settings during registration check:', gateError);
+        }
+    }
 
     const userRef = doc(db, 'users', user.uid);
 
@@ -364,6 +424,32 @@ export const sendLoginLink = async (email: string) => {
         return {success: true};
     } catch (error: any) {
         logger.error('Send login link error:', error);
+        throw error;
+    }
+};
+
+/**
+ * Send a sign-in invite link to a different user (admin invite flow).
+ *
+ * Unlike `sendLoginLink`, this does NOT stash the email in sessionStorage,
+ * because the recipient will open the link in a different browser. The
+ * recipient will be prompted to confirm their email by `AuthPage`'s
+ * `needsEmailForLink` flow when they click the link.
+ *
+ * Uses the same Firebase email-link infrastructure (no external SMTP).
+ * The email content is configured in Firebase Console → Authentication →
+ * Templates → "Email address sign-in".
+ */
+export const sendInviteLink = async (email: string) => {
+    try {
+        const actionCodeSettings = {
+            url: window.location.origin + '/auth',
+            handleCodeInApp: true,
+        };
+        await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+        return { success: true };
+    } catch (error: any) {
+        logger.error('Send invite link error:', error);
         throw error;
     }
 };

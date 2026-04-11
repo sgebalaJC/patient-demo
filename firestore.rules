@@ -138,7 +138,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // System config — admin can read/write templates, rest server-only
+    // System config — admin can read/write templates, rest server-only.
+    // Exception: `system/settings` is publicly readable so the unauthenticated
+    // /auth page can check `registrationEnabled` and `bootstrapped` before
+    // showing signup or the bootstrap-first-admin form. Writes still admin-only.
+    match /system/settings {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
     match /system/{docId} {
       allow read, write: if isAdmin();
     }

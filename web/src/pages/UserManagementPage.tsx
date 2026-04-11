@@ -19,8 +19,12 @@ import {
     AlertTriangle,
     ArrowUpDown,
     ChevronUp,
-    ChevronDown
+    ChevronDown,
+    Send,
+    CheckCircle2
 } from 'lucide-react';
+import { sendInviteLink } from '../lib/firebase';
+import { useAppSettings } from '../contexts/AppSettingsContext';
 import { UserForm } from '../components/admin/UserForm';
 import { PatientDocumentManagement } from '../components/admin/PatientDocumentManagement';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -36,6 +40,7 @@ import { DocumentSnapshot } from 'firebase/firestore';
 import logger from '../lib/logger';
 export const UserManagementPage: React.FC = () => {
   const { userProfile, loading: authLoading } = useAuth();
+  const { settings: appSettings } = useAppSettings();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -43,8 +48,12 @@ export const UserManagementPage: React.FC = () => {
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
 
-  // Pagination state (cursor-based)
-  const pageSize = 25;
+  // Resend-invite state
+  const [resendingInviteFor, setResendingInviteFor] = useState<string | null>(null);
+  const [resendInviteFlash, setResendInviteFlash] = useState<{ uid: string; ok: boolean } | null>(null);
+
+  // Pagination state (cursor-based) — page size from app settings
+  const pageSize = appSettings.paginationSize;
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -73,12 +82,29 @@ export const UserManagementPage: React.FC = () => {
     }
   }, [userProfile]);
 
-  // Fetch users when search, sort, or page 1 reset
+  // Fetch users when search, sort, page size, or page 1 reset
   useEffect(() => {
     if (userProfile?.role === 'admin') {
       fetchUsers('first');
     }
-  }, [userProfile, searchQuery, sortBy, sortDir]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile, searchQuery, sortBy, sortDir, pageSize]);
+
+  const handleResendInvite = async (user: User) => {
+    if (!user.email) return;
+    setResendingInviteFor(user.id);
+    setResendInviteFlash(null);
+    try {
+      await sendInviteLink(user.email);
+      setResendInviteFlash({ uid: user.id, ok: true });
+    } catch (err: any) {
+      logger.error('Resend invite failed:', err);
+      setResendInviteFlash({ uid: user.id, ok: false });
+    } finally {
+      setResendingInviteFor(null);
+      setTimeout(() => setResendInviteFlash(null), 4000);
+    }
+  };
 
   const fetchUsers = useCallback(async (direction: 'first' | 'next' | 'prev' = 'first') => {
     if (!userProfile) return;
@@ -359,6 +385,34 @@ export const UserManagementPage: React.FC = () => {
                         >
                           <FileText className="h-4 w-4 mr-1" />
                           Documents
+                        </Button>
+                      )}
+                      {user.email && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleResendInvite(user)}
+                          loading={resendingInviteFor === user.id}
+                          className={
+                            resendInviteFlash?.uid === user.id && resendInviteFlash.ok
+                              ? 'text-green-600 hover:text-green-700'
+                              : resendInviteFlash?.uid === user.id && !resendInviteFlash.ok
+                              ? 'text-red-600 hover:text-red-700'
+                              : ''
+                          }
+                          title="Send a fresh sign-in link to this user"
+                        >
+                          {resendInviteFlash?.uid === user.id && resendInviteFlash.ok ? (
+                            <>
+                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                              Sent
+                            </>
+                          ) : (
+                            <>
+                              <Send className="h-4 w-4 mr-1" />
+                              Invite
+                            </>
+                          )}
                         </Button>
                       )}
                       <Button

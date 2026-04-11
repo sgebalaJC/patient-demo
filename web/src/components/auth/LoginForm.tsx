@@ -22,6 +22,8 @@ interface LoginFormProps {
   onForgotPassword: () => void;
   onSwitchToSignup: () => void;
   onSwitchToEmailLink?: () => void;
+  /** When false, the "Sign up here" prompt is hidden (registration disabled). */
+  allowSignup?: boolean;
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({
@@ -29,6 +31,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   onForgotPassword,
   onSwitchToSignup,
   onSwitchToEmailLink,
+  allowSignup = true,
 }) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -140,16 +143,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         </Button>
 
         <div className="text-center space-y-2">
-          <p className="text-sm text-secondary-600">
-            Don't have an account?{' '}
-            <button
-              type="button"
-              onClick={onSwitchToSignup}
-              className="text-primary-600 hover:text-primary-500 font-medium"
-            >
-              Sign up here
-            </button>
-          </p>
+          {allowSignup && (
+            <p className="text-sm text-secondary-600">
+              Don't have an account?{' '}
+              <button
+                type="button"
+                onClick={onSwitchToSignup}
+                className="text-primary-600 hover:text-primary-500 font-medium"
+              >
+                Sign up here
+              </button>
+            </p>
+          )}
 
           {onSwitchToEmailLink && (
             <p className="text-sm text-secondary-600">

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Layout } from './components/layout/Layout';
 import { useAuth } from './hooks/useAuth';
 import { AuthProvider } from './contexts/AuthContext';
+import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { PendingApproval } from './components/ui/PendingApproval';
 
 // Eager-loaded (needed immediately)
@@ -81,6 +82,7 @@ const RoleBasedRedirect: React.FC = () => {
 
 function App() {
   return (
+    <AppSettingsProvider>
     <AuthProvider>
       <Router>
         <Suspense fallback={<PageLoader />}>
@@ -127,6 +129,7 @@ function App() {
       </Suspense>
     </Router>
     </AuthProvider>
+    </AppSettingsProvider>
   );
 }
 

@@ -565,17 +565,15 @@ export const createUserWithAuth = onCall({
     const phoneNumber = request.data.phoneNumber
       ? validateStringField(request.data.phoneNumber, 'phoneNumber', { max: FIELD_LIMITS.phoneNumber.max })
       : '';
-    const password = request.data.password
-      ? validateStringField(request.data.password, 'password', { max: FIELD_LIMITS.password.max })
-      : undefined;
+    const sendWelcomeSms = request.data.sendWelcomeSms === true;
 
     if (!VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
       throw new Error(`Invalid role. Must be one of: ${VALID_ROLES.join(', ')}`);
     }
 
-    // Generate a secure temporary password if not provided
-    const userPassword = password || `Tmp${require('crypto').randomBytes(12).toString('base64url')}!`;
-
+    // Passwordless: admin-created users have no password set. They sign in via
+    // the invite link (Firebase email link) sent from the admin's browser after
+    // this function returns, or via Google / phone OTP.
     logger.info('Creating user account', { role });
 
     // Check if user already exists
@@ -597,12 +595,14 @@ export const createUserWithAuth = onCall({
       }
     }
 
-    // Create user in Firebase Auth
+    // Create user in Firebase Auth — no password set (passwordless invite flow).
+    // Registration-disabled gating happens client-side in `createUserDocument`
+    // for self-signup paths (email/Google); admin-created users bypass that
+    // because the admin role check above already authorized this call.
     let userRecord;
     try {
       userRecord = await admin.auth().createUser({
         email,
-        password: userPassword,
         displayName: `${firstName} ${lastName}`,
         emailVerified: false,
       });
@@ -623,12 +623,6 @@ export const createUserWithAuth = onCall({
           success: false,
           error: 'The email address is not valid. Please enter a valid email address.',
           code: 'INVALID_EMAIL'
-        };
-      } else if (authError.code === 'auth/weak-password') {
-        return {
-          success: false,
-          error: 'The password is too weak. Please use a stronger password.',
-          code: 'WEAK_PASSWORD'
         };
       } else {
         return {
@@ -693,6 +687,32 @@ export const createUserWithAuth = onCall({
 
     logger.info('User created successfully', { uid: userRecord.uid, role });
 
+    // Optional welcome SMS via Twilio (best-effort, non-fatal on failure)
+    let smsSent = false;
+    if (sendWelcomeSms && phoneNumber) {
+      try {
+        const accountSid = process.env.TWILIO_ACCOUNT_SID;
+        const authToken = process.env.TWILIO_AUTH_TOKEN;
+        const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+        if (accountSid && authToken && fromNumber) {
+          const client = twilio(accountSid, authToken);
+          const formattedTo = phoneNumber.startsWith('+')
+            ? phoneNumber
+            : formatPhoneNumber(phoneNumber);
+          await client.messages.create({
+            body: `Welcome to ${FUNCTIONS_BRANDING.shortName}, ${firstName}! Check your email for a sign-in link to access your account.`,
+            from: fromNumber,
+            to: formattedTo,
+          });
+          smsSent = true;
+        } else {
+          logger.warn('Welcome SMS requested but Twilio not configured');
+        }
+      } catch (smsError: any) {
+        logger.error('Welcome SMS failed (non-fatal):', { message: smsError.message });
+      }
+    }
+
     // Audit log: user creation
     logger.info('[AUDIT]', {
       audit: true,
@@ -701,14 +721,15 @@ export const createUserWithAuth = onCall({
       action: 'user.created',
       resourceType: 'user',
       resourceId: userRecord.uid,
-      metadata: { targetRole: role },
+      metadata: { targetRole: role, smsSent },
       timestamp: new Date().toISOString(),
     });
 
     return {
       success: true,
       uid: userRecord.uid,
-      message: 'User created successfully. A password reset email should be sent to set their password.'
+      smsSent,
+      message: 'User created. The admin client should now send the sign-in invite link.',
     };
 
   } catch (error: any) {
@@ -718,6 +739,160 @@ export const createUserWithAuth = onCall({
       success: false,
       error: error.message || 'An unexpected error occurred while creating the user.',
       code: error.code || 'UNEXPECTED_ERROR'
+    };
+  }
+});
+
+
+/**
+ * Bootstrap the very first administrator on a fresh install — WordPress-style.
+ *
+ * Unauthenticated callable. Inside a Firestore transaction:
+ *  1. Reads `system/settings`. If `bootstrapped === true`, rejects immediately.
+ *  2. Queries `users` for any active admin. If one exists, rejects AND
+ *     self-heals by setting `bootstrapped = true`.
+ *  3. Otherwise creates the Firebase Auth user (no password), sets the admin
+ *     custom claim, writes the `users/{uid}` profile doc, and sets
+ *     `system/settings.bootstrapped = true` — all in the same transaction.
+ *
+ * Returns a Firebase custom token so the caller (the person at the keyboard)
+ * gets signed in immediately, without an email round-trip.
+ *
+ * Race-safe: concurrent calls hit the same transaction, only one wins. The
+ * `bootstrapped` flag is write-once; once set, this function refuses forever
+ * even if all admins are later deleted (prevents takeover of an abandoned
+ * install).
+ */
+export const bootstrapFirstAdmin = onCall({
+  cors: corsOptions,
+}, async (request) => {
+  try {
+    const email = validateStringField(request.data.email, 'email', { max: FIELD_LIMITS.email.max });
+    const firstName = validateStringField(request.data.firstName, 'firstName', FIELD_LIMITS.firstName);
+    const lastName = validateStringField(request.data.lastName, 'lastName', FIELD_LIMITS.lastName);
+    const phoneNumber = request.data.phoneNumber
+      ? validateStringField(request.data.phoneNumber, 'phoneNumber', { max: FIELD_LIMITS.phoneNumber.max })
+      : '';
+
+    // Basic email shape sanity (full validation happens in Firebase Auth)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { success: false, error: 'Invalid email address', code: 'INVALID_EMAIL' };
+    }
+
+    const settingsRef = db.collection('system').doc('settings');
+
+    // Phase 1: transactional gate. Check + flip the flag atomically.
+    let reservedBootstrap = false;
+    try {
+      await db.runTransaction(async (tx) => {
+        const settingsSnap = await tx.get(settingsRef);
+        const settingsData = settingsSnap.data() || {};
+
+        if (settingsData.bootstrapped === true) {
+          throw new Error('ALREADY_BOOTSTRAPPED');
+        }
+
+        const adminQuery = await db.collection('users')
+          .where('role', '==', 'admin')
+          .where('isActive', '==', true)
+          .limit(1)
+          .get();
+
+        if (!adminQuery.empty) {
+          tx.set(settingsRef, { bootstrapped: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+          throw new Error('ALREADY_BOOTSTRAPPED');
+        }
+
+        tx.set(settingsRef, { bootstrapped: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        reservedBootstrap = true;
+      });
+    } catch (err: any) {
+      if (err.message === 'ALREADY_BOOTSTRAPPED') {
+        return {
+          success: false,
+          error: 'This system has already been set up. Please ask an administrator to invite you.',
+          code: 'ALREADY_BOOTSTRAPPED',
+        };
+      }
+      throw err;
+    }
+
+    // Phase 2: create auth user + profile. If anything fails, roll back the flag.
+    try {
+      try {
+        await admin.auth().getUserByEmail(email);
+        if (reservedBootstrap) {
+          await settingsRef.set({ bootstrapped: false }, { merge: true });
+        }
+        return {
+          success: false,
+          error: 'A user with this email already exists. Try signing in instead.',
+          code: 'USER_ALREADY_EXISTS',
+        };
+      } catch (err: any) {
+        if (err.code !== 'auth/user-not-found') throw err;
+      }
+
+      const userRecord = await admin.auth().createUser({
+        email,
+        displayName: `${firstName} ${lastName}`,
+        emailVerified: true,
+      });
+
+      await admin.auth().setCustomUserClaims(userRecord.uid, { role: 'admin' });
+
+      await db.collection('users').doc(userRecord.uid).set({
+        email,
+        firstName,
+        lastName,
+        displayName: `${firstName} ${lastName}`,
+        role: 'admin',
+        phoneNumber: phoneNumber || '',
+        isActive: true,
+        emailVerified: true,
+        authUid: userRecord.uid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const token = await admin.auth().createCustomToken(userRecord.uid, { role: 'admin' });
+
+      logger.info('[AUDIT] First admin bootstrapped', {
+        audit: true,
+        actorId: 'bootstrap',
+        action: 'user.bootstrap',
+        resourceType: 'user',
+        resourceId: userRecord.uid,
+        timestamp: new Date().toISOString(),
+      });
+
+      return {
+        success: true,
+        uid: userRecord.uid,
+        token,
+        message: 'First administrator created. Signing you in...',
+      };
+    } catch (err: any) {
+      if (reservedBootstrap) {
+        try {
+          await settingsRef.set({ bootstrapped: false }, { merge: true });
+        } catch (rollbackErr) {
+          logger.error('Failed to rollback bootstrap flag:', rollbackErr);
+        }
+      }
+      logger.error('Bootstrap admin creation failed:', err);
+      return {
+        success: false,
+        error: err.message || 'Failed to create administrator',
+        code: err.code || 'BOOTSTRAP_FAILED',
+      };
+    }
+  } catch (error: any) {
+    logger.error('bootstrapFirstAdmin error:', { code: error.code, message: error.message });
+    return {
+      success: false,
+      error: error.message || 'An unexpected error occurred',
+      code: error.code || 'UNEXPECTED_ERROR',
     };
   }
 });

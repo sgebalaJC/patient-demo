@@ -22,6 +22,8 @@ interface EmailLinkLoginFormProps {
   onSwitchToSignup: () => void;
   onSwitchToTraditional: () => void;
   onSwitchToPhone?: () => void;
+  /** When false, the "Sign up here" prompt is hidden (registration disabled). */
+  allowSignup?: boolean;
 }
 
 export const EmailLinkLoginForm: React.FC<EmailLinkLoginFormProps> = ({
@@ -29,6 +31,7 @@ export const EmailLinkLoginForm: React.FC<EmailLinkLoginFormProps> = ({
   onSwitchToSignup,
   onSwitchToTraditional,
   onSwitchToPhone,
+  allowSignup = true,
 }) => {
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -106,15 +109,17 @@ export const EmailLinkLoginForm: React.FC<EmailLinkLoginFormProps> = ({
             Try different email
           </Button>
 
-          <div className="text-center">
-            <span className="text-sm text-secondary-600">Don't have an account? </span>
-            <button
-              onClick={onSwitchToSignup}
-              className="text-sm text-primary-600 hover:text-primary-500 font-medium"
-            >
-              Sign up here
-            </button>
-          </div>
+          {allowSignup && (
+            <div className="text-center">
+              <span className="text-sm text-secondary-600">Don't have an account? </span>
+              <button
+                onClick={onSwitchToSignup}
+                className="text-sm text-primary-600 hover:text-primary-500 font-medium"
+              >
+                Sign up here
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -167,15 +172,17 @@ export const EmailLinkLoginForm: React.FC<EmailLinkLoginFormProps> = ({
         </div>
 
         <div className="text-center space-y-2">
-          <p className="text-sm text-secondary-600">
-            Don't have an account?{' '}
-            <button
-              onClick={onSwitchToSignup}
-              className="text-primary-600 hover:text-primary-500 font-medium"
-            >
-              Sign up here
-            </button>
-          </p>
+          {allowSignup && (
+            <p className="text-sm text-secondary-600">
+              Don't have an account?{' '}
+              <button
+                onClick={onSwitchToSignup}
+                className="text-primary-600 hover:text-primary-500 font-medium"
+              >
+                Sign up here
+              </button>
+            </p>
+          )}
 
           <p className="text-sm text-secondary-600">
             Prefer a password?{' '}

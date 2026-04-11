@@ -13,7 +13,6 @@ import {
   FileText,
   Stethoscope,
   Settings,
-  UserX,
   CreditCard,
 } from 'lucide-react';
 
@@ -29,7 +28,6 @@ export const AdminNavigation: React.FC = () => {
     { title: 'Prescription Refills', href: '/admin/refills', icon: Pill, isActive: true },
     { title: 'To-Do List', href: '/admin/todos', icon: CheckSquare, isActive: canUseAdminTodos() },
     { title: 'Intake Forms', href: '/admin/intake-forms', icon: FileText, isActive: true },
-    { title: 'Dormant Patients', href: '/admin/pending-patients', icon: UserX, isActive: true },
     { title: 'AI Agent', href: '/admin/agent', icon: Bot, isActive: true },
     { title: 'Subscription Plans', href: '/admin/subscription-plans', icon: CreditCard, isActive: true },
     { title: 'Settings', href: '/admin/settings', icon: Settings, isActive: true },

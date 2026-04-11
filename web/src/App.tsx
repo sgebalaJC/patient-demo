@@ -27,7 +27,6 @@ const AgentPage = lazy(() => import('./pages/AgentPage').then(m => ({ default: m
 const AdminIntakeFormsPage = lazy(() => import('./pages/AdminIntakeFormsPage').then(m => ({ default: m.AdminIntakeFormsPage })));
 const AdminSpecialistRequestsPage = lazy(() => import('./pages/AdminSpecialistRequestsPage').then(m => ({ default: m.AdminSpecialistRequestsPage })));
 const AdminSettingsPage = lazy(() => import('./pages/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })));
-const AdminPendingPatientsPage = lazy(() => import('./pages/AdminPendingPatientsPage').then(m => ({ default: m.AdminPendingPatientsPage })));
 const SupportChatPage = lazy(() => import('./pages/SupportChatPage').then(m => ({ default: m.SupportChatPage })));
 const ContactPage = lazy(() => import('./pages/ContactPage').then(m => ({ default: m.ContactPage })));
 const BillingPage = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })));
@@ -118,7 +117,6 @@ function App() {
           <Route path="admin/intake-forms" element={<AdminIntakeFormsPage />} />
           <Route path="admin/specialist-requests" element={<AdminSpecialistRequestsPage />} />
           <Route path="admin/settings" element={<AdminSettingsPage />} />
-          <Route path="admin/pending-patients" element={<AdminPendingPatientsPage />} />
           <Route path="support" element={<SupportChatPage />} />
           <Route path="contact" element={<ContactPage />} />
           <Route path="billing" element={<BillingPage />} />

@@ -183,8 +183,5 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create, update, delete: if false; // server-only
     }
-
-    // Note: dormant patients (no contact info) are stored in the users collection
-    // with isActive: false — no separate collection needed
   }
 }

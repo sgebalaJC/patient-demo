@@ -32,7 +32,7 @@ Patient-side
 - Patient support chatbot (OpenClaw-backed)
 
 Admin-side
-- User management, pending patients / dormant patients queue
+- User management
 - Appointment calendar
 - Specialist referral requests
 - Refill request approval queue

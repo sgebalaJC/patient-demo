@@ -24,13 +24,6 @@ export interface SlackChannelStatus {
   workspace?: SlackWorkspace;
 }
 
-interface SlackAuthTestResponse {
-  ok: boolean;
-  team?: string;
-  team_id?: string;
-  error?: string;
-}
-
 interface OpenClawConfigShape {
   bindings?: Array<Record<string, unknown>>;
   channels?: {
@@ -61,23 +54,15 @@ export function readSlackStatus(config: Record<string, unknown>): SlackChannelSt
   };
 }
 
-/** Call slack.com/api/auth.test to validate a bot token and fetch workspace metadata. */
+/**
+ * Validate a Slack bot token and fetch workspace metadata.
+ *
+ * Routed through the sidecarProxy Cloud Function (server-side fetch), because
+ * slack.com/api/auth.test blocks browser CORS preflight requests carrying an
+ * Authorization header. See functions/src/index.ts sidecarProxy /slack/auth-test.
+ */
 export async function validateSlackToken(botToken: string): Promise<SlackWorkspace> {
-  let res: Response;
-  try {
-    res = await fetch('https://slack.com/api/auth.test', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${botToken}` },
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'TimeoutError') {
-      throw new Error('Slack took too long to respond');
-    }
-    throw new Error('Could not reach Slack. Check your network and CORS.');
-  }
-
-  const data = (await res.json().catch(() => ({}))) as SlackAuthTestResponse;
+  const data = await sidecar.slackAuthTest(botToken);
   if (!data.ok) {
     throw new Error(`Slack rejected the bot token${data.error ? `: ${data.error}` : ''}`);
   }

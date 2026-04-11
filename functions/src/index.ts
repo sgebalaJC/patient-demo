@@ -2264,6 +2264,39 @@ export const sidecarProxy = onRequest({
       return;
     }
 
+    // Special case: /slack/auth-test — handled locally, NOT forwarded to the
+    // sidecar. Slack's Web API rejects browser preflight requests that carry
+    // an Authorization header, so the browser cannot call auth.test directly.
+    // We proxy it here (admin-only) where there is no CORS restriction.
+    if (sidecarPath === '/slack/auth-test') {
+      if (userRole !== 'admin') {
+        res.status(403).json({ error: 'Admin access required' });
+        return;
+      }
+      const botToken = (req.body as { botToken?: string })?.botToken;
+      if (!botToken || typeof botToken !== 'string') {
+        res.status(400).json({ error: 'botToken required' });
+        return;
+      }
+      try {
+        const slackRes = await fetch('https://slack.com/api/auth.test', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${botToken}` },
+        });
+        const data = (await slackRes.json()) as {
+          ok: boolean;
+          team?: string;
+          team_id?: string;
+          error?: string;
+        };
+        res.status(200).json(data);
+      } catch (err: any) {
+        logger.error('slack auth.test failed:', { message: err.message });
+        res.status(502).json({ error: `Could not reach Slack: ${err.message}` });
+      }
+      return;
+    }
+
     if (!SIDECAR_API_KEY) {
       res.status(503).json({ error: 'Sidecar not configured' });
       return;

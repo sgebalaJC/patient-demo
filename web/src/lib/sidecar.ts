@@ -150,6 +150,23 @@ class SidecarClient {
     return this.request('/config');
   }
 
+  /**
+   * Proxied Slack auth.test — handled inside the sidecarProxy Cloud Function,
+   * NOT forwarded to the sidecar (slack.com blocks browser CORS preflights
+   * that carry an Authorization header, so we call it server-side instead).
+   */
+  async slackAuthTest(botToken: string): Promise<{
+    ok: boolean;
+    team?: string;
+    team_id?: string;
+    error?: string;
+  }> {
+    return this.request('/slack/auth-test', {
+      method: 'POST',
+      body: JSON.stringify({ botToken }),
+    });
+  }
+
   async patchConfig(patch: Record<string, unknown>): Promise<void> {
     await this.request('/config', {
       method: 'PATCH',

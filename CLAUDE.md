@@ -171,17 +171,43 @@ not default.
   read+update own notifications (rules enforced).
 - **File uploads:** Cloud Storage at
   `patients/{patientId}/documents/{documentType}/{fileName}`.
-- **AI Agents:** Two OpenClaw agents on a customer-owned VPS — an admin agent
+- **AI Agents:** Two OpenClaw agents on a customer-owned host — an admin agent
   (`main`) and a patient support agent (`patient-support`). Unified auth via
   `sidecarProxy` Cloud Function. **The patient support agent has NO patient
-  data access** (HIPAA compliance — no PHI on the VPS); it acts as a practice
+  data access** (HIPAA compliance — no PHI on the host); it acts as a practice
   navigator and FAQ bot. The admin agent can optionally get Google Workspace
-  access via `gog` CLI with SA domain-wide delegation. VPS config mirrored in
+  access via `gog` CLI with SA domain-wide delegation. Host config mirrored in
   `openclaw/` directory with `{{PLACEHOLDER}}` tokens — fill these in per
   customer before shipping.
-- **Sidecar:** Bun binary on the VPS (`sidecar/`). Chat proxy to OpenClaw
+- **Agent admin UI:** `/admin/agent` has tabs **Chat · Skills · Channels ·
+  Integrations · Backups · Health**. Channels tab
+  (`web/src/components/agent/AgentChannels.tsx`) lets admins connect messaging
+  channels — currently Slack, with Telegram/Discord/WhatsApp stubs. All channel
+  logic is browser-side in `web/src/lib/slack.ts`: it reads/writes
+  `openclaw.json` via the existing `/config PATCH` + `/restart` sidecar
+  endpoints, so adding new channels needs no sidecar rebuild.
+- **Slack → admin agent:** Bound via `channels.slack.accounts.main` → agent
+  `main` with an explicit `bindings` route entry. `dmPolicy: "open"`,
+  `groupPolicy: "open"` (at both top-level and per-account), `allowFrom: ["*"]`.
+  Tokens live **only** in `openclaw.json` on the host — never in Firestore.
+  **CRITICAL:** OpenClaw's config schema has `additionalProperties: false`
+  under `channels.slack.accounts.<id>` — only write schema-known keys
+  (`botToken`, `appToken`, `dmPolicy`, `allowFrom`, `groupPolicy`). Writing
+  unknown cache fields bricks gateway boot. Workspace name is fetched fresh
+  on each status read via `slackAuthTest()`, not cached in config.
+- **Slack `auth.test` CORS workaround:** Slack's Web API rejects browser
+  preflights carrying an `Authorization` header, so the browser cannot call
+  `slack.com/api/auth.test` directly. The `sidecarProxy` Cloud Function
+  special-cases `?path=/slack/auth-test` — handled **locally inside the CF**,
+  not forwarded to the sidecar. Any Slack validation call from the web routes
+  through this.
+- **Sidecar:** Bun binary on the host (`sidecar/`). Chat proxy to OpenClaw
   gateway, file ops, config, backups. Dual auth: static API key (internal) +
-  user context headers (proxied). Patients restricted to `/chat` only.
+  user context headers (proxied). Patients restricted to `/chat` only. Runs
+  as root under systemd unit `showmd-sidecar`. **Gateway lifecycle:**
+  `sidecar/src/lib/process.ts` shells out to `/usr/bin/openclaw gateway
+  {restart,start,stop}` with `HOME=/root` — NOT `systemctl restart
+  openclaw-gateway` directly.
 - **Chat persistence:** Admin chat in `agent-chat` collection (global).
   Patient support chat in `support-chat` collection (per-patient via
   `patientId` field, cursor-based pagination). **All Firestore saves in chat
@@ -243,7 +269,7 @@ not default.
 - `logAuditEvent` — HIPAA-safe audit logging
 - `getAvailableSlots` / `validateAppointmentSlot` — appointment scheduling
 - `onAppointmentWrite` / `syncCalendarChanges` — bidirectional Google Calendar sync
-- `sidecarProxy` — HTTP proxy to the VPS sidecar
+- `sidecarProxy` — HTTP proxy to the host sidecar. Also **handles `?path=/slack/auth-test` locally** without forwarding — calls Slack's `auth.test` server-side because browser CORS blocks direct calls carrying an Authorization header.
 - `serveFile` — secure file proxy with signed URLs
 - `cleanupCancelledAppointments` — daily cleanup
 - `createCheckoutSession` — callable; creates a Stripe Checkout Session.
@@ -327,7 +353,7 @@ $SSH "openclaw gateway restart"
   ```
   Without this, `createCustomToken` throws `Permission 'iam.serviceAccounts.signBlob' denied`.
 - **Functions:** `firebase deploy --only functions`
-- **Sidecar:** `cd sidecar && ./deploy.sh`
+- **Sidecar:** `cd sidecar && ./deploy.sh` (cross-compiles Bun binary for linux-x64, uploads via `gcloud compute scp`, restarts `showmd-sidecar` systemd unit, health checks). Targets GCE by default via the `GCE_VM`/`GCE_ZONE`/`GCE_PROJECT` constants inside the script — edit these for your host. `TARGET=vultr` escape hatch is available for Vultr-based installs.
 - **OpenClaw update:** `./scripts/openclaw-update.sh [tag]` — creates backup
   on VPS, uploads to GCS, then runs `openclaw update`. `--dry-run` to preview.
 - **Mobile:** Customize package id in `mobile/android/app/build.gradle.kts`

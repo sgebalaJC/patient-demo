@@ -9,7 +9,6 @@ import { AgentIntegrations } from '../components/agent/AgentIntegrations';
 import { AgentChannels } from '../components/agent/AgentChannels';
 import { AgentBackups } from '../components/agent/AgentBackups';
 import { AgentHealth } from '../components/agent/AgentHealth';
-import { AdminWorkflowsPage } from './AdminWorkflowsPage';
 import { sidecar } from '../lib/sidecar';
 import {
   ArrowLeft,
@@ -18,20 +17,18 @@ import {
   Link2,
   Archive,
   Activity,
-  Workflow,
   ExternalLink,
   Radio,
   Bot,
 } from 'lucide-react';
 
-type Tab = 'chat' | 'skills' | 'channels' | 'integrations' | 'workflows' | 'backups' | 'health';
+type Tab = 'chat' | 'skills' | 'channels' | 'integrations' | 'backups' | 'health';
 
 const NAV_ITEMS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'chat', label: 'Chat', icon: MessageSquare },
   { key: 'skills', label: 'Skills', icon: Star },
   { key: 'channels', label: 'Channels', icon: Radio },
   { key: 'integrations', label: 'Integrations', icon: Link2 },
-  { key: 'workflows', label: 'Workflows', icon: Workflow },
   { key: 'backups', label: 'Backups', icon: Archive },
   { key: 'health', label: 'Health', icon: Activity },
 ];
@@ -120,8 +117,6 @@ export const AgentPage: React.FC = () => {
         return <AgentChannels />;
       case 'integrations':
         return <AgentIntegrations />;
-      case 'workflows':
-        return <AdminWorkflowsPage embedded />;
       case 'backups':
         return <AgentBackups />;
       case 'health':

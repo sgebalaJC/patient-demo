@@ -94,16 +94,6 @@ service cloud.firestore {
         resource.data.recipientId == request.auth.uid;
     }
 
-    // Agent workflows — admin only
-    match /agent-workflows/{workflowId} {
-      allow read, list, write, create: if isAdmin();
-    }
-
-    // Workflow runs — admin only
-    match /workflow-runs/{runId} {
-      allow read, list, write, create: if isAdmin();
-    }
-
     // Agent skills — admin only
     match /agent-skills/{skillId} {
       allow read, list, write: if isAdmin();

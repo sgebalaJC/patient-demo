@@ -431,54 +431,6 @@ declare global {
     }
 }
 
-// Workflows
-export type WorkflowStepType = 'run_skill' | 'ai_task' | 'send_message' | 'search_web' | 'wait_approval';
-
-export type WorkflowSchedule = 'manual' | 'daily' | 'weekdays' | 'weekly';
-
-export interface WorkflowStep {
-  id: string;
-  type: WorkflowStepType;
-  config: {
-    prompt?: string;
-    skillId?: string;
-    recipient?: string;
-  };
-  useOutputFromPrevious: boolean;
-}
-
-export interface AgentWorkflow {
-  id: string;
-  name: string;
-  description?: string;
-  schedule: WorkflowSchedule;
-  scheduleTime?: string; // HH:mm
-  scheduleDayOfWeek?: number; // 0-6, for weekly
-  timezone: string;
-  steps: WorkflowStep[];
-  enabled: boolean;
-  agentId: string; // 'main' or 'patient-support'
-  createdBy: string;
-  cronJobId?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-}
-
-export interface WorkflowRun {
-  id: string;
-  workflowId: string;
-  status: 'running' | 'completed' | 'failed';
-  startedAt: Timestamp;
-  completedAt?: Timestamp;
-  stepResults: {
-    stepIndex: number;
-    status: 'completed' | 'failed' | 'skipped';
-    prompt?: string;
-    output?: string;
-    error?: string;
-  }[];
-}
-
 // ─── Stripe billing ──────────────────────────────────────────────────────────
 
 /**

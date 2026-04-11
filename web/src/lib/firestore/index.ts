@@ -8,7 +8,6 @@ export { prescriptionRefillOperations } from './refills';
 export { intakeFormOperations } from './intake-forms';
 export { todoOperations } from './todos';
 export { notificationOperations } from './notifications';
-export { workflowOperations } from './workflows';
 export { specialistRequestOperations } from './specialist-requests';
 export { smsTemplateOperations } from './sms-templates';
 export { dormantPatientOperations } from './pending-patients';

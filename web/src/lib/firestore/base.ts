@@ -22,8 +22,6 @@ export const collections = {
   patientDocuments: collection(db, 'patient-documents'),
   patientIntakeForms: collection(db, 'patient-intake-forms'),
   notifications: collection(db, 'notifications'),
-  agentWorkflows: collection(db, 'agent-workflows'),
-  workflowRuns: collection(db, 'workflow-runs'),
   specialistRequests: collection(db, 'specialist-requests'),
   subscriptionPlans: collection(db, 'subscription-plans'),
   patientSubscriptions: collection(db, 'patient-subscriptions'),

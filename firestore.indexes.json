@@ -476,22 +476,6 @@
           "order": "DESCENDING"
         }
       ]
-    }
-    ,
-    {
-      "collectionGroup": "workflow-runs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "workflowId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "startedAt",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
     },
     {
       "collectionGroup": "patient-intake-forms",

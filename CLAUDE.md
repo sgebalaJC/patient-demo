@@ -225,8 +225,7 @@ not default.
 `users`, `message-threads`, `thread-messages`, `appointments`,
 `prescription-refills`, `patient-documents`, `patient-intake-forms`,
 `admin-todos`, `notifications`, `phone-verifications`, `rate-limits`,
-`agent-chat`, `support-chat`, `agent-skills`, `agent-workflows`,
-`workflow-runs`, `specialist-requests`, `daily-reminders`,
+`agent-chat`, `support-chat`, `agent-skills`, `specialist-requests`, `daily-reminders`,
 `system` (`system/settings` is publicly readable),
 `bootstrap-requests` (write-once channel for first-admin setup, UUID doc IDs, `list` denied),
 `subscription-plans`, `patient-subscriptions`

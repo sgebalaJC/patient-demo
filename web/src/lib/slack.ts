@@ -7,6 +7,11 @@
  *
  * Binding: channels.slack.accounts.main → agent `main` (Aurelia).
  * Tokens live only in openclaw.json on the OpenClaw host.
+ *
+ * IMPORTANT: OpenClaw's schema validator rejects unknown fields under
+ * channels.slack.accounts.<id>. Never write cache/metadata fields there —
+ * only the schema-known keys (botToken, appToken, dmPolicy, allowFrom,
+ * groupPolicy, etc). Workspace name is fetched fresh from Slack on demand.
  */
 
 import { sidecar } from './sidecar';
@@ -21,6 +26,7 @@ export interface SlackWorkspace {
 
 export interface SlackChannelStatus {
   enabled: boolean;
+  /** Only populated after an auth.test round-trip. Undefined if fetch failed. */
   workspace?: SlackWorkspace;
 }
 
@@ -32,26 +38,33 @@ interface OpenClawConfigShape {
       accounts?: Record<string, {
         botToken?: string;
         appToken?: string;
-        workspaceName?: string;
-        workspaceTeamId?: string;
       }>;
     };
   };
 }
 
-/** Read current Slack channel state from the OpenClaw config. No network cost beyond getConfig. */
-export function readSlackStatus(config: Record<string, unknown>): SlackChannelStatus {
+/**
+ * Read current Slack channel state. If Slack is enabled, round-trips to
+ * Slack (via the sidecarProxy CF) to fetch a fresh workspace name — we do
+ * NOT cache the workspace name in the config because OpenClaw's schema
+ * validator rejects unknown fields under accounts.<id>.
+ */
+export async function readSlackStatus(
+  config: Record<string, unknown>,
+): Promise<SlackChannelStatus> {
   const slack = (config as OpenClawConfigShape).channels?.slack;
   const account = slack?.accounts?.[SLACK_ACCOUNT_ID];
-  const enabled = slack?.enabled === true && !!account?.botToken;
-  if (!enabled) return { enabled: false };
-  return {
-    enabled: true,
-    workspace: {
-      name: account?.workspaceName,
-      teamId: account?.workspaceTeamId,
-    },
-  };
+  const botToken = account?.botToken;
+  const enabled = slack?.enabled === true && !!botToken;
+  if (!enabled || !botToken) return { enabled: false };
+
+  try {
+    const workspace = await validateSlackToken(botToken);
+    return { enabled: true, workspace };
+  } catch {
+    // Token saved but Slack rejected or was unreachable — still show connected.
+    return { enabled: true };
+  }
 }
 
 /**
@@ -119,6 +132,9 @@ export async function configureSlack(
   const current = (await sidecar.getConfig()) as OpenClawConfigShape;
   const bindings = upsertSlackBinding(current.bindings);
 
+  // NOTE: only write schema-known fields (botToken, appToken, dmPolicy,
+  // allowFrom, groupPolicy). OpenClaw's validator rejects unknown properties
+  // under accounts.<id> and refuses to load the gateway.
   await sidecar.patchConfig({
     channels: {
       slack: {
@@ -130,9 +146,7 @@ export async function configureSlack(
             appToken: trimmedApp,
             dmPolicy: 'open',
             allowFrom: ['*'],
-            // Cached workspace metadata so the status read is free.
-            workspaceName: workspace.name,
-            workspaceTeamId: workspace.teamId,
+            groupPolicy: 'open',
           },
         },
       },
@@ -161,8 +175,6 @@ export async function disconnectSlack(): Promise<void> {
           [SLACK_ACCOUNT_ID]: {
             botToken: '',
             appToken: '',
-            workspaceName: '',
-            workspaceTeamId: '',
             allowFrom: [],
           },
         },

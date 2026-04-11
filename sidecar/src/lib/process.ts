@@ -1,38 +1,47 @@
-import { $ } from "bun";
+import { execSync } from "child_process";
 import { GATEWAY_URL } from "./paths.js";
 
-const SERVICE_NAME = "openclaw-gateway";
+/**
+ * OpenClaw gateway is managed by the `openclaw` CLI as a user process under
+ * /root/.openclaw — it is NOT a systemd unit on the GCE host. Shell out to
+ * `openclaw gateway <cmd>` the same way skills.ts does it, with HOME=/root so
+ * the CLI can find its state directory.
+ */
+
+const OPENCLAW_BIN = "/usr/bin/openclaw";
+const OPENCLAW_ENV = { ...process.env, HOME: "/root" };
+
+function runOpenclaw(command: string, timeoutMs: number): string {
+  return execSync(`${OPENCLAW_BIN} ${command}`, {
+    timeout: timeoutMs,
+    encoding: "utf-8",
+    env: OPENCLAW_ENV,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+}
 
 export async function getStatus(): Promise<"running" | "stopped" | "failed" | "unknown"> {
+  // checkGatewayHealth() is the authoritative liveness signal used by /status.
+  // We use that here instead of parsing `openclaw gateway status` which has
+  // varied output across versions.
   try {
-    const result = await $`systemctl is-active ${SERVICE_NAME}`.text();
-    const status = result.trim();
-    if (status === "active") return "running";
-    if (status === "inactive") return "stopped";
-    if (status === "failed") return "failed";
-    return "unknown";
+    const healthy = await checkGatewayHealth();
+    return healthy ? "running" : "stopped";
   } catch {
-    // systemctl returns non-zero for inactive/failed
-    try {
-      const result = await $`systemctl is-active ${SERVICE_NAME} 2>/dev/null || true`.text();
-      const status = result.trim();
-      if (status === "inactive") return "stopped";
-      if (status === "failed") return "failed";
-    } catch { /* ignore */ }
     return "unknown";
   }
 }
 
 export async function restart(): Promise<void> {
-  await $`systemctl restart ${SERVICE_NAME}`.quiet();
+  runOpenclaw("gateway restart", 60_000);
 }
 
 export async function stop(): Promise<void> {
-  await $`systemctl stop ${SERVICE_NAME}`.quiet();
+  runOpenclaw("gateway stop", 30_000);
 }
 
 export async function start(): Promise<void> {
-  await $`systemctl start ${SERVICE_NAME}`.quiet();
+  runOpenclaw("gateway start", 30_000);
 }
 
 export async function checkGatewayHealth(): Promise<boolean> {
@@ -48,8 +57,7 @@ export async function checkGatewayHealth(): Promise<boolean> {
 
 export async function getVersion(): Promise<string> {
   try {
-    const result = await $`openclaw --version`.text();
-    return result.trim();
+    return runOpenclaw("--version", 10_000).trim();
   } catch {
     return "unknown";
   }

@@ -5,8 +5,6 @@ import { readSlackStatus, type SlackChannelStatus } from '../../lib/slack';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { SlackSetup } from './SlackSetup';
 
-const AGENT_NAME = import.meta.env.VITE_AGENT_NAME || 'your agent';
-
 export const AgentChannels: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -17,7 +15,8 @@ export const AgentChannels: React.FC = () => {
     setError('');
     try {
       const config = await sidecar.getConfig();
-      setSlack(readSlackStatus(config));
+      const status = await readSlackStatus(config);
+      setSlack(status);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load channel status');
     } finally {
@@ -42,7 +41,7 @@ export const AgentChannels: React.FC = () => {
         </button>
       </div>
       <p className="text-sm text-secondary-500 mb-6">
-        Connect messaging channels to chat with {AGENT_NAME} from anywhere.
+        Connect messaging channels to chat with Aurelia from anywhere.
       </p>
 
       {loading && <LoadingSpinner />}
@@ -68,14 +67,14 @@ export const AgentChannels: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-secondary-500 mt-0.5">
-                Chat with {AGENT_NAME} through this admin interface
+                Chat with Aurelia through this admin interface
               </p>
             </div>
           </div>
 
           {/* Slack */}
           <SlackSetup
-            agentName={AGENT_NAME}
+            agentName="Aurelia"
             initialConnected={slack.enabled}
             initialWorkspaceName={slack.workspace?.name}
             onStateChange={loadStatus}

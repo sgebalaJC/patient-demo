@@ -1,368 +1,142 @@
 # Patient Portal (template)
 
-Generic HIPAA-posture patient engagement platform — fork per customer, one
-dedicated Firebase project per fork. See `README.md` for the customer
-onboarding workflow.
+Generic HIPAA-posture patient engagement platform. Fork per customer, one dedicated Firebase project per fork. See `README.md` for the customer onboarding workflow.
 
 ## Tech Stack
 
-- **Frontend (Web):** React 18 + TypeScript, Vite, Tailwind CSS, React Router v6
-- **Frontend (Mobile):** Flutter 3.41+, Dart 3.11+, Provider for state management
-- **Backend:** Firebase (Auth, Firestore, Cloud Storage, Cloud Functions v2)
-- **External:** Twilio (SMS), Google Maps API, Google Workspace APIs, Stripe (billing)
-- **AI agents:** OpenClaw-based admin + patient support agents on a
-  customer-owned VPS, proxied via Firebase Functions
+- **Web:** React 18 + TypeScript, Vite, Tailwind CSS, React Router v6
+- **Mobile:** Flutter 3.41+, Dart 3.11+, Provider state
+- **Backend:** Firebase (Auth, Firestore, Storage, Cloud Functions v2)
+- **External:** Twilio (SMS), Google Maps, Google Workspace, Stripe (billing)
+- **AI agents:** OpenClaw admin + patient support agents on a customer-owned VPS, proxied via Cloud Functions
 - **Node:** v20
 
 ## Project Structure
 
 ```
-web/                    # React SPA (Vite)
-  src/
-    config/
-      branding.ts       # ★ PER-CUSTOMER: name, logo, colors, agent identities
-      features.ts       # feature flags (all enabled by default)
-    pages/              # Route-level page components
-    components/         # Feature-organized components
-      ui/               # Shared UI primitives (BrandLogo, LoadingSpinner, PageHeader, etc.)
-      chat/             # Shared chat components (ChatMarkdown, ChatInput)
-    lib/
-      firebase.ts       # Firebase init, auth helpers, emulator connection
-      firestore/        # Firestore CRUD operations per collection (incl. subscriptions.ts)
-      sidecar.ts        # HTTP client for sidecar API
-      storage.ts        # Cloud Storage operations
-      validation.ts     # Centralized field length limits (FIELD_LIMITS)
-      logger.ts         # Logging utility
-    contexts/           # AuthContext (global auth state)
-    hooks/              # useAuth, useFeatures, usePagination
-    types/index.ts      # All TypeScript type definitions
-mobile/                 # Flutter mobile app (patient-only, iOS + Android)
-  lib/
-    config/
-      branding.dart     # ★ PER-CUSTOMER: mirror of web/src/config/branding.ts
-      constants.dart    # Field limits + Places API key
-      colors.dart       # AppColors — mutated at runtime by ThemeProvider
-      firebase_config.dart
-    models/             # Dart data models
-    services/           # Auth, biometric, Firestore CRUD, Storage
-      firestore/        # Per-collection service classes (incl. subscriptions_service.dart)
-    providers/          # ChangeNotifier providers (auth, biometric, theme)
-    screens/            # Feature screens
-    widgets/            # Shared widgets (SubscriptionStatusCard, etc.)
-functions/              # Firebase Cloud Functions (Node 20)
-  src/
-    branding.ts         # ★ PER-CUSTOMER: short name for SMS/email/admin signatures
-    index.ts            # Shared entry (SMS reminders, user management, calendar sync)
-    stripe.ts           # Stripe Checkout, cancel, webhook → Firestore mirror
-    google-calendar.ts  # Appointment / calendar sync
-sidecar/                # Bun sidecar API deployed to customer VPS
-openclaw/               # ★ PER-CUSTOMER: AI agent workspace templates with {{PLACEHOLDER}} tokens
-  workspace/            # Admin agent (id: main)
-  agents/patient-support/workspace/  # Patient support agent
-firestore.rules         # Firestore security rules
-storage.rules           # Cloud Storage security rules
-firebase.json           # Emulator and deployment config
+web/           # React SPA (Vite)
+  src/config/
+    branding.ts      # ★ PER-CUSTOMER: name, logo, colors, agent identities
+    features.ts      # feature flags
+  src/pages/         # Route-level pages
+  src/components/    # Feature-organized; ui/ primitives; chat/ shared admin+patient
+  src/lib/           # firebase, firestore/ (incl. subscriptions.ts), sidecar, slack, storage, validation
+  src/contexts/      # AuthContext
+  src/hooks/         # useAuth, useFeatures, usePagination
+  src/types/         # TypeScript types
+mobile/        # Flutter patient app
+  lib/config/
+    branding.dart    # ★ PER-CUSTOMER: mirror of web/src/config/branding.ts
+    constants.dart, colors.dart, firebase_config.dart
+  lib/services/firestore/   # Per-collection service classes incl. subscriptions_service.dart
+  lib/widgets/              # Shared widgets (SubscriptionStatusCard, etc.)
+functions/     # Cloud Functions (Node 20)
+  src/branding.ts    # ★ PER-CUSTOMER: short name for SMS/email/admin signatures
+  src/index.ts       # Shared entry (SMS reminders, user management, calendar sync)
+  src/stripe.ts      # Stripe Checkout, cancel, webhook → Firestore mirror
+sidecar/       # Bun sidecar API deployed to customer host
+openclaw/      # ★ PER-CUSTOMER: AI agent workspace templates with {{PLACEHOLDER}} tokens
+firestore.rules, storage.rules, firebase.json, firestore.indexes.json
 ```
 
-★ = files that every fork edits.
+★ = files every fork edits.
 
 ## Development
 
 ```bash
-# Frontend dev server (from web/)
-npm run dev
+# From web/
+npm run dev                 # Vite dev server
+npm run emulators           # Firebase emulators (persisted)
+npm run emulators:fresh     # Fresh emulators
+npm run build && npm run lint
 
-# Firebase emulators with persisted data (from web/)
-npm run emulators
-
-# Fresh emulators (no data) (from web/)
-npm run emulators:fresh
-
-# Build frontend (from web/)
+# From functions/
 npm run build
 
-# Build functions (from functions/)
-npm run build
-
-# Lint (from web/)
-npm run lint
-
-# Mobile app (from mobile/)
-flutter run
-flutter analyze
-flutter build apk
-flutter build ios
+# From mobile/
+flutter run && flutter analyze
 ```
 
-Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000.
-
-Java 21+ required for emulators. Set
-`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home` if
-not default.
+Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000. Java 21+ required — `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
 
 ## Key Patterns
 
-- **Branding:** Single source of truth is `web/src/config/branding.ts` (web),
-  `mobile/lib/config/branding.dart` (mobile), `functions/src/branding.ts`
-  (functions). These three must stay in sync — Functions cannot import from
-  the web workspace. Never hardcode the practice name in new code — import
-  BRANDING and template it.
-- **Auth:** Firebase Auth (email/password, Google OAuth, email link, phone OTP).
-  Roles: `patient`, `admin`, `assistant`. **Passwordless by default** —
-  admin-created users have no password; they sign in via email link, Google
-  OAuth, or phone OTP.
-- **App Settings:** Global knobs in `system/settings` Firestore doc
-  (`registrationEnabled`, `paginationSize`, `bootstrapped`). Publicly readable
-  so unauthenticated `/auth` can check them; admin-only write. Live
-  subscription via `AppSettingsProvider` + `useAppSettings()` hook. UI in
-  `AdminSettingsPage`. `registrationEnabled: false` by default — public
-  self-signup is blocked at every chokepoint (`createUserDocument`,
-  `verifyPhoneLogin`) when off.
-- **Admin invites:** `createUserWithAuth` creates passwordless users;
-  `UserForm` then calls `sendInviteLink()` from the admin's browser to send a
-  Firebase email-link invite. Optional welcome SMS via Twilio. "Resend
-  invite" button on every user row.
-- **Bootstrap first admin:** Fresh-install setup is WordPress-style.
-  `AuthPage` renders `BootstrapAdminForm` when
-  `system/settings.bootstrapped === false`. Client writes
-  `bootstrap-requests/{uuid}`, `onBootstrapRequestCreated` Firestore trigger
-  processes it, writes custom token back, client signs in via
-  `signInWithCustomToken`. **Firestore trigger (not `onCall`)** because
-  GCP orgs with `iam.allowedPolicyMemberDomains` (HIPAA-hardened orgs) block
-  public Cloud Run invocation. Trigger checks for ANY user (not just admins)
-  and auto-heals by flipping `bootstrapped: true` if any user exists.
-  `AuthPage` latches `bootstrapInFlight` to keep the form mounted through
-  the in-flight sign-in (race fix).
-- **Phone normalization:** All writes to `users.phoneNumber` MUST route
-  through a `formatPhoneNumber`/`normalizePhoneNumber` helper. Server:
-  `functions/src/index.ts formatPhoneNumber`. Web: `web/src/lib/phone.ts
-  normalizePhoneNumber`. Mobile: `mobile/lib/utils/phone.dart
-  normalizePhoneNumber`. All three produce identical canonical
-  `+1XXXXXXXXXX` output. Never write raw user input — phone-OTP login
-  queries will silently fail.
-- **Routing:** Protected routes redirect to `/auth`. Admins access `/admin/*`.
-  Patients use `/dashboard`, `/messages`, `/refills`, `/billing`, etc.
-- **Data layer:** Firestore operations in `web/src/lib/firestore/` modules.
-  Each module exports CRUD functions for its collection.
-- **Validation:** Centralized field limits in `web/src/lib/validation.ts`
-  (`FIELD_LIMITS`). Never hardcode limits in individual forms.
-- **Feature flags:** `web/src/config/features.ts` — all features enabled by
-  default. Check with `useFeatures()` hook.
-- **Forms:** React Hook Form + Zod. All text fields must have max length from
-  `FIELD_LIMITS`.
-- **Shared UI:** Reusable primitives in `components/ui/` — use `BrandLogo`,
-  `LoadingSpinner`, `AccessDenied`, `PageHeader`, `StatsGrid`, `FilterTabs`,
-  `EmptyState`, `PaginationBar` instead of inline markup.
-- **Styling:** Tailwind with custom `primary-*` and `secondary-*` color
-  tokens. Three themes: Classic, Brand (configurable via branding.ts), Dark.
-  After editing `branding.ts` colors, also update
-  `web/src/index.css[data-theme="brand"]` and
-  `mobile/lib/providers/theme_provider.dart`.
-- **Emulators:** Web auto-detected via `window.location.hostname === 'localhost'`.
-  Mobile uses `FirebaseConfig.initialize(useEmulator: true)` with Android
-  `10.0.2.2` / iOS `localhost`.
-- **Mobile auth gate:** Admin/assistant → blocked modal. Inactive → pending
-  screen. Biometric locked → fingerprint/face prompt. Active patient → main app.
-- **Mobile biometric:** Enabled by default via `local_auth`. Skipped on fresh
-  sign-in. Toggle in Profile. Android requires `FlutterFragmentActivity` +
-  `USE_BIOMETRIC` permission.
-- **Mobile notifications:** Patient actions create admin notifications.
-  Tapping a message notification deep-links via `meta.threadId`. Patients can
-  read+update own notifications (rules enforced).
-- **File uploads:** Cloud Storage at
-  `patients/{patientId}/documents/{documentType}/{fileName}`.
-- **AI Agents:** Two OpenClaw agents on a customer-owned host — an admin agent
-  (`main`) and a patient support agent (`patient-support`). Unified auth via
-  `sidecarProxy` Cloud Function. **The patient support agent has NO patient
-  data access** (HIPAA compliance — no PHI on the host); it acts as a practice
-  navigator and FAQ bot. The admin agent can optionally get Google Workspace
-  access via `gog` CLI with SA domain-wide delegation. Host config mirrored in
-  `openclaw/` directory with `{{PLACEHOLDER}}` tokens — fill these in per
-  customer before shipping.
-- **Agent admin UI:** `/admin/agent` has tabs **Chat · Skills · Channels ·
-  Integrations · Backups · Health**. Channels tab
-  (`web/src/components/agent/AgentChannels.tsx`) lets admins connect messaging
-  channels — currently Slack, with Telegram/Discord/WhatsApp stubs. All channel
-  logic is browser-side in `web/src/lib/slack.ts`: it reads/writes
-  `openclaw.json` via the existing `/config PATCH` + `/restart` sidecar
-  endpoints, so adding new channels needs no sidecar rebuild.
-- **Slack → admin agent:** Bound via `channels.slack.accounts.main` → agent
-  `main` with an explicit `bindings` route entry. `dmPolicy: "open"`,
-  `groupPolicy: "open"` (at both top-level and per-account), `allowFrom: ["*"]`.
-  Tokens live **only** in `openclaw.json` on the host — never in Firestore.
-  **CRITICAL:** OpenClaw's config schema has `additionalProperties: false`
-  under `channels.slack.accounts.<id>` — only write schema-known keys
-  (`botToken`, `appToken`, `dmPolicy`, `allowFrom`, `groupPolicy`). Writing
-  unknown cache fields bricks gateway boot. Workspace name is fetched fresh
-  on each status read via `slackAuthTest()`, not cached in config.
-- **Slack `auth.test` CORS workaround:** Slack's Web API rejects browser
-  preflights carrying an `Authorization` header, so the browser cannot call
-  `slack.com/api/auth.test` directly. The `sidecarProxy` Cloud Function
-  special-cases `?path=/slack/auth-test` — handled **locally inside the CF**,
-  not forwarded to the sidecar. Any Slack validation call from the web routes
-  through this.
-- **Sidecar:** Bun binary on the host (`sidecar/`). Chat proxy to OpenClaw
-  gateway, file ops, config, backups. Dual auth: static API key (internal) +
-  user context headers (proxied). Patients restricted to `/chat` only. Runs
-  as root under systemd unit `showmd-sidecar`. **Gateway lifecycle:**
-  `sidecar/src/lib/process.ts` shells out to `/usr/bin/openclaw gateway
-  {restart,start,stop}` with `HOME=/root` — NOT `systemctl restart
-  openclaw-gateway` directly.
-- **Chat persistence:** Admin chat in `agent-chat` collection (global).
-  Patient support chat in `support-chat` collection (per-patient via
-  `patientId` field, cursor-based pagination). **All Firestore saves in chat
-  are non-blocking** (fire-and-forget with `.catch()`). Show the message in
-  UI first, persist in background. Never `await` Firestore writes in the
-  send flow. Never pass `undefined` field values to Firestore; use
-  conditional spread `...(field ? { field } : {})`.
-- **No PHI on the VPS:** Patient Firebase tokens are NOT forwarded to the
-  sidecar for the patient agent. The patient agent cannot access any patient
-  data API. The patient agent's `TOOLS.md` must say "no tools, no API" —
-  never add API endpoint docs there (it overrides SOUL.md rules).
-- **Stripe billing:** Practice-owned Stripe account. Admins manage
-  `subscription-plans` (doc id = Stripe price id). Patients subscribe via
-  Stripe Checkout (hosted). `stripeWebhook` Cloud Function mirrors
-  subscription state into `patient-subscriptions/{uid}`. The mobile app
-  reads subscription state from Firestore but delegates checkout to the web
-  `/billing` page via `url_launcher`.
+- **Branding:** Single source of truth is `web/src/config/branding.ts` (web), `mobile/lib/config/branding.dart` (mobile), `functions/src/branding.ts` (functions). These three must stay in sync — Functions cannot import from the web workspace. Never hardcode the practice name in new code; import `BRANDING` and template it.
+- **Auth:** Firebase Auth (email/password, Google OAuth, email link, phone OTP). Roles: `patient`, `admin`, `assistant`. **Passwordless by default** — admin-created users sign in via email link, Google OAuth, or phone OTP.
+- **App Settings:** Global knobs in `system/settings` Firestore doc (`registrationEnabled`, `paginationSize`, `bootstrapped`). Publicly readable, admin-only write. `AppSettingsProvider` + `useAppSettings()` hook. `registrationEnabled: false` by default — self-signup blocked at every chokepoint when off.
+- **Bootstrap first admin:** WordPress-style. `AuthPage` renders `BootstrapAdminForm` when `system/settings.bootstrapped === false`. Client writes `bootstrap-requests/{uuid}`, `onBootstrapRequestCreated` Firestore trigger processes it and writes a custom token back, client signs in via `signInWithCustomToken`. **Firestore trigger, not `onCall`** — GCP orgs with `iam.allowedPolicyMemberDomains` (HIPAA-hardened) block public Cloud Run invocation. Trigger auto-heals by flipping `bootstrapped: true` if any user exists.
+- **Admin invites:** `createUserWithAuth` creates passwordless users; `UserForm` then calls `sendInviteLink()` from the admin's browser. Optional welcome SMS via Twilio.
+- **Phone normalization:** All writes to `users.phoneNumber` MUST route through `normalizePhoneNumber`. Server `functions/src/index.ts`, web `web/src/lib/phone.ts`, mobile `mobile/lib/utils/phone.dart` — all three produce identical `+1XXXXXXXXXX`. Never write raw input.
+- **Routing:** Protected routes redirect to `/auth`. Admins access `/admin/*`. Patients use `/dashboard`, `/messages`, `/refills`, `/billing`, etc.
+- **Data layer:** Firestore ops in `web/src/lib/firestore/` — one module per collection.
+- **Validation:** Centralized `FIELD_LIMITS` in `web/src/lib/validation.ts`. Never hardcode limits in forms.
+- **Feature flags:** `web/src/config/features.ts` — all enabled by default. Check with `useFeatures()`.
+- **Forms:** React Hook Form + Zod. Max lengths from `FIELD_LIMITS`.
+- **Shared UI:** Primitives in `components/ui/` — `BrandLogo`, `LoadingSpinner`, `PageHeader`, `StatsGrid`, `FilterTabs`, `EmptyState`, `PaginationBar`, `AccessDenied`. Never inline.
+- **Styling:** Tailwind with `primary-*` / `secondary-*` tokens. Three themes: Classic, Brand (via branding.ts), Dark. After editing branding colors, also update `web/src/index.css[data-theme="brand"]` and `mobile/lib/providers/theme_provider.dart`.
+- **Mobile auth gate:** Admin/assistant → blocked modal. Inactive → pending. Biometric locked → fingerprint/face prompt. Active patient → main app. Biometric default via `local_auth`, skipped on fresh sign-in. Android requires `FlutterFragmentActivity` + `USE_BIOMETRIC`.
+- **Mobile notifications:** Patient actions create admin notifications. Message notifications deep-link via `meta.threadId`. Patients can read+update their own notifications.
+- **File uploads:** Cloud Storage at `patients/{patientId}/documents/{documentType}/{fileName}`.
+- **Chat persistence (non-blocking):** Admin chat in `agent-chat`, patient support in `support-chat`. **All Firestore saves in chat are fire-and-forget with `.catch()`** — show message in UI first, persist in background. Never `await` Firestore writes in the send flow. Never pass `undefined` fields; use conditional spread `...(field ? { field } : {})`.
+- **Stripe billing:** Practice-owned Stripe account. Admins manage `subscription-plans` (doc id = Stripe price id). Patients subscribe via Stripe Checkout (hosted). `stripeWebhook` Cloud Function mirrors subscription state into `patient-subscriptions/{uid}`. Mobile app reads subscription state from Firestore but delegates checkout to the web `/billing` page via `url_launcher`.
+- **AI Agents:** Two OpenClaw agents on a customer-owned host — admin agent (`main`) and patient support agent (`patient-support`). Unified auth via `sidecarProxy` Cloud Function. **Patient support agent has NO patient data access** (HIPAA defense in depth). Slack integration available via `/admin/agent → Channels`. **See [`docs/AI_AGENTS.md`](docs/AI_AGENTS.md) for hosts, health checks, Slack config, sidecar ops, and per-fork setup.**
 
 ## Security
 
-- **API keys:** All keys in `.env` file (gitignored), referenced via
-  `import.meta.env.VITE_*`. Never hardcode keys in source. Production
-  secrets go through Cloud Secret Manager via
-  `firebase functions:secrets:set NAME`.
-- **PII logging:** Never log email addresses, phone numbers, or other PII.
-  Log only UIDs and roles.
-- **Input validation:** Frontend (Zod) AND backend (Cloud Functions) must
-  both validate. Limits defined in `FIELD_LIMITS`.
-- **Storage rules:** Only patient owner and admins can read documents. No
-  public access.
-- **Firestore rules:** Admin role verified from user document, not from data
-  being accessed.
-- **Session storage:** Email for sign-in link stored in `sessionStorage`
-  (not `localStorage`) — cleared when tab closes.
-- **Stripe webhook:** Signature verified via `STRIPE_WEBHOOK_SECRET`.
-  Clients cannot write to `patient-subscriptions` — rules force all writes
-  through the webhook Cloud Function.
+- **API keys:** `.env` (gitignored), referenced via `import.meta.env.VITE_*`. Never hardcode in source. Production secrets go through Cloud Secret Manager via `firebase functions:secrets:set NAME`.
+- **PII logging:** Never log emails, phone numbers, or other PII. Log UIDs and roles only.
+- **Input validation:** Frontend (Zod) AND backend (Cloud Functions) must both validate against `FIELD_LIMITS`.
+- **Storage rules:** Only patient owner and admins can read documents. No public access.
+- **Firestore rules:** Admin role verified from user doc, not from the accessed data.
+- **Session storage:** Email for sign-in link in `sessionStorage` (cleared on tab close), not `localStorage`.
+- **Stripe webhook:** Signature verified via `STRIPE_WEBHOOK_SECRET`. Clients cannot write to `patient-subscriptions` — rules force all writes through the webhook Cloud Function.
 
 ## Firestore Collections
 
-`users`, `message-threads`, `thread-messages`, `appointments`,
-`prescription-refills`, `patient-documents`, `patient-intake-forms`,
-`admin-todos`, `notifications`, `phone-verifications`, `rate-limits`,
-`agent-chat`, `support-chat`, `agent-skills`, `specialist-requests`, `daily-reminders`,
-`system` (`system/settings` is publicly readable),
-`bootstrap-requests` (write-once channel for first-admin setup, UUID doc IDs, `list` denied),
-`subscription-plans`, `patient-subscriptions`
-
-## Cloud Functions
-
-- `calendarReminderScheduler` — every 5 min, reads Calendar events 24h ahead,
-  sends 24h SMS + queues 8AM reminder
-- `morningReminderScheduler` — daily 8AM PT, sends queued same-day reminders
-- `todoReminderScheduler` — every 30 min, sends SMS via Twilio for admin todos
-- `createUserWithAuth` / `updateUserAuth` — callable admin user management (passwordless, phone normalized)
-- `onBootstrapRequestCreated` — Firestore trigger on `bootstrap-requests/{uuid}`, runs the WordPress-style first-admin bootstrap flow as the function's SA (not a public callable — HIPAA-hardened orgs block public Cloud Run invocation via `iam.allowedPolicyMemberDomains`)
-- `sendPhoneVerificationCode` / `verifyPhoneCode` — phone verification via Twilio
-- `deleteAccount` — cascade delete user data (Firestore, Storage, Auth)
-- `logAuditEvent` — HIPAA-safe audit logging
-- `getAvailableSlots` / `validateAppointmentSlot` — appointment scheduling
-- `onAppointmentWrite` / `syncCalendarChanges` — bidirectional Google Calendar sync
-- `sidecarProxy` — HTTP proxy to the host sidecar. Also **handles `?path=/slack/auth-test` locally** without forwarding — calls Slack's `auth.test` server-side because browser CORS blocks direct calls carrying an Authorization header.
-- `serveFile` — secure file proxy with signed URLs
-- `cleanupCancelledAppointments` — daily cleanup
-- `createCheckoutSession` — callable; creates a Stripe Checkout Session.
-  Returns hosted checkout URL.
-- `cancelSubscription` — callable; cancels patient's subscription at period end.
-- `stripeWebhook` — HTTPS; receives Stripe events and mirrors subscription
-  state into `patient-subscriptions/{uid}`.
-
-## AI Agent setup (per fork)
-
-Each customer runs its own VPS with OpenClaw + the sidecar. Template
-workspace files live in `openclaw/` with `{{PLACEHOLDER}}` tokens:
-
-- `{{PRACTICE_NAME}}` — full practice name
-- `{{LEGAL_ENTITY}}` — legal entity for compliance text
-- `{{DOMAIN}}` — patient portal domain (without protocol)
-- `{{SUPPORT_EMAIL}}`, `{{SUPPORT_PHONE}}`, `{{ADDRESS}}`, `{{HOURS}}`
-- `{{ADMIN_AGENT_NAME}}` — admin assistant display name
-- `{{PATIENT_AGENT_NAME}}` — patient support assistant display name
-- `{{PRIMARY_CONTACT_NAME}}`, `{{PRIMARY_CONTACT_EMAIL}}`
-
-Before first deploy, rewrite these tokens in:
-- `openclaw/workspace/*.md` (admin agent)
-- `openclaw/agents/patient-support/workspace/*.md` (patient support agent)
-- `openclaw/openclaw.json`
-
-Keep the patient-support agent's SOUL.md small (~5KB max) — large system
-prompts are often ignored by the model.
-
-## Health check
-
-After an agent is deployed:
-
-**Via sidecar API (admin auth required):**
-- `GET /healthz` — sidecar alive check
-- `GET /status` — gateway process state + health
-- `GET /stats` — memory, CPU, uptime, disk
-
-**Via web app:** Admin dashboard → AI Agent page → status indicator
-
-**Via CLI (direct SSH for debugging):**
-```bash
-SSH="ssh -i ~/.ssh/vps-key root@YOUR_VPS_IP"
-$SSH "curl -s http://localhost:18789/health"   # Gateway
-$SSH "curl -s http://localhost:8081/healthz"   # Sidecar
-$SSH "openclaw agents list"
-$SSH "systemctl restart patient-sidecar"
-$SSH "openclaw gateway restart"
-```
+`users`, `message-threads`, `thread-messages`, `appointments`, `prescription-refills`, `patient-documents`, `patient-intake-forms`, `admin-todos`, `notifications`, `phone-verifications`, `rate-limits`, `agent-chat`, `support-chat`, `agent-skills`, `specialist-requests`, `daily-reminders`, `system` (`system/settings` publicly readable), `bootstrap-requests` (write-once, `list` denied), `subscription-plans`, `patient-subscriptions`
 
 ## Deployment
 
-- **Frontend:** Firebase App Hosting (Cloud Run) — one backend per customer.
-  Auto-deploys on push to `main` once the GitHub repo is linked to the
-  backend in Firebase Console. The demo fork uses backend `web-patient-demo`
-  on project `patient-demo-project` in `us-central1`. Before first deploy
-  per customer: update the project id in `.firebaserc`, update `apphosting.yaml`
-  with the new project's Firebase config values, and put
-  `VITE_FIREBASE_API_KEY` in Secret Manager (see below) — DO NOT put the key
-  directly in `apphosting.yaml` with `value:` (GitHub's secret scanner flags
-  it, and the key should be a `secret:` reference for consistency with
-  production posture).
-- **Secret Manager for Firebase Web API key:**
-  ```bash
-  echo -n "AIzaSy..." | gcloud secrets create VITE_FIREBASE_API_KEY \
-    --project=<PROJECT_ID> --data-file=-
-  firebase apphosting:secrets:grantaccess VITE_FIREBASE_API_KEY \
-    --project <PROJECT_ID> --backend <BACKEND_ID>
-  ```
-  (Web API keys are public routing identifiers per Google — real security
-  is via Firebase Rules + App Check — but routing through Secret Manager
-  keeps scanners quiet and makes rotation trivial.)
-- **Compute SA needs tokenCreator on itself** for `createCustomToken`
-  (used by phone-OTP sign-in and bootstrap trigger). Run once per project:
-  ```bash
-  gcloud iam service-accounts add-iam-policy-binding \
-    <PROJECT_NUMBER>-compute@developer.gserviceaccount.com \
-    --member=serviceAccount:<PROJECT_NUMBER>-compute@developer.gserviceaccount.com \
-    --role=roles/iam.serviceAccountTokenCreator \
-    --project=<PROJECT_ID>
-  ```
-  Without this, `createCustomToken` throws `Permission 'iam.serviceAccounts.signBlob' denied`.
+- **Frontend:** Firebase App Hosting (Cloud Run) — one backend per customer. Auto-deploys on push to `main` once the GitHub repo is linked to the backend. The demo fork uses backend `web-patient-demo` on project `patient-demo-project` in `us-central1`.
 - **Functions:** `firebase deploy --only functions`
-- **Sidecar:** `cd sidecar && ./deploy.sh` (cross-compiles Bun binary for linux-x64, uploads via `gcloud compute scp`, restarts `showmd-sidecar` systemd unit, health checks). Targets GCE by default via the `GCE_VM`/`GCE_ZONE`/`GCE_PROJECT` constants inside the script — edit these for your host. `TARGET=vultr` escape hatch is available for Vultr-based installs.
-- **OpenClaw update:** `./scripts/openclaw-update.sh [tag]` — creates backup
-  on VPS, uploads to GCS, then runs `openclaw update`. `--dry-run` to preview.
-- **Mobile:** Customize package id in `mobile/android/app/build.gradle.kts`
-  and iOS bundle id before building.
+- **Firestore rules + indexes:** `firebase deploy --only firestore:rules,firestore:indexes`
+- **Sidecar:** `cd sidecar && ./deploy.sh` (GCE default, edit constants for host)
+- **OpenClaw update:** `./scripts/openclaw-update.sh [tag]`
+- **Mobile:** Customize package id in `mobile/android/app/build.gradle.kts` and iOS bundle id before building.
+
+## Per-fork setup
+
+Before first deploy to a new customer project:
+
+1. **Branding** — edit `web/src/config/branding.ts`, `mobile/lib/config/branding.dart`, `functions/src/branding.ts`
+2. **Firebase project** — update `.firebaserc`, `apphosting.yaml` (with new project's Firebase config values)
+3. **Firebase Web API key in Secret Manager** — NEVER put it in `apphosting.yaml` with `value:`; GitHub's scanner flags it, and `secret:` is cleaner for rotation:
+   ```bash
+   echo -n "AIzaSy..." | gcloud secrets create VITE_FIREBASE_API_KEY \
+     --project=<PROJECT_ID> --data-file=-
+   firebase apphosting:secrets:grantaccess VITE_FIREBASE_API_KEY \
+     --project <PROJECT_ID> --backend <BACKEND_ID>
+   ```
+   (Firebase Web API keys are public routing identifiers — real security is Firebase Rules + App Check — but routing through Secret Manager keeps scanners quiet and makes rotation trivial.)
+4. **Compute SA `tokenCreator` on itself** — required for `createCustomToken` (used by phone-OTP sign-in and the bootstrap trigger). Run once per project:
+   ```bash
+   gcloud iam service-accounts add-iam-policy-binding \
+     <PROJECT_NUMBER>-compute@developer.gserviceaccount.com \
+     --member=serviceAccount:<PROJECT_NUMBER>-compute@developer.gserviceaccount.com \
+     --role=roles/iam.serviceAccountTokenCreator \
+     --project=<PROJECT_ID>
+   ```
+   Without this, `createCustomToken` throws `Permission 'iam.serviceAccounts.signBlob' denied`.
+5. **AI agent workspace tokens** — rewrite `{{PLACEHOLDER}}` tokens in `openclaw/**/*.md` and `openclaw/openclaw.json`. See [`docs/AI_AGENTS.md`](docs/AI_AGENTS.md) for the full placeholder list.
+
+## Detailed docs
+
+- **[`docs/AI_AGENTS.md`](docs/AI_AGENTS.md)** — agents, hosts, Slack channel, sidecar ops, health checks, session management, per-fork setup
+- **[`docs/DEMO_DEPLOY.md`](docs/DEMO_DEPLOY.md)** — demo deployment walkthrough
+- **[`docs/FORK_CHECKLIST.md`](docs/FORK_CHECKLIST.md)** — per-customer fork checklist
 
 ## Notes
 
-- `dataconnect/` directory is unused and can be ignored
-- No test suite yet — to be added later
-- When adding new collections, always update both `firestore.rules` and
-  `firestore.indexes.json` in the same change. Add composite indexes
-  whenever you create a `where()` + `orderBy()` query.
+- `dataconnect/` unused, can be removed
+- No test suite yet
+- When adding new collections: update `firestore.rules` and `firestore.indexes.json` in the same change. Add composite indexes for any `where()` + `orderBy()` query.

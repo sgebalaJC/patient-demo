@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
@@ -38,7 +38,11 @@ const GATEWAY_TOKEN = import.meta.env.VITE_AGENT_GATEWAY_TOKEN || '';
 
 export const AgentPage: React.FC = () => {
   const { userProfile, loading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>('chat');
+  const [searchParams] = useSearchParams();
+  const initialTab = (searchParams.get('tab') as Tab) || 'chat';
+  const [activeTab, setActiveTab] = useState<Tab>(
+    NAV_ITEMS.some((n) => n.key === initialTab) ? initialTab : 'chat'
+  );
   const [healthy, setHealthy] = useState<boolean | null>(null);
 
   // Poll status every 30s

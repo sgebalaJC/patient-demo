@@ -2721,3 +2721,344 @@ export const morningReminderScheduler = onSchedule({
     logger.error('Error in morning reminder:', error.message);
   }
 });
+
+
+// =============================================================================
+// Google Workspace OAuth Integration
+// =============================================================================
+
+import {SignJWT, jwtVerify} from "jose";
+import {encrypt} from "./encryption.js";
+import {
+  getGoogleAuthUrl,
+  exchangeCodeForTokens,
+  refreshAccessToken,
+  detectServices,
+  type GoogleService,
+} from "./google-workspace.js";
+import {
+  listInboxMessages,
+  getFullMessage,
+  sendEmail,
+  replyToEmail,
+} from "./gmail-workspace.js";
+import {
+  listEvents as wsListEvents,
+  getEvent as wsGetEvent,
+  createEvent as wsCreateEvent,
+  updateEvent as wsUpdateEvent,
+  deleteEvent as wsDeleteEvent,
+} from "./google-calendar-workspace.js";
+import {
+  listFiles,
+  getFile,
+  getFileContent,
+  createFile,
+} from "./google-drive-workspace.js";
+
+/**
+ * googleWorkspaceAuthorize — Admin-only callable function.
+ * Returns a Google OAuth URL for the requested services.
+ * Creates a signed JWT "state" param so the callback can validate the round-trip.
+ */
+export const googleWorkspaceAuthorize = onCall({}, async (request) => {
+  // Admin-only
+  if (!request.auth) throw new Error('Authentication required');
+  const userDoc = await db.collection('users').doc(request.auth.uid).get();
+  if (!userDoc.exists || userDoc.data()?.role !== 'admin') {
+    throw new Error('Admin access required');
+  }
+
+  const services = ((request.data?.services as string) || 'gmail')
+    .split(',').filter(Boolean) as GoogleService[];
+  const returnUrl = (request.data?.returnUrl as string) || null;
+
+  // Create signed state JWT (10 min expiry)
+  const encKey = process.env.GOOGLE_WORKSPACE_ENCRYPTION_KEY;
+  if (!encKey) throw new Error('GOOGLE_WORKSPACE_ENCRYPTION_KEY not configured');
+  const secret = new TextEncoder().encode(encKey);
+
+  const state = await new SignJWT({
+    userId: request.auth.uid,
+    services,
+    ...(returnUrl ? {returnUrl} : {}),
+  })
+    .setProtectedHeader({alg: 'HS256'})
+    .setExpirationTime('10m')
+    .sign(secret);
+
+  const authUrl = getGoogleAuthUrl(state, services);
+  return {url: authUrl};
+});
+
+/**
+ * googleWorkspaceCallback — Public HTTPS endpoint (Google redirects here).
+ * Validates the state JWT, exchanges the auth code for tokens, encrypts the
+ * refresh token, and stores everything in Firestore integrations/google-workspace.
+ * Then redirects the browser back to the admin UI.
+ */
+export const googleWorkspaceCallback = onRequest({
+  cors: true,
+}, async (req, res) => {
+  // Determine the frontend URL for redirects
+  const frontendUrl = isProduction()
+    ? 'https://patient.example.com'
+    : 'http://localhost:3001';
+  const redirectBase = `${frontendUrl}/admin/agent`;
+
+  const code = req.query.code as string | undefined;
+  const state = req.query.state as string | undefined;
+  const oauthError = req.query.error as string | undefined;
+
+  if (oauthError) {
+    res.redirect(`${redirectBase}?tab=integrations&gws_error=${encodeURIComponent(oauthError)}`);
+    return;
+  }
+
+  if (!code || !state) {
+    res.redirect(`${redirectBase}?tab=integrations&gws_error=missing_params`);
+    return;
+  }
+
+  // Verify state JWT
+  let userId: string;
+  let requestedServices: GoogleService[];
+  let returnUrl: string | null = null;
+  try {
+    const encKey = process.env.GOOGLE_WORKSPACE_ENCRYPTION_KEY;
+    if (!encKey) throw new Error('Encryption key not configured');
+    const secret = new TextEncoder().encode(encKey);
+    const {payload} = await jwtVerify(state, secret);
+    userId = payload.userId as string;
+    requestedServices = (payload.services as GoogleService[]) || ['gmail'];
+    returnUrl = (payload.returnUrl as string) || null;
+    if (!userId) throw new Error('Invalid state');
+  } catch {
+    res.redirect(`${redirectBase}?tab=integrations&gws_error=invalid_state`);
+    return;
+  }
+
+  const finalRedirect = returnUrl ? `${frontendUrl}${returnUrl}` : redirectBase;
+
+  try {
+    const tokens = await exchangeCodeForTokens(code);
+
+    // Determine which services were actually granted
+    const grantedServices = detectServices(tokens.grantedScopes);
+    const services = requestedServices.filter((s) => grantedServices.includes(s));
+    if (services.length === 0) services.push(...grantedServices);
+
+    // Encrypt refresh token and store in Firestore
+    const encryptedCredentials = encrypt(
+      JSON.stringify({refreshToken: tokens.refreshToken, expiresAt: tokens.expiresAt})
+    );
+
+    await db.collection('integrations').doc('google-workspace').set({
+      provider: 'google-workspace',
+      status: 'active',
+      email: tokens.email,
+      refreshTokenCipher: encryptedCredentials,
+      enabledServices: services,
+      grantedScopes: tokens.grantedScopes,
+      connectedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      connectedBy: userId,
+    });
+
+    const params = new URLSearchParams({
+      tab: 'integrations',
+      gws_status: 'connected',
+      gws_email: tokens.email,
+      gws_services: services.join(','),
+    });
+    res.redirect(`${finalRedirect}?${params}`);
+  } catch (error: any) {
+    logger.error('[google-workspace] OAuth callback error:', error.message);
+    res.redirect(
+      `${finalRedirect}?tab=integrations&gws_error=${encodeURIComponent('Failed to connect Google Workspace')}`
+    );
+  }
+});
+
+/**
+ * googleWorkspaceProxy — API-key-authenticated HTTPS endpoint.
+ * Called by the OpenClaw agent via curl. Routes to Gmail, Calendar, or Drive
+ * handlers based on the {service, action} in the request body.
+ */
+export const googleWorkspaceProxy = onRequest({
+  cors: true,
+  timeoutSeconds: 60,
+}, async (req, res) => {
+  try {
+    // Validate API key
+    const apiKey = req.headers['x-api-key'] as string;
+    const expectedKey = process.env.GOOGLE_WORKSPACE_API_KEY;
+    if (!apiKey || !expectedKey || apiKey !== expectedKey) {
+      res.status(401).json({error: 'Missing or invalid X-Api-Key'});
+      return;
+    }
+
+    // Read integration from Firestore
+    const integrationDoc = await db.collection('integrations').doc('google-workspace').get();
+    if (!integrationDoc.exists || integrationDoc.data()?.status !== 'active') {
+      res.status(404).json({error: 'Google Workspace not connected'});
+      return;
+    }
+
+    const integration = integrationDoc.data()!;
+
+    // Refresh access token
+    let accessToken: string;
+    try {
+      const result = await refreshAccessToken(integration.refreshTokenCipher);
+      accessToken = result.accessToken;
+    } catch {
+      res.status(401).json({error: 'Google token expired — reconnect Google Workspace'});
+      return;
+    }
+
+    // Parse request body
+    let body: Record<string, unknown>;
+    try {
+      body = req.body as Record<string, unknown>;
+      if (!body || typeof body !== 'object') throw new Error('Invalid body');
+    } catch {
+      res.status(400).json({error: 'Invalid JSON body'});
+      return;
+    }
+
+    const service = body.service as string;
+    const action = body.action as string;
+
+    switch (service) {
+    case 'gmail':
+      res.json(await handleGmailAction(accessToken, action, body, integration.email));
+      break;
+    case 'calendar':
+      res.json(await handleCalendarAction(accessToken, action, body));
+      break;
+    case 'drive':
+      res.json(await handleDriveAction(accessToken, action, body));
+      break;
+    default:
+      res.status(400).json({error: 'Invalid service. Use: gmail, calendar, drive'});
+    }
+  } catch (error: any) {
+    logger.error('[gws-proxy] error:', error.message);
+    res.status(500).json({error: error.message});
+  }
+});
+
+async function handleGmailAction(
+  accessToken: string,
+  action: string,
+  body: Record<string, unknown>,
+  email: string,
+) {
+  switch (action) {
+  case 'inbox': {
+    const maxResults = Math.min((body.maxResults as number) ?? 10, 20);
+    return {emails: await listInboxMessages(accessToken, maxResults)};
+  }
+  case 'read': {
+    const messageId = body.messageId as string;
+    if (!messageId) throw new Error('messageId required');
+    const msg = await getFullMessage(accessToken, messageId);
+    if (!msg) throw new Error('Message not found');
+    return {email: msg};
+  }
+  case 'send': {
+    const {to, subject, body: emailBody} = body as {
+      to: string; subject: string; body: string;
+    };
+    if (!to || !subject || !emailBody) throw new Error('to, subject, and body required');
+    return await sendEmail(accessToken, to, subject, emailBody, email);
+  }
+  case 'reply': {
+    const {messageId, body: replyBody} = body as {messageId: string; body: string};
+    if (!messageId || !replyBody) throw new Error('messageId and body required');
+    return await replyToEmail(accessToken, messageId, replyBody, email);
+  }
+  default:
+    throw new Error('Invalid Gmail action. Use: inbox, read, send, reply');
+  }
+}
+
+async function handleCalendarAction(
+  accessToken: string,
+  action: string,
+  body: Record<string, unknown>,
+) {
+  const calendarId = (body.calendarId as string) || 'primary';
+  switch (action) {
+  case 'list': {
+    const timeMin = (body.timeMin as string) || new Date().toISOString();
+    const timeMax = (body.timeMax as string) || new Date(Date.now() + 7 * 86400000).toISOString();
+    const maxResults = Math.min((body.maxResults as number) ?? 50, 100);
+    return {events: await wsListEvents(accessToken, timeMin, timeMax, calendarId, maxResults)};
+  }
+  case 'get': {
+    const eventId = body.eventId as string;
+    if (!eventId) throw new Error('eventId required');
+    const event = await wsGetEvent(accessToken, eventId, calendarId);
+    if (!event) throw new Error('Event not found');
+    return {event};
+  }
+  case 'create': {
+    const event = body.event as Record<string, unknown>;
+    if (!event) throw new Error('event object required');
+    return {event: await wsCreateEvent(accessToken, event as Parameters<typeof wsCreateEvent>[1], calendarId)};
+  }
+  case 'update': {
+    const eventId = body.eventId as string;
+    const updates = body.updates as Record<string, unknown>;
+    if (!eventId || !updates) throw new Error('eventId and updates required');
+    return {event: await wsUpdateEvent(accessToken, eventId, updates, calendarId)};
+  }
+  case 'delete': {
+    const eventId = body.eventId as string;
+    if (!eventId) throw new Error('eventId required');
+    await wsDeleteEvent(accessToken, eventId, calendarId);
+    return {ok: true};
+  }
+  default:
+    throw new Error('Invalid Calendar action. Use: list, get, create, update, delete');
+  }
+}
+
+async function handleDriveAction(
+  accessToken: string,
+  action: string,
+  body: Record<string, unknown>,
+) {
+  switch (action) {
+  case 'list': {
+    const query = body.query as string | undefined;
+    const maxResults = Math.min((body.maxResults as number) ?? 20, 50);
+    return {files: await listFiles(accessToken, query, maxResults)};
+  }
+  case 'get': {
+    const fileId = body.fileId as string;
+    if (!fileId) throw new Error('fileId required');
+    const file = await getFile(accessToken, fileId);
+    if (!file) throw new Error('File not found');
+    return {file};
+  }
+  case 'read': {
+    const fileId = body.fileId as string;
+    if (!fileId) throw new Error('fileId required');
+    const file = await getFile(accessToken, fileId);
+    const content = await getFileContent(accessToken, fileId);
+    return {file, content};
+  }
+  case 'create': {
+    const {name, content, mimeType, folderId} = body as {
+      name: string; content: string; mimeType?: string; folderId?: string;
+    };
+    if (!name || !content) throw new Error('name and content required');
+    return {file: await createFile(accessToken, name, content, mimeType, folderId)};
+  }
+  default:
+    throw new Error('Invalid Drive action. Use: list, get, read, create');
+  }
+}

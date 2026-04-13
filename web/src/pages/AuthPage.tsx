@@ -73,8 +73,12 @@ export const AuthPage: React.FC = () => {
 
         try {
           await completeEmailLinkSignIn();
-          // Navigation will be handled by auth state change
+          // Sign-in succeeded — keep the loading spinner visible until
+          // AuthContext picks up the auth state change and redirects.
+          // Do NOT clear emailLinkLoading here; the redirect via
+          // <Navigate> will unmount this component.
         } catch (error: any) {
+          setEmailLinkLoading(false);
           if (error.message === 'EMAIL_REQUIRED') {
             // sessionStorage email lost (link opened in new tab) — ask user to confirm email
             setNeedsEmailForLink(true);
@@ -88,8 +92,6 @@ export const AuthPage: React.FC = () => {
               error.message || 'Failed to complete sign-in. Please try again.'
             );
           }
-        } finally {
-          setEmailLinkLoading(false);
         }
       }
     };
@@ -192,13 +194,13 @@ export const AuthPage: React.FC = () => {
     try {
       await completeEmailLinkSignIn(emailForLink.trim());
       setNeedsEmailForLink(false);
+      // Keep loading spinner — AuthContext will redirect on state change
     } catch (error: any) {
+      setEmailLinkLoading(false);
       logger.error('Email link sign-in error:', error);
       setEmailLinkError(
         error.message || 'Failed to complete sign-in. Please try again.'
       );
-    } finally {
-      setEmailLinkLoading(false);
     }
   };
 

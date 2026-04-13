@@ -31,14 +31,26 @@ $SSH "sudo systemctl stop patient-sidecar"
 echo "==> Moving binary into place..."
 $SSH "sudo mv /tmp/patient-sidecar.new $REMOTE_BIN && sudo chmod +x $REMOTE_BIN"
 
+# Ensure SIDECAR_API_KEY is in the OpenClaw gateway environment so the CLI inherits it
+echo "==> Provisioning CLI environment..."
+$SSH "sudo bash -c '
+  KEY=\$(grep SIDECAR_API_KEY /root/sidecar.env 2>/dev/null | cut -d= -f2)
+  if [ -n \"\$KEY\" ]; then
+    grep -q SIDECAR_API_KEY /root/.bashrc 2>/dev/null || echo \"export SIDECAR_API_KEY=\$KEY\" >> /root/.bashrc
+    echo \"SIDECAR_API_KEY set in .bashrc\"
+  else
+    echo \"WARNING: SIDECAR_API_KEY not found in /root/sidecar.env\"
+  fi
+'"
+
 # Deploy CLI wrapper + skills if present
 CLI_SCRIPT="$SCRIPT_DIR/../openclaw/scripts/admin-api"
 if [ -f "$CLI_SCRIPT" ]; then
   echo "==> Deploying admin-api CLI..."
   gcloud compute scp "$CLI_SCRIPT" \
-    "$GCE_VM:/usr/local/bin/admin-api" \
+    "$GCE_VM:/tmp/admin-api-cli" \
     --zone="$GCE_ZONE" --project="$GCE_PROJECT"
-  $SSH "chmod +x /usr/local/bin/admin-api"
+  $SSH "sudo mv /tmp/admin-api-cli /usr/local/bin/admin-api && sudo chmod +x /usr/local/bin/admin-api"
 fi
 
 SKILLS_DIR="$SCRIPT_DIR/../openclaw/workspace/skills"
@@ -46,10 +58,11 @@ if [ -d "$SKILLS_DIR" ]; then
   echo "==> Deploying skills..."
   for skill_dir in "$SKILLS_DIR"/*/; do
     skill_name=$(basename "$skill_dir")
-    $SSH "mkdir -p /root/.openclaw/workspace/skills/$skill_name"
+    $SSH "sudo mkdir -p /root/.openclaw/workspace/skills/$skill_name"
     gcloud compute scp "$skill_dir"SKILL.md \
-      "$GCE_VM:/root/.openclaw/workspace/skills/$skill_name/SKILL.md" \
+      "$GCE_VM:/tmp/skill-${skill_name}.md" \
       --zone="$GCE_ZONE" --project="$GCE_PROJECT" 2>/dev/null || true
+    $SSH "sudo mv /tmp/skill-${skill_name}.md /root/.openclaw/workspace/skills/$skill_name/SKILL.md"
   done
 fi
 

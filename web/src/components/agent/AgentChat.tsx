@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader, FileText, Image } from 'lucide-react';
+import { Loader } from 'lucide-react';
 import { DocumentSnapshot } from 'firebase/firestore';
 import { sidecar } from '../../lib/sidecar';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
-import { ChatMarkdown } from '../chat/ChatMarkdown';
+import { ChatBubble } from '../chat/ChatBubble';
 import { ChatInput, fileToBase64 } from '../chat/ChatInput';
 import {
   AgentChatMessage,
@@ -16,7 +16,6 @@ import logger from '../../lib/logger';
 
 const PAGE_SIZE = 50;
 
-const isImage = (mimeType: string) => mimeType.startsWith('image/');
 
 export const AgentChat: React.FC = () => {
   const { user, userProfile } = useAuth();
@@ -182,29 +181,13 @@ export const AgentChat: React.FC = () => {
         )}
 
         {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div
-              className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm ${
-                msg.role === 'user'
-                  ? 'bg-primary-700 text-white rounded-br-sm'
-                  : 'bg-surface-card border border-secondary-200 text-secondary-900 rounded-bl-sm'
-              }`}
-            >
-              <ChatMarkdown content={msg.content} variant={msg.role} />
-              {msg.attachments && msg.attachments.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {msg.attachments.map((att, i) => (
-                    <div key={i} className={`flex items-center gap-1.5 text-xs ${
-                      msg.role === 'user' ? 'text-white/80' : 'text-secondary-500'
-                    }`}>
-                      {isImage(att.mimeType) ? <Image className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
-                      <span className="truncate">{att.name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <ChatBubble
+            key={msg.id}
+            role={msg.role}
+            content={msg.content}
+            attachments={msg.attachments}
+            onDelete={() => setMessages(prev => prev.filter(m => m.id !== msg.id))}
+          />
         ))}
 
         {sending && (

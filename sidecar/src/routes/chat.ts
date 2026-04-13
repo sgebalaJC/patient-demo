@@ -25,6 +25,54 @@ try {
 } catch { /* config may not exist yet */ }
 
 // ---------------------------------------------------------------------------
+// Per-patient rate limiter — admins are unlimited
+// ---------------------------------------------------------------------------
+
+const RATE_LIMIT_PER_MINUTE = 10;
+const RATE_LIMIT_PER_HOUR = 60;
+
+interface RateBucket {
+  minuteCount: number;
+  minuteReset: number;
+  hourCount: number;
+  hourReset: number;
+}
+
+const rateBuckets = new Map<string, RateBucket>();
+
+function checkChatRateLimit(uid: string): string | null {
+  const now = Date.now();
+  let bucket = rateBuckets.get(uid);
+
+  if (!bucket) {
+    bucket = { minuteCount: 0, minuteReset: now + 60_000, hourCount: 0, hourReset: now + 3_600_000 };
+    rateBuckets.set(uid, bucket);
+  }
+
+  if (now > bucket.minuteReset) { bucket.minuteCount = 0; bucket.minuteReset = now + 60_000; }
+  if (now > bucket.hourReset) { bucket.hourCount = 0; bucket.hourReset = now + 3_600_000; }
+
+  bucket.minuteCount++;
+  bucket.hourCount++;
+
+  if (bucket.minuteCount > RATE_LIMIT_PER_MINUTE) {
+    return "You're sending messages too quickly. Please wait a moment.";
+  }
+  if (bucket.hourCount > RATE_LIMIT_PER_HOUR) {
+    return "You've reached the message limit. Please try again later or contact us at support@showmd.org.";
+  }
+  return null;
+}
+
+// Clean up stale rate buckets every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [uid, bucket] of rateBuckets) {
+    if (now > bucket.hourReset) rateBuckets.delete(uid);
+  }
+}, 600_000);
+
+// ---------------------------------------------------------------------------
 // Per-session message queue — serializes messages so the gateway processes
 // one at a time per session. Prevents race conditions and dropped messages.
 // ---------------------------------------------------------------------------
@@ -143,6 +191,14 @@ export async function handleChat(request: Request, user?: UserContext): Promise<
   let messageContent = lastUserMessage.content;
 
   const isPatientSupport = user?.role !== "admin" || body.support === true;
+
+  // Rate limit non-admin users
+  if (user && user.role !== "admin") {
+    const limited = checkChatRateLimit(user.uid);
+    if (limited) {
+      return Response.json({ role: "assistant", content: limited });
+    }
+  }
 
   if (user?.role !== "admin" && messageContent.startsWith("/")) {
     messageContent = messageContent.replace(/^\/+/, "");

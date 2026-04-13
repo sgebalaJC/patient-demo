@@ -19,4 +19,6 @@ export const FUNCTIONS_BRANDING = {
   legalEntity: 'Acme Primary Care, LLC',
   /** Name used to sign admin system messages */
   adminSignatureName: 'Acme Admin System',
+  /** Patient portal URL for email links */
+  portalUrl: 'https://web-patient-demo--patient-demo-project.us-central1.hosted.app',
 } as const;

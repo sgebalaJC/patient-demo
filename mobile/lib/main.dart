@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'config/firebase_config.dart';
 import 'config/colors.dart';
 import 'config/branding.dart';
@@ -17,6 +18,12 @@ import 'widgets/admin_blocked_modal.dart';
 import 'widgets/inactive_account_screen.dart';
 import 'widgets/biometric_lock_screen.dart';
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Background messages are handled by the OS notification tray.
+  // Firebase is already initialized by the time this runs.
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -24,6 +31,8 @@ void main() async {
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await FirebaseConfig.initialize(useEmulator: false);
   await AuthService.initGoogleSignIn();
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   runApp(const PatientPortalApp());
 }

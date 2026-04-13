@@ -62,27 +62,16 @@
     }
   ],
   "hosting": {
-    "public": "web/dist",
+    "public": "hosting-redirect",
     "ignore": [
       "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
+      "**/.*"
     ],
-    "rewrites": [
+    "redirects": [
       {
         "source": "**",
-        "destination": "/index.html"
-      }
-    ],
-    "headers": [
-      {
-        "source": "**/*.@(js|css|woff2)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public,max-age=31536000,immutable"
-          }
-        ]
+        "destination": "https://web-patient-demo--patient-demo-project.us-central1.hosted.app",
+        "type": 302
       }
     ]
   },

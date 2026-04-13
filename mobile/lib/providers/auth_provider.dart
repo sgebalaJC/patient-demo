@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
+import '../services/fcm_service.dart';
 
 enum AuthStatus {
   uninitialized,
@@ -17,6 +18,7 @@ enum AuthStatus {
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
   final BiometricService _biometricService = BiometricService();
+  final FcmService _fcmService = FcmService();
 
   AuthStatus _status = AuthStatus.uninitialized;
   User? _firebaseUser;
@@ -75,6 +77,8 @@ class AuthProvider extends ChangeNotifier {
     );
   }
 
+  bool _fcmInitialized = false;
+
   void _resolveStatus(AppUser? profile) {
     if (profile == null) {
       _status = AuthStatus.unauthenticated;
@@ -90,6 +94,10 @@ class AuthProvider extends ChangeNotifier {
       }
     } else {
       _status = AuthStatus.authenticated;
+      if (!_fcmInitialized && _firebaseUser != null) {
+        _fcmInitialized = true;
+        _fcmService.initialize(_firebaseUser!.uid);
+      }
     }
   }
 
@@ -254,7 +262,11 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    if (_firebaseUser != null) {
+      await _fcmService.clearToken(_firebaseUser!.uid);
+    }
     _biometricPassed = false;
+    _fcmInitialized = false;
     await _authService.signOut();
   }
 

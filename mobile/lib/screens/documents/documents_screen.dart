@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore/documents_service.dart';
+import '../../services/storage_service.dart';
 import '../../models/document.dart';
 import '../../config/colors.dart';
 
@@ -14,8 +17,11 @@ class DocumentsScreen extends StatefulWidget {
 
 class _DocumentsScreenState extends State<DocumentsScreen> {
   final _service = DocumentsService();
+  final _storageService = StorageService();
   List<PatientDocument> _documents = [];
   bool _loading = true;
+  bool _uploading = false;
+  double _uploadProgress = 0;
 
   @override
   void initState() {
@@ -81,16 +87,175 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     },
                   ),
                 ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Coming soon')),
-          );
-        },
-        child: const Icon(Icons.upload_file, color: Colors.white),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_uploading)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SizedBox(
+                width: 56,
+                height: 56,
+                child: CircularProgressIndicator(
+                  value: _uploadProgress > 0 ? _uploadProgress : null,
+                  strokeWidth: 3,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          FloatingActionButton(
+            backgroundColor: _uploading ? Colors.grey : AppColors.primary,
+            onPressed: _uploading ? null : _showDocumentTypePicker,
+            child: const Icon(Icons.upload_file, color: Colors.white),
+          ),
+        ],
       ),
     );
+  }
+
+  void _showDocumentTypePicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Select document type',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+            ...DocumentType.values.map((type) => ListTile(
+                  leading: Icon(_getDocTypeIcon(type), color: AppColors.purple),
+                  title: Text(_formatDocType(type)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickAndUpload(type);
+                  },
+                )),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUpload(DocumentType type) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'heic', 'pdf', 'doc', 'docx'],
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final platformFile = result.files.first;
+    if (platformFile.path == null) return;
+    final file = File(platformFile.path!);
+
+    final validationError = _storageService.validateDocumentFile(file);
+    if (validationError != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(validationError)),
+        );
+      }
+      return;
+    }
+
+    final uid = context.read<AuthProvider>().firebaseUser?.uid;
+    if (uid == null) return;
+
+    setState(() {
+      _uploading = true;
+      _uploadProgress = 0;
+    });
+
+    try {
+      final downloadUrl = await _storageService.uploadDocument(
+        file: file,
+        patientId: uid,
+        documentType: _toStorageKey(type),
+        onProgress: (progress) {
+          if (mounted) setState(() => _uploadProgress = progress);
+        },
+      );
+
+      await _service.createDocument({
+        'patientId': uid,
+        'fileName': platformFile.name,
+        'originalFileName': platformFile.name,
+        'fileUrl': downloadUrl,
+        'fileSize': platformFile.size,
+        'fileType': platformFile.extension != null
+            ? 'application/${platformFile.extension}'
+            : 'application/octet-stream',
+        'documentType': _toStorageKey(type),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Document uploaded successfully')),
+        );
+      }
+      await _loadDocuments();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  String _toStorageKey(DocumentType type) {
+    switch (type) {
+      case DocumentType.driversLicense:
+        return 'drivers_license';
+      case DocumentType.insuranceCardFront:
+        return 'insurance_card_front';
+      case DocumentType.insuranceCardBack:
+        return 'insurance_card_back';
+      case DocumentType.medicalRecords:
+        return 'medical_records';
+      case DocumentType.labResults:
+        return 'lab_results';
+      case DocumentType.advanceDirective:
+        return 'advance_directive';
+      case DocumentType.prescription:
+        return 'prescription';
+      case DocumentType.other:
+        return 'other';
+    }
+  }
+
+  IconData _getDocTypeIcon(DocumentType type) {
+    switch (type) {
+      case DocumentType.driversLicense:
+        return Icons.badge_outlined;
+      case DocumentType.insuranceCardFront:
+      case DocumentType.insuranceCardBack:
+        return Icons.credit_card;
+      case DocumentType.medicalRecords:
+        return Icons.medical_information_outlined;
+      case DocumentType.labResults:
+        return Icons.science_outlined;
+      case DocumentType.prescription:
+        return Icons.medication_outlined;
+      default:
+        return Icons.description_outlined;
+    }
+  }
+
+  String _formatDocType(DocumentType type) {
+    return type.name
+        .replaceAllMapped(RegExp(r'[A-Z]'), (m) => ' ${m.group(0)}')
+        .trim();
   }
 }
 

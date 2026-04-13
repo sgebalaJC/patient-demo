@@ -15,6 +15,7 @@ export {
 } from "./stripe.js";
 
 import {FUNCTIONS_BRANDING} from "./branding.js";
+import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail} from "./email.js";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onCall, onRequest} from "firebase-functions/v2/https";
@@ -717,6 +718,13 @@ export const createUserWithAuth = onCall({
       }
     }
 
+    // Welcome email (best-effort, non-fatal)
+    let emailSent = false;
+    if (email) {
+      const template = welcomeEmail(firstName, FUNCTIONS_BRANDING.portalUrl);
+      emailSent = await sendTransactionalEmail({to: email, ...template});
+    }
+
     // Audit log: user creation
     logger.info('[AUDIT]', {
       audit: true,
@@ -725,7 +733,7 @@ export const createUserWithAuth = onCall({
       action: 'user.created',
       resourceType: 'user',
       resourceId: userRecord.uid,
-      metadata: { targetRole: role, smsSent },
+      metadata: { targetRole: role, smsSent, emailSent },
       timestamp: new Date().toISOString(),
     });
 
@@ -2063,8 +2071,19 @@ async function sendAppointmentStatusSMS(
     });
 
     logger.info(`Appointment ${status} SMS sent to patient ${patientId}`);
+
+    // Also send email notification
+    const email = patientData?.email;
+    const patientName = [patientData?.firstName, patientData?.lastName]
+      .filter(Boolean).join(' ') || 'Patient';
+    if (email) {
+      const template = status === 'confirmed'
+        ? appointmentConfirmedEmail(patientName, dateStr, timeStr)
+        : appointmentCancelledEmail(patientName, dateStr, timeStr);
+      await sendTransactionalEmail({to: email, ...template});
+    }
   } catch (error: any) {
-    logger.error('Error sending appointment status SMS:', { message: error.message });
+    logger.error('Error sending appointment status notification:', { message: error.message });
   }
 }
 
@@ -3062,3 +3081,59 @@ async function handleDriveAction(
     throw new Error('Invalid Drive action. Use: list, get, read, create');
   }
 }
+
+// ── FCM Push Notifications ──────────────────────────────────────────
+// Send a push notification when a patient-targeted notification is created
+export const onNotificationCreated = onDocumentCreated({
+  document: "notifications/{notificationId}",
+}, async (event) => {
+  const data = event.data?.data();
+  if (!data) return;
+
+  // Only push to patient-role notifications with a specific recipient
+  if (data.recipientRole !== "patient" || !data.recipientId) return;
+
+  const userDoc = await db.collection("users").doc(data.recipientId).get();
+  const fcmToken = userDoc.data()?.fcmToken;
+  if (!fcmToken) {
+    logger.info(`No FCM token for user ${data.recipientId}, skipping push`);
+    return;
+  }
+
+  try {
+    await admin.messaging().send({
+      token: fcmToken,
+      notification: {
+        title: data.title ?? FUNCTIONS_BRANDING.shortName,
+        body: data.message ?? "",
+      },
+      data: {
+        type: data.type ?? "system",
+        notificationId: event.params.notificationId,
+        ...(data.meta?.threadId ? {threadId: data.meta.threadId} : {}),
+      },
+      android: {
+        notification: {
+          channelId: "patient_portal_default",
+        },
+        priority: "high" as const,
+      },
+      apns: {
+        payload: {aps: {sound: "default", badge: 1}},
+      },
+    });
+    logger.info(`Push sent to ${data.recipientId} for ${data.type}`);
+  } catch (err: unknown) {
+    const error = err as {code?: string};
+    // Clean up invalid tokens
+    if (error.code === "messaging/registration-token-not-registered" ||
+        error.code === "messaging/invalid-registration-token") {
+      await db.collection("users").doc(data.recipientId).update({
+        fcmToken: admin.firestore.FieldValue.delete(),
+      });
+      logger.info(`Removed stale FCM token for ${data.recipientId}`);
+    } else {
+      logger.error("FCM send failed:", err);
+    }
+  }
+});

@@ -50,3 +50,31 @@ export function normalizePhoneNumber(phoneNumber: string | null | undefined): st
   // Fallback: prepend +
   return `+${digits}`;
 }
+
+/**
+ * Format a stored phone number for display.
+ *
+ * Input (canonical):  "+14425004657"
+ * Output:             "(442) 500-4657"
+ *
+ * Non-US numbers are returned as-is. Empty/null returns empty string.
+ */
+export function formatPhoneDisplay(phoneNumber: string | null | undefined): string {
+  if (!phoneNumber) return '';
+
+  const digits = phoneNumber.replace(/\D/g, '');
+
+  // US number with country code: 1 + 10 digits
+  if (digits.length === 11 && digits.startsWith('1')) {
+    const local = digits.slice(1);
+    return `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
+  }
+
+  // 10-digit US number without country code
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
+  // Non-US or unknown format: return as-is
+  return phoneNumber;
+}

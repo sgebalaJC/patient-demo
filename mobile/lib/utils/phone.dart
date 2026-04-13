@@ -37,3 +37,29 @@ String normalizePhoneNumber(String? phoneNumber) {
   // Fallback: prepend +
   return '+$digits';
 }
+
+/// Format a stored phone number for display.
+///
+/// Input (canonical):  "+14425004657"
+/// Output:             "(442) 500-4657"
+///
+/// Non-US numbers are returned as-is. Empty/null returns empty string.
+String formatPhoneDisplay(String? phoneNumber) {
+  if (phoneNumber == null || phoneNumber.isEmpty) return '';
+
+  final digits = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+
+  // US number with country code: 1 + 10 digits
+  if (digits.length == 11 && digits.startsWith('1')) {
+    final local = digits.substring(1);
+    return '(${local.substring(0, 3)}) ${local.substring(3, 6)}-${local.substring(6)}';
+  }
+
+  // 10-digit US number without country code
+  if (digits.length == 10) {
+    return '(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}';
+  }
+
+  // Non-US or unknown format: return as-is
+  return phoneNumber;
+}

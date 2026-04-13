@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { ErrorAlert } from './ErrorAlert';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
+import { formatPhoneDisplay } from '../../lib/phone';
 
 interface PhoneVerificationModalProps {
   isOpen: boolean;
@@ -76,7 +77,7 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
     onClose();
   };
 
-  const maskedPhone = phoneNumber.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+  const maskedPhone = formatPhoneDisplay(phoneNumber);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">

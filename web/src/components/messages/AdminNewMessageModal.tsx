@@ -12,6 +12,7 @@ import { User } from '../../types';
 import { FIELD_LIMITS } from '../../lib/validation';
 import logger from '../../lib/logger';
 import { Modal } from '../ui/Modal';
+import { formatPhoneDisplay } from '../../lib/phone';
 
 const adminNewMessageSchema = z.object({
     patientId: z.string().min(1, 'Please select a patient'),
@@ -231,7 +232,7 @@ export const AdminNewMessageModal: React.FC<AdminNewMessageModalProps> = ({
                                                             {patient.firstName} {patient.lastName}
                                                         </p>
                                                         <p className="text-sm text-secondary-500">
-                                                            {patient.email || patient.phoneNumber}
+                                                            {patient.email || formatPhoneDisplay(patient.phoneNumber)}
                                                             {patient.dateOfBirth && (
                                                                 <> &middot; DOB: {patient.dateOfBirth.toDate().toLocaleDateString()}</>
                                                             )}

@@ -32,6 +32,7 @@ import { AccessDenied } from '../components/ui/AccessDenied';
 import { PageHeader } from '../components/ui/PageHeader';
 
 import { PaginationBar } from '../components/ui/PaginationBar';
+import { formatPhoneDisplay } from '../lib/phone';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Modal } from '../components/ui/Modal';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
@@ -365,7 +366,7 @@ export const UserManagementPage: React.FC = () => {
                         <div className="flex items-center mt-2 space-x-4">
                           <div className="flex items-center text-sm text-secondary-600">
                             <Mail className="h-4 w-4 mr-1" />
-                            {user.email || user.phoneNumber || 'No contact info'}
+                            {user.email || formatPhoneDisplay(user.phoneNumber) || 'No contact info'}
                           </div>
                         </div>
                         {user.role === 'patient' && user.dateOfBirth && (

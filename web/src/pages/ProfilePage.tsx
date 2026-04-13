@@ -13,6 +13,7 @@ import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { PhoneVerificationModal } from '../components/ui/PhoneVerificationModal';
 import { signOut } from '../lib/firebase';
 import { ThemeSelector } from '../components/ui/ThemeSelector';
+import { formatPhoneDisplay } from '../lib/phone';
 import logger from '../lib/logger';
 
 export const ProfilePage: React.FC = () => {
@@ -268,7 +269,7 @@ export const ProfilePage: React.FC = () => {
                   <div>
                     <p className="text-sm font-medium text-secondary-700">Phone Number</p>
                     <div className="flex items-center space-x-2">
-                      <p className="text-secondary-900">{formData.phoneNumber || 'Not set'}</p>
+                      <p className="text-secondary-900">{formatPhoneDisplay(formData.phoneNumber) || 'Not set'}</p>
                       {formData.phoneNumber && (
                         userProfile?.phoneVerified ? (
                           <span className="inline-flex items-center text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">

@@ -203,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   )
                 else if (user?.phoneNumber?.isNotEmpty == true)
                   Text(
-                    user!.phoneNumber!,
+                    formatPhoneDisplay(user!.phoneNumber),
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
               ],
@@ -494,7 +494,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Row(
                       children: [
                         Text(
-                          hasPhone ? user.phoneNumber ?? '' : 'Not set',
+                          hasPhone ? formatPhoneDisplay(user.phoneNumber) : 'Not set',
                           style: TextStyle(
                             fontWeight: FontWeight.w500,
                             color: AppColors.textDark,

@@ -1,5 +1,4 @@
 import { readFileSync, watch } from "fs";
-import { spawnSync } from "child_process";
 import { CONFIG_PATH, GATEWAY_URL } from "../lib/paths.js";
 import type { UserContext } from "../lib/auth.js";
 
@@ -25,7 +24,7 @@ try {
   });
 } catch { /* config may not exist yet */ }
 
-/** POST /chat — route to the appropriate agent */
+/** POST /chat — route to the appropriate agent via web-chat webhook */
 export async function handleChat(request: Request, user?: UserContext): Promise<Response> {
   if (!cachedToken) {
     return Response.json({ error: "Gateway token not configured" }, { status: 503 });
@@ -66,42 +65,14 @@ export async function handleChat(request: Request, user?: UserContext): Promise<
   const prefix = user
     ? (isPatientSupport ? `[Patient: ${user.name}]\n` : `[${user.role}: ${user.name}]\n`)
     : "";
-  const fullMessage = prefix + messageContent;
 
-  // ── Patient support → openclaw agent CLI (reliable routing) ──
-  if (isPatientSupport) {
-    const sessionId = `patient:${user?.uid ?? "anonymous"}`;
-    const result = spawnSync("/usr/bin/openclaw", [
-      "agent",
-      "--agent", "patient-support",
-      "--session-id", sessionId,
-      "--message", fullMessage,
-      "--json",
-      "--timeout", "90",
-    ], {
-      timeout: 100_000,
-      encoding: "utf-8",
-      env: { ...process.env, HOME: "/root" },
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+  // Session ID with agent prefix for routing:
+  // "agent:patient-support:patient:UID" → web-chat plugin routes to patient-support
+  // "admin:UID" → routes to main agent (default)
+  const sessionId = isPatientSupport
+    ? `agent:patient-support:patient:${user?.uid ?? "anonymous"}`
+    : (user ? `admin:${user.uid}` : "admin-chat");
 
-    if (result.status !== 0) {
-      console.error("[chat] patient-support error:", (result.stderr as string)?.slice(0, 200));
-      return Response.json({ error: "Support agent unavailable" }, { status: 502 });
-    }
-
-    try {
-      const output = JSON.parse(result.stdout as string);
-      const reply = output?.result?.payloads?.[0]?.text ?? "";
-      return Response.json({ role: "assistant", content: reply });
-    } catch {
-      // Non-JSON output — return raw
-      return Response.json({ role: "assistant", content: (result.stdout as string).trim() });
-    }
-  }
-
-  // ── Admin → web-chat webhook (Aurelia) ──
-  const sessionId = user ? `admin:${user.uid}` : "admin-chat";
   try {
     const res = await fetch(`${GATEWAY_URL}/webhook/web-chat`, {
       method: "POST",
@@ -111,7 +82,7 @@ export async function handleChat(request: Request, user?: UserContext): Promise<
       },
       body: JSON.stringify({
         sessionId,
-        body: fullMessage,
+        body: prefix + messageContent,
         timestamp: new Date().toISOString(),
         ...(body.attachments?.length ? { attachments: body.attachments } : {}),
       }),
@@ -120,7 +91,10 @@ export async function handleChat(request: Request, user?: UserContext): Promise<
 
     if (!res.ok) {
       const text = await res.text();
-      return Response.json({ error: `Gateway returned ${res.status}`, detail: text }, { status: 502 });
+      return Response.json(
+        { error: `Gateway returned ${res.status}`, detail: text },
+        { status: 502 },
+      );
     }
 
     const data = await res.json() as { reply?: string };

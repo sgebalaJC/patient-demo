@@ -65,11 +65,16 @@ class SidecarClient {
 
   async chat(
     messages: { role: string; content: string }[],
-    attachments?: { mimeType: string; content: string; name: string }[]
+    attachments?: { mimeType: string; content: string; name: string }[],
+    options?: { support?: boolean },
   ): Promise<{ role: string; content: string }> {
     return this.request('/chat', {
       method: 'POST',
-      body: JSON.stringify({ messages, attachments }),
+      body: JSON.stringify({
+        messages,
+        attachments,
+        ...(options?.support ? { support: true } : {}),
+      }),
     });
   }
 

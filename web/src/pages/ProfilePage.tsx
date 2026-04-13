@@ -6,7 +6,7 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../hooks/useAuth';
 import { userOperations } from '../lib/firestore';
-import { User, Mail, Phone, Edit2, Save, X, Trash2, AlertTriangle, Shield, CheckCircle } from 'lucide-react';
+import { User, Mail, Phone, Edit2, Save, X, Trash2, AlertTriangle, Shield, CheckCircle, Download } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
@@ -26,6 +26,9 @@ export const ProfilePage: React.FC = () => {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [exportUrl, setExportUrl] = useState('');
+  const [exportError, setExportError] = useState('');
   const [formData, setFormData] = useState({
     firstName: userProfile?.firstName || '',
     lastName: userProfile?.lastName || '',
@@ -135,6 +138,36 @@ export const ProfilePage: React.FC = () => {
       setDeleteError(error.message || 'Failed to delete account');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    if (!user) return;
+    setExportStatus('loading');
+    setExportError('');
+    try {
+      const { httpsCallable } = await import('firebase/functions');
+      const { functions } = await import('../lib/firebase');
+      const exportFn = httpsCallable(functions, 'exportPatientData', { timeout: 300000 });
+      const result = await exportFn({}) as { data: { success: boolean; downloadUrl?: string; error?: string; filesSkipped?: boolean } };
+
+      if (result.data.success && result.data.downloadUrl) {
+        setExportUrl(result.data.downloadUrl);
+        setExportStatus('ready');
+        const a = document.createElement('a');
+        a.href = result.data.downloadUrl;
+        a.download = 'patient-export.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        setExportError(result.data.error || 'Export failed');
+        setExportStatus('error');
+      }
+    } catch (error: any) {
+      logger.error('Error exporting data:', error);
+      setExportError(error.message || 'Export failed. Please try again later.');
+      setExportStatus('error');
     }
   };
 
@@ -301,6 +334,43 @@ export const ProfilePage: React.FC = () => {
       {/* Theme */}
       <Card className="p-4 sm:p-6">
         <ThemeSelector />
+      </Card>
+
+      {/* Export Data */}
+      <Card className="p-4 sm:p-6">
+        <div className="flex items-start space-x-4">
+          <div className="bg-blue-100 p-3 rounded-lg flex-shrink-0">
+            <Download className="h-6 w-6 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-secondary-900">Export My Data</h3>
+            <p className="text-sm text-secondary-600 mt-1">
+              Download a copy of all your health records, messages, documents, and
+              appointments as a ZIP file. You may request one export per hour.
+            </p>
+            {exportError && <ErrorAlert message={exportError} className="mt-2" />}
+            {exportStatus === 'ready' && (
+              <p className="text-sm text-green-700 mt-2">
+                Export ready.{' '}
+                <a href={exportUrl} className="underline font-medium" download="patient-export.zip">
+                  Click here
+                </a>{' '}
+                if download didn&apos;t start automatically.
+              </p>
+            )}
+            <Button
+              onClick={handleExportData}
+              variant="secondary"
+              size="sm"
+              loading={exportStatus === 'loading'}
+              disabled={exportStatus === 'loading'}
+              className="mt-4"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {exportStatus === 'loading' ? 'Preparing export...' : 'Export My Data'}
+            </Button>
+          </div>
+        </div>
       </Card>
 
       {/* Delete Account */}

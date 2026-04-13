@@ -1100,6 +1100,263 @@ export const deleteAccount = onCall({
 
 
 // =============================================================================
+// Patient Data Export (HIPAA Right-of-Access)
+// =============================================================================
+
+export const exportPatientData = onCall({
+  cors: corsOptions,
+  memory: "1GiB",
+  timeoutSeconds: 300,
+}, async (request) => {
+  try {
+    const context = request.auth;
+    if (!context) {
+      throw new Error("Authentication required");
+    }
+
+    const patientId = context.uid;
+
+    // Verify patient role
+    const callerDoc = await db.collection("users").doc(patientId).get();
+    const callerData = callerDoc.data();
+    if (!callerDoc.exists || callerData?.role !== "patient") {
+      throw new Error("Only patients can export their own data");
+    }
+
+    // Rate limit: 1 export per 60 minutes
+    await checkRateLimit(patientId, "exportPatientData", 1, 60);
+
+    logger.info("[AUDIT] Patient data export started", {
+      audit: true,
+      actorId: patientId,
+      action: "patient.export",
+      timestamp: new Date().toISOString(),
+    });
+
+    // ── Collect all patient data from Firestore ──
+
+    const profile = callerData;
+
+    const collectionsToExport = [
+      {name: "appointments", field: "patientId", outputName: "appointments"},
+      {name: "prescription-refills", field: "patientId", outputName: "prescription-refills"},
+      {name: "patient-documents", field: "patientId", outputName: "documents-metadata"},
+      {name: "patient-intake-forms", field: "patientId", outputName: "intake-forms"},
+      {name: "specialist-requests", field: "patientId", outputName: "specialist-requests"},
+    ];
+
+    const exportData: Record<string, unknown[]> = {};
+
+    for (const col of collectionsToExport) {
+      const snapshot = await db.collection(col.name)
+        .where(col.field, "==", patientId)
+        .get();
+      exportData[col.outputName] = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+    }
+
+    // Messages: get threads then their messages
+    const threadsSnapshot = await db.collection("message-threads")
+      .where("patientId", "==", patientId)
+      .get();
+
+    const threads = threadsSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    const allMessages: unknown[] = [];
+    for (const thread of threads) {
+      const msgsSnapshot = await db.collection("thread-messages")
+        .where("threadId", "==", (thread as {id: string}).id)
+        .orderBy("createdAt", "asc")
+        .get();
+      msgsSnapshot.docs.forEach((doc) => {
+        allMessages.push({id: doc.id, ...doc.data()});
+      });
+    }
+
+    // Notifications
+    const notifSnapshot = await db.collection("notifications")
+      .where("recipientId", "==", patientId)
+      .get();
+    const notifications = notifSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    // Support chat
+    const supportSnapshot = await db.collection("support-chat")
+      .where("patientId", "==", patientId)
+      .get();
+    const supportChat = supportSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    // ── Download files from Cloud Storage ──
+
+    const bucket = admin.storage().bucket();
+    const downloadedFiles: {path: string; buffer: Buffer}[] = [];
+    let totalFileSize = 0;
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB guard
+
+    // Patient documents
+    try {
+      const [files] = await bucket.getFiles({
+        prefix: `patients/${patientId}/documents/`,
+      });
+      for (const file of files) {
+        if (totalFileSize > MAX_FILE_SIZE) break;
+        try {
+          const [buffer] = await file.download();
+          totalFileSize += buffer.length;
+          const relativePath = file.name.replace(
+            `patients/${patientId}/documents/`,
+            "files/documents/"
+          );
+          downloadedFiles.push({path: relativePath, buffer});
+        } catch {
+          logger.warn(`Failed to download file: ${file.name}`);
+        }
+      }
+    } catch {
+      logger.warn("No patient documents in Storage or access error");
+    }
+
+    // Message attachments
+    const messagesWithAttachments = allMessages.filter(
+      (m: any) => m.attachments?.length > 0
+    );
+    for (const msg of messagesWithAttachments as any[]) {
+      if (totalFileSize > MAX_FILE_SIZE) break;
+      for (const att of msg.attachments) {
+        if (!att.url) continue;
+        // Extract storage path from download URL
+        try {
+          const url = new URL(att.url);
+          const pathMatch = url.pathname.match(/\/o\/(.+?)(\?|$)/);
+          if (!pathMatch) continue;
+          const storagePath = decodeURIComponent(pathMatch[1]);
+          const [buffer] = await bucket.file(storagePath).download();
+          totalFileSize += buffer.length;
+          downloadedFiles.push({
+            path: `files/message-attachments/${msg.threadId}/${att.name || "attachment"}`,
+            buffer,
+          });
+        } catch {
+          logger.warn(`Failed to download attachment: ${att.name}`);
+        }
+      }
+    }
+
+    const filesSkipped = totalFileSize > MAX_FILE_SIZE;
+
+    // ── Build ZIP ──
+
+    const archiver = require("archiver");
+    const {PassThrough} = require("stream");
+
+    const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      const passThrough = new PassThrough();
+      passThrough.on("data", (chunk: Buffer) => chunks.push(chunk));
+      passThrough.on("end", () => resolve(Buffer.concat(chunks)));
+      passThrough.on("error", reject);
+
+      const archive = archiver("zip", {zlib: {level: 6}});
+      archive.on("error", reject);
+      archive.pipe(passThrough);
+
+      // README
+      const exportDate = new Date().toISOString();
+      archive.append(
+        `Patient Data Export\n` +
+        `Generated: ${exportDate}\n` +
+        `Patient ID: ${patientId}\n\n` +
+        `This archive contains your health records exported under HIPAA Right of Access.\n` +
+        `The data/ folder contains structured records in JSON format.\n` +
+        `The files/ folder contains your uploaded documents and message attachments.\n` +
+        (filesSkipped ? `\nNote: Some files were skipped because the total exceeded 500MB.\n` : ""),
+        {name: "patient-export/README.txt"}
+      );
+
+      // JSON data
+      archive.append(JSON.stringify(profile, null, 2),
+        {name: "patient-export/data/profile.json"});
+      archive.append(JSON.stringify(exportData["appointments"], null, 2),
+        {name: "patient-export/data/appointments.json"});
+      archive.append(JSON.stringify({threads, messages: allMessages}, null, 2),
+        {name: "patient-export/data/messages.json"});
+      archive.append(JSON.stringify(exportData["documents-metadata"], null, 2),
+        {name: "patient-export/data/documents-metadata.json"});
+      archive.append(JSON.stringify(exportData["intake-forms"], null, 2),
+        {name: "patient-export/data/intake-forms.json"});
+      archive.append(JSON.stringify(exportData["prescription-refills"], null, 2),
+        {name: "patient-export/data/prescription-refills.json"});
+      archive.append(JSON.stringify(exportData["specialist-requests"], null, 2),
+        {name: "patient-export/data/specialist-requests.json"});
+      archive.append(JSON.stringify(notifications, null, 2),
+        {name: "patient-export/data/notifications.json"});
+      archive.append(JSON.stringify(supportChat, null, 2),
+        {name: "patient-export/data/support-chat.json"});
+
+      // Binary files
+      for (const file of downloadedFiles) {
+        archive.append(file.buffer, {name: `patient-export/${file.path}`});
+      }
+
+      archive.finalize();
+    });
+
+    // ── Upload ZIP and generate signed URL ──
+
+    const timestamp = Date.now();
+    const exportPath = `exports/${patientId}/patient-export-${timestamp}.zip`;
+    const exportFile = bucket.file(exportPath);
+
+    await exportFile.save(zipBuffer, {
+      metadata: {contentType: "application/zip"},
+    });
+
+    const [signedUrl] = await exportFile.getSignedUrl({
+      action: "read" as const,
+      expires: Date.now() + 60 * 60 * 1000, // 1 hour
+    });
+
+    logger.info("[AUDIT] Patient data export completed", {
+      audit: true,
+      actorId: patientId,
+      action: "patient.export.completed",
+      zipSizeBytes: zipBuffer.length,
+      fileCount: downloadedFiles.length,
+      filesSkipped,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      success: true,
+      downloadUrl: signedUrl,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      filesSkipped,
+    };
+  } catch (error: any) {
+    logger.error("Error exporting patient data:", {
+      code: error.code,
+      message: error.message,
+    });
+    return {
+      success: false,
+      error: error.message || "Failed to export data.",
+      code: error.code || "EXPORT_FAILED",
+    };
+  }
+});
+
+
+// =============================================================================
 // Google Calendar Integration
 // =============================================================================
 

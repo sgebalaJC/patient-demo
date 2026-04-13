@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
 import '../config/constants.dart';
 import '../config/colors.dart';
+import '../config/branding.dart';
 import '../services/biometric_service.dart';
 import '../widgets/phone_verification_sheet.dart';
 import '../widgets/page_header.dart';
@@ -359,6 +361,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // Theme
           const ThemeSelector(),
+          const SizedBox(height: 16),
+
+          // Export Data
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceCard,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              leading: Icon(Icons.download_rounded, color: AppColors.primary),
+              title: const Text('Export My Data'),
+              subtitle: const Text(
+                'Download all your health records',
+                style: TextStyle(fontSize: 12),
+              ),
+              trailing: const Icon(Icons.open_in_new, size: 18),
+              onTap: () {
+                final url = Uri.parse('https://${branding.domain}/profile');
+                launchUrl(url, mode: LaunchMode.externalApplication);
+              },
+            ),
+          ),
           const SizedBox(height: 24),
 
           // Sign out

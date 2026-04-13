@@ -31,7 +31,7 @@ Features that directly improve the patient-facing product.
 
 | Item | Description | Platform |
 |------|-------------|----------|
-| Online scheduling | Patient self-books from available slots, ties into existing Google Calendar sync | Web + Mobile |
+| ~~Online scheduling~~ | ~~Already built: patient self-booking with availability grid + admin approval~~ | ~~Done~~ |
 | Telehealth / video visits | Embedded video call (Daily, Twilio Video, or WebRTC) linked to appointments | Web + Mobile |
 | Electronic signatures | Consent forms, intake agreements with legally-binding e-sign capture | Web + Mobile |
 | Patient data export | HIPAA right-of-access: one-click download of all patient records as PDF/ZIP | Web + Functions |

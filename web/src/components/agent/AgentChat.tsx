@@ -21,8 +21,10 @@ export const AgentChat: React.FC = () => {
   const { user, userProfile } = useAuth();
   const [messages, setMessages] = useState<AgentChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const chatQueue = useRef<(() => Promise<void>)[]>([]);
+  const chatBusy = useRef(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [oldestCursor, setOldestCursor] = useState<DocumentSnapshot | null>(null);
@@ -40,7 +42,7 @@ export const AgentChat: React.FC = () => {
       isLoadingOlder.current = false;
       return;
     }
-    if (messages.length > 0 || sending) {
+    if (messages.length > 0 || pendingCount > 0) {
       if (!hasScrolledInitial.current) {
         hasScrolledInitial.current = true;
         endRef.current?.scrollIntoView({ behavior: 'instant' });
@@ -48,7 +50,7 @@ export const AgentChat: React.FC = () => {
         endRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
     }
-  }, [messages, sending]);
+  }, [messages, pendingCount]);
 
   const loadInitial = async () => {
     setLoading(true);
@@ -89,9 +91,23 @@ export const AgentChat: React.FC = () => {
     if (el.scrollTop < 50 && hasMore && !loadingMore) loadOlder();
   }, [loadOlder, hasMore, loadingMore]);
 
+  const flushQueue = useCallback(async () => {
+    if (chatBusy.current) return;
+    const next = chatQueue.current.shift();
+    if (!next) return;
+    chatBusy.current = true;
+    try {
+      await next();
+    } finally {
+      chatBusy.current = false;
+      setPendingCount(chatQueue.current.length);
+      flushQueue();
+    }
+  }, []);
+
   const handleSend = async () => {
     const text = input.trim();
-    if ((!text && pendingFiles.length === 0) || sending || !user) return;
+    if ((!text && pendingFiles.length === 0) || !user) return;
 
     const senderName = userProfile
       ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim()
@@ -103,7 +119,7 @@ export const AgentChat: React.FC = () => {
 
     const msgContent = text || (pendingFiles.length > 0 ? `[${pendingFiles.length} file(s) attached]` : '');
 
-    // Optimistic UI — show message immediately
+    // Show message immediately
     const tempId = `temp-${Date.now()}`;
     setMessages(prev => [...prev, {
       id: tempId, role: 'user' as const, content: msgContent,
@@ -114,7 +130,6 @@ export const AgentChat: React.FC = () => {
     setInput('');
     const filesToSend = [...pendingFiles];
     setPendingFiles([]);
-    setSending(true);
 
     // Persist in background
     saveAgentChatMessage({
@@ -122,34 +137,35 @@ export const AgentChat: React.FC = () => {
       ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {}),
     }).catch(err => logger.error('Failed to persist user message:', err));
 
-    try {
-      const base64Attachments = await Promise.all(
-        filesToSend.map(async f => ({ mimeType: f.type, content: await fileToBase64(f), name: f.name }))
-      );
-      const res = await sidecar.chat(
-        [{ role: 'user', content: text || 'See attached file(s)' }],
-        base64Attachments.length > 0 ? base64Attachments : undefined
-      );
-      logger.log('[AgentChat] sidecar response:', JSON.stringify(res).slice(0, 300));
-      const replyContent = res.content || '';
-      setMessages(prev => [...prev, {
-        id: `assistant-${Date.now()}`, role: 'assistant', content: replyContent,
-        createdAt: { toDate: () => new Date() } as any,
-      }]);
-      saveAgentChatMessage({ role: 'assistant', content: replyContent })
-        .catch(err => logger.error('Failed to persist assistant message:', err));
-    } catch (err) {
-      logger.error('[AgentChat] Error:', err);
-      const errorContent = `Error: ${err instanceof Error ? err.message : 'Failed to get response'}`;
-      setMessages(prev => [...prev, {
-        id: `error-${Date.now()}`, role: 'assistant', content: errorContent,
-        createdAt: { toDate: () => new Date() } as any,
-      }]);
-      saveAgentChatMessage({ role: 'assistant', content: errorContent })
-        .catch(e => logger.error('Failed to persist error message:', e));
-    } finally {
-      setSending(false);
-    }
+    // Enqueue — processed one at a time
+    chatQueue.current.push(async () => {
+      try {
+        const base64Attachments = await Promise.all(
+          filesToSend.map(async f => ({ mimeType: f.type, content: await fileToBase64(f), name: f.name }))
+        );
+        const res = await sidecar.chat(
+          [{ role: 'user', content: text || 'See attached file(s)' }],
+          base64Attachments.length > 0 ? base64Attachments : undefined
+        );
+        const replyContent = res.content || '';
+        setMessages(prev => [...prev, {
+          id: `assistant-${Date.now()}`, role: 'assistant', content: replyContent,
+          createdAt: { toDate: () => new Date() } as any,
+        }]);
+        saveAgentChatMessage({ role: 'assistant', content: replyContent })
+          .catch(err => logger.error('Failed to persist assistant message:', err));
+      } catch (err) {
+        const errorContent = `Error: ${err instanceof Error ? err.message : 'Failed to get response'}`;
+        setMessages(prev => [...prev, {
+          id: `error-${Date.now()}`, role: 'assistant', content: errorContent,
+          createdAt: { toDate: () => new Date() } as any,
+        }]);
+        saveAgentChatMessage({ role: 'assistant', content: errorContent })
+          .catch(e => logger.error('Failed to persist error message:', e));
+      }
+    });
+    setPendingCount(chatQueue.current.length);
+    flushQueue();
   };
 
   if (loading) {
@@ -174,7 +190,7 @@ export const AgentChat: React.FC = () => {
           </button>
         )}
 
-        {messages.length === 0 && !sending && (
+        {messages.length === 0 && pendingCount === 0 && !chatBusy.current && (
           <div className="flex items-center justify-center h-full text-secondary-400 text-sm">
             Send a message to start chatting with the agent.
           </div>
@@ -190,10 +206,13 @@ export const AgentChat: React.FC = () => {
           />
         ))}
 
-        {sending && (
+        {(chatBusy.current || pendingCount > 0) && (
           <div className="flex justify-start">
-            <div className="bg-surface-card border border-secondary-200 rounded-xl px-4 py-2.5 rounded-bl-sm">
+            <div className="bg-surface-card border border-secondary-200 rounded-xl px-4 py-2.5 rounded-bl-sm flex items-center gap-2">
               <LoadingSpinner size="sm" />
+              {pendingCount > 0 && (
+                <span className="text-xs text-secondary-400">+{pendingCount} queued</span>
+              )}
             </div>
           </div>
         )}
@@ -204,7 +223,7 @@ export const AgentChat: React.FC = () => {
         value={input}
         onChange={setInput}
         onSend={handleSend}
-        sending={sending}
+        sending={false}
         pendingFiles={pendingFiles}
         onFilesChange={setPendingFiles}
       />

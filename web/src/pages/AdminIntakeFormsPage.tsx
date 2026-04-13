@@ -144,6 +144,36 @@ const MedicalHistorySectionView: React.FC<{ data: MedicalHistoryForm }> = ({ dat
   </div>
 );
 
+const FamilyHistorySectionView: React.FC<{ data: any }> = ({ data }) => (
+  <div className="space-y-3">
+    {data.conditions?.length > 0 && (
+      <SectionCard title="Family Conditions">
+        {data.conditions.map((entry: any, i: number) => (
+          <div key={i} className="py-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-secondary-900">{entry.condition}</p>
+              <span className="text-xs bg-secondary-100 text-secondary-600 px-2 py-0.5 rounded-full capitalize">
+                {entry.relation}
+              </span>
+            </div>
+            {entry.details && (
+              <p className="text-xs text-secondary-500 mt-0.5">{entry.details}</p>
+            )}
+          </div>
+        ))}
+      </SectionCard>
+    )}
+    {data.otherHistory && (
+      <SectionCard title="Other Family History">
+        <p className="text-sm text-secondary-800 py-1 whitespace-pre-line">{data.otherHistory}</p>
+      </SectionCard>
+    )}
+    {(!data.conditions || data.conditions.length === 0) && !data.otherHistory && (
+      <p className="text-sm text-secondary-400 italic">No family history reported.</p>
+    )}
+  </div>
+);
+
 const ConsentSection: React.FC<{ data: ConsentForm }> = ({ data }) => (
   <div className="space-y-3">
     <SectionCard title="Consents">
@@ -226,6 +256,7 @@ const FormDataViewer: React.FC<{ form: PatientIntakeForm }> = ({ form }) => {
   const sections = [
     { key: 'patientInfo', label: 'Patient Information', data: form.patientInfo },
     { key: 'medicalHistory', label: 'Medical History', data: form.medicalHistory },
+    { key: 'familyHistory', label: 'Family History', data: form.familyHistory },
     { key: 'consentForm', label: 'Consent Forms', data: form.consentForm },
     { key: 'conciergeAgreement', label: 'Concierge Agreement', data: form.conciergeAgreement },
   ].filter(s => s.data);
@@ -259,6 +290,7 @@ const FormDataViewer: React.FC<{ form: PatientIntakeForm }> = ({ form }) => {
         <div className="mt-3 animate-in fade-in duration-200">
           {activeSection === 'patientInfo' && form.patientInfo && <PatientInfoSection data={form.patientInfo} />}
           {activeSection === 'medicalHistory' && form.medicalHistory && <MedicalHistorySectionView data={form.medicalHistory} />}
+          {activeSection === 'familyHistory' && form.familyHistory && <FamilyHistorySectionView data={form.familyHistory} />}
           {activeSection === 'consentForm' && form.consentForm && <ConsentSection data={form.consentForm} />}
           {activeSection === 'conciergeAgreement' && form.conciergeAgreement && <ConciergeSection data={form.conciergeAgreement} />}
         </div>

@@ -289,6 +289,35 @@ export interface MedicalHistoryForm {
   completedAt?: Timestamp;
 }
 
+export const FAMILY_HISTORY_CONDITIONS = [
+  'Heart Disease',
+  'High Blood Pressure',
+  'Stroke',
+  'Diabetes',
+  'Cancer',
+  'Asthma / Lung Disease',
+  'Mental Health (Depression, Anxiety)',
+  'Kidney Disease',
+  'Liver Disease',
+  'Autoimmune Disorder',
+  'Blood Disorder',
+  'Alzheimer\'s / Dementia',
+] as const;
+
+export type FamilyRelation = 'mother' | 'father' | 'sibling' | 'grandparent' | 'other';
+
+export interface FamilyHistoryEntry {
+  condition: string;
+  relation: FamilyRelation;
+  details?: string;
+}
+
+export interface FamilyHistoryForm {
+  conditions: FamilyHistoryEntry[];
+  otherHistory?: string;
+  completedAt?: Timestamp;
+}
+
 export interface ConsentForm {
   treatmentConsent: boolean;
   hipaaConsent: boolean;
@@ -332,6 +361,7 @@ export interface PatientIntakeForm {
   // Form Sections
   patientInfo?: PatientInfoForm;
   medicalHistory?: MedicalHistoryForm;
+  familyHistory?: FamilyHistoryForm;
   consentForm?: ConsentForm;
   conciergeAgreement?: ConciergeAgreement;
 

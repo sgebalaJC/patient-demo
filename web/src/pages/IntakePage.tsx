@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { PatientInfoSection } from '../components/intake/PatientInfoSection';
 import { MedicalHistorySection } from '../components/intake/MedicalHistorySection';
+import { FamilyHistorySection } from '../components/intake/FamilyHistorySection';
 import { ConsentFormSection } from '../components/intake/ConsentFormSection';
 
 import { useAuth } from '../hooks/useAuth';
@@ -15,6 +16,7 @@ import {
     Circle,
     User,
     Heart,
+    Users,
     FileCheck,
 } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -32,6 +34,12 @@ const formSections = [
     title: 'Medical History',
     icon: Heart,
     description: 'Medical background and health information'
+  },
+  {
+    id: 'family-history',
+    title: 'Family History',
+    icon: Users,
+    description: 'Family illness and hereditary conditions'
   },
   {
     id: 'consent-form',
@@ -88,6 +96,7 @@ export const IntakePage: React.FC = () => {
       const sectionFieldMap: { [key: string]: string } = {
         'patient-info': 'patientInfo',
         'medical-history': 'medicalHistory',
+        'family-history': 'familyHistory',
         'consent-form': 'consentForm',
       };
 
@@ -306,6 +315,13 @@ export const IntakePage: React.FC = () => {
           <MedicalHistorySection
             onComplete={(data: unknown) => handleSectionComplete('medical-history', data)}
             initialData={intakeForm?.medicalHistory}
+          />
+        )}
+
+        {currentSection === 'family-history' && (
+          <FamilyHistorySection
+            onComplete={(data: unknown) => handleSectionComplete('family-history', data)}
+            initialData={intakeForm?.familyHistory}
           />
         )}
 

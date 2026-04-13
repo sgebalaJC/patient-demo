@@ -16,6 +16,7 @@ import { handleStats } from "./routes/stats.js";
 import { readConfig, patchConfig } from "./routes/config.js";
 import { handleCreate, handleList, handleRestore, handleDelete, handleDownload } from "./routes/backup.js";
 import { handleListSkills, handleInstallSkill, handleUninstallSkill } from "./routes/skills.js";
+import { handleAdminApi } from "./routes/admin-api.js";
 
 const PORT = parseInt(process.env.PORT || "8081");
 
@@ -62,7 +63,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
 }
 
 /** Admin-only routes — patients can only access /chat */
-const ADMIN_ONLY_PREFIXES = ["/files", "/status", "/restart", "/stats", "/config", "/backup", "/cron"];
+const ADMIN_ONLY_PREFIXES = ["/files", "/status", "/restart", "/stats", "/config", "/backup", "/cron", "/admin-api"];
 
 function isAdminOnlyRoute(path: string): boolean {
   return ADMIN_ONLY_PREFIXES.some(prefix => path.startsWith(prefix));
@@ -183,7 +184,6 @@ const server = Bun.serve({
       }
 
       // ── Skills ─────────────────────────────────
-      if (path === "/skills" && method === "GET") return respond(handleListSkills());
       if (path.match(/^\/skills\/[\w-]+\/install$/) && method === "POST") {
         const id = path.split("/")[2];
         return respond(handleInstallSkill(id));
@@ -216,68 +216,78 @@ const server = Bun.serve({
       if (path === "/cron" && method === "POST") {
         try {
           const body = await request.json() as Record<string, any>;
-          const { execSync } = await import("child_process");
-          const args = ["/usr/bin/openclaw", "cron", "add"];
-          if (body.name) args.push("--name", body.name);
-          if (body.cron) args.push("--cron", body.cron);
-          if (body.at) args.push("--at", body.at);
-          if (body.tz) args.push("--tz", body.tz);
-          if (body.message) args.push("--message", body.message);
-          if (body.session) args.push("--session", body.session);
+          const { spawnSync } = await import("child_process");
+          const args = ["cron", "add"];
+          if (body.name) args.push("--name", String(body.name));
+          if (body.cron) args.push("--cron", String(body.cron));
+          if (body.at) args.push("--at", String(body.at));
+          if (body.tz) args.push("--tz", String(body.tz));
+          if (body.message) args.push("--message", String(body.message));
+          if (body.session) args.push("--session", String(body.session));
           if (body.announce) args.push("--announce");
-          const out = execSync(args.join(" "), {
+          const result = spawnSync("/usr/bin/openclaw", args, {
             timeout: 15000, encoding: "utf-8",
             env: { ...process.env, HOME: "/root" },
             stdio: ["pipe", "pipe", "pipe"],
           });
-          return respond(Response.json({ ok: true, output: out.trim() }));
+          if (result.status !== 0) {
+            return respond(Response.json({ error: "Cron add failed" }, { status: 500 }));
+          }
+          return respond(Response.json({ ok: true, output: (result.stdout as string).trim() }));
         } catch (err: any) {
-          console.error("[cron] add failed:", err);
-          return respond(Response.json({ error: err.message }, { status: 500 }));
+          console.error("[cron] add failed:", err.message);
+          return respond(Response.json({ error: "Cron add failed" }, { status: 500 }));
         }
       }
 
       if (path.match(/^\/cron\/[\w-]+$/) && method === "DELETE") {
         try {
           const jobId = path.split("/")[2];
-          const { execSync } = await import("child_process");
-          execSync(`/usr/bin/openclaw cron delete ${jobId}`, {
+          const { spawnSync } = await import("child_process");
+          const result = spawnSync("/usr/bin/openclaw", ["cron", "delete", jobId], {
             timeout: 15000, encoding: "utf-8",
             env: { ...process.env, HOME: "/root" },
             stdio: ["pipe", "pipe", "pipe"],
           });
+          if (result.status !== 0) {
+            return respond(Response.json({ error: "Cron delete failed" }, { status: 500 }));
+          }
           return respond(Response.json({ ok: true }));
         } catch (err: any) {
           console.error("[cron] delete failed:", err);
-          return respond(Response.json({ error: err.message }, { status: 500 }));
+          return respond(Response.json({ error: "Cron delete failed" }, { status: 500 }));
         }
       }
 
       if (path.match(/^\/cron\/[\w-]+\/run$/) && method === "POST") {
         try {
           const jobId = path.split("/")[2];
-          const { execSync } = await import("child_process");
-          const out = execSync(`/usr/bin/openclaw cron run ${jobId}`, {
+          const { spawnSync } = await import("child_process");
+          const result = spawnSync("/usr/bin/openclaw", ["cron", "run", jobId], {
             timeout: 180000, encoding: "utf-8",
             env: { ...process.env, HOME: "/root" },
             stdio: ["pipe", "pipe", "pipe"],
           });
-          return respond(Response.json({ ok: true, output: out.trim() }));
+          if (result.status !== 0) {
+            return respond(Response.json({ error: "Cron run failed" }, { status: 500 }));
+          }
+          return respond(Response.json({ ok: true, output: (result.stdout as string).trim() }));
         } catch (err: any) {
           console.error("[cron] run failed:", err);
-          return respond(Response.json({ error: err.message }, { status: 500 }));
+          return respond(Response.json({ error: "Cron run failed" }, { status: 500 }));
         }
       }
 
       if (path.match(/^\/cron\/[\w-]+\/runs$/) && method === "GET") {
         try {
           const jobId = path.split("/")[2];
-          const { execSync } = await import("child_process");
-          const out = execSync(`/usr/bin/openclaw cron runs --id ${jobId} --json`, {
+          const { spawnSync } = await import("child_process");
+          const result = spawnSync("/usr/bin/openclaw", ["cron", "runs", "--id", jobId, "--json"], {
             timeout: 15000, encoding: "utf-8",
             env: { ...process.env, HOME: "/root" },
             stdio: ["pipe", "pipe", "pipe"],
           });
+          const out = result.stdout as string;
           const jsonStart = out.indexOf("[");
           const jsonEnd = out.lastIndexOf("]");
           const json = (jsonStart >= 0 && jsonEnd > jsonStart)
@@ -287,6 +297,11 @@ const server = Bun.serve({
           console.error("[cron] runs failed:", err);
           return respond(Response.json([]));
         }
+      }
+
+      // ── Admin API ─────────────────────────────
+      if (path.startsWith("/admin-api")) {
+        return respond(await handleAdminApi(method, path, url, request));
       }
 
       return respond(Response.json({ error: "Not found" }, { status: 404 }));

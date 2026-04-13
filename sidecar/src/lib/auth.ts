@@ -1,15 +1,15 @@
-const API_KEY = process.env.SIDECAR_API_KEY || "";
+import crypto from "crypto";
 
+const API_KEY = process.env.SIDECAR_API_KEY;
 if (!API_KEY) {
-  console.warn("[auth] SIDECAR_API_KEY not set — all requests will be rejected");
+  throw new Error("[auth] SIDECAR_API_KEY is not set — refusing to start");
 }
 
-/** Constant-time string comparison to prevent timing attacks. */
+/** Constant-time string comparison. Prevents timing attacks on key length and content. */
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  return bufA.every((byte, i) => byte === bufB[i]);
+  const hashA = crypto.createHash("sha256").update(a).digest();
+  const hashB = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
 }
 
 /** User context passed from the Cloud Function proxy. */
@@ -37,7 +37,7 @@ export interface AuthResult {
  * user context as trusted headers alongside the API key.
  */
 export function validateAuth(request: Request): AuthResult | null {
-  if (!API_KEY) return null;
+  if (!API_KEY) return null; // unreachable — startup throws, but satisfies TS narrowing
 
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) return null;

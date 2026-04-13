@@ -1,0 +1,82 @@
+#!/bin/bash
+#
+# admin-api — Generic CLI for the Admin Agent API
+#
+# Thin wrapper around curl for the sidecar admin API.
+# Installed at /usr/local/bin/admin-api on the agent host.
+#
+# Usage:
+#   admin-api <METHOD> <path> [json-body]
+#   admin-api --authorize <METHOD> <path> [json-body]
+#
+# The --authorize flag adds X-Operator-Authorized: true header.
+# Required for: cancelling appointments, deactivating patients.
+#
+# Examples:
+#   admin-api GET /patients
+#   admin-api GET /appointments/upcoming
+#   admin-api PATCH /refills/abc123 '{"status":"approved","doctorNotes":"Approved"}'
+#   admin-api --authorize PATCH /appointments/abc123 '{"status":"cancelled"}'
+#   admin-api --authorize PATCH /patients/abc123 '{"isActive":false}'
+#
+# Environment:
+#   SIDECAR_API_KEY  — required, the sidecar Bearer token
+#   SIDECAR_URL      — optional, defaults to http://localhost:8081
+#
+
+set -euo pipefail
+
+# Parse --authorize flag
+AUTHORIZED="false"
+if [ "${1:-}" = "--authorize" ]; then
+  AUTHORIZED="true"
+  shift
+fi
+
+METHOD="${1:-}"
+ENDPOINT="${2:-}"
+BODY="${3:-}"
+
+if [ -z "$METHOD" ] || [ -z "$ENDPOINT" ]; then
+  SELF=$(basename "$0")
+  echo "Usage: $SELF [--authorize] <METHOD> <path> [json-body]"
+  echo ""
+  echo "Methods: GET, POST, PATCH, DELETE"
+  echo "Run '$SELF GET /' for available endpoints."
+  echo ""
+  echo "Use --authorize for destructive operations (cancel, deactivate)."
+  exit 1
+fi
+
+API="${SIDECAR_URL:-http://localhost:8081}/admin-api"
+KEY="${SIDECAR_API_KEY:-}"
+
+if [ -z "$KEY" ]; then
+  KEY_FILE="/root/.openclaw/credentials/sidecar-api-key"
+  if [ -f "$KEY_FILE" ]; then
+    KEY=$(cat "$KEY_FILE")
+  else
+    echo "Error: SIDECAR_API_KEY not set and $KEY_FILE not found" >&2
+    exit 1
+  fi
+fi
+
+CURL_ARGS=(
+  -s
+  -X "$METHOD"
+  -H "Authorization: Bearer $KEY"
+  -H "Content-Type: application/json"
+  -H "X-User-Uid: ai-agent"
+  -H "X-User-Role: admin"
+  -H "X-User-Name: Assistant"
+)
+
+if [ "$AUTHORIZED" = "true" ]; then
+  CURL_ARGS+=(-H "X-Operator-Authorized: true")
+fi
+
+if [ -n "$BODY" ]; then
+  CURL_ARGS+=(-d "$BODY")
+fi
+
+curl "${CURL_ARGS[@]}" "${API}${ENDPOINT}" | jq . 2>/dev/null || cat

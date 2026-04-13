@@ -724,13 +724,27 @@ async function getIntakeForm(db: Db, patientId: string): Promise<Response> {
 
   const doc = snap.docs[0];
   const d = doc.data();
+
+  // Section data is stored as top-level fields (patientInfo, medicalHistory, etc.)
+  const metaKeys = new Set([
+    "patientId", "status", "currentSection", "completedSections",
+    "reviewedBy", "reviewNotes", "reviewedAt", "createdAt", "updatedAt",
+    "submittedAt", "skipIntakeForm",
+  ]);
+  const sections: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(d)) {
+    if (!metaKeys.has(key) && typeof value === "object" && value !== null) {
+      sections[key] = value;
+    }
+  }
+
   return json({
     id: doc.id,
     patientId: d.patientId,
     status: d.status,
     currentSection: d.currentSection ?? null,
     completedSections: d.completedSections ?? [],
-    sections: d.sections ?? {},
+    sections,
     reviewedBy: d.reviewedBy ?? null,
     reviewNotes: d.reviewNotes ?? null,
     createdAt: tsToISO(d.createdAt),

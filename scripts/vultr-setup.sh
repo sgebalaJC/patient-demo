@@ -48,7 +48,9 @@ ssh -i "$SSH_KEY" "$HOST" bash << REMOTE_SCRIPT
 set -e
 
 echo "--- Installing system packages ---"
-apt-get update && apt-get install -y curl git build-essential sqlite3
+apt-get update && apt-get install -y \
+  curl git build-essential sqlite3 \
+  poppler-utils imagemagick file
 
 echo "--- Installing Node.js 22 ---"
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -

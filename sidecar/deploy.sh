@@ -20,6 +20,13 @@ echo "==> Building sidecar binary..."
 cd "$SCRIPT_DIR"
 bun run build
 
+# Self-heal runtime deps for document/image pipelines. pdftoppm from
+# poppler-utils (PDF→JPG), `convert` from imagemagick (PNG/WEBP/GIF→JPG),
+# `file` detects real MIME type regardless of extension.
+echo "==> Ensuring system deps on VM (poppler-utils, imagemagick, file)..."
+$SSH "command -v pdftoppm >/dev/null && command -v convert >/dev/null && command -v file >/dev/null \
+  || (sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq poppler-utils imagemagick file)"
+
 echo "==> Uploading binary to GCE..."
 gcloud compute scp "$SCRIPT_DIR/patient-sidecar" \
   "$GCE_VM:/tmp/patient-sidecar.new" \

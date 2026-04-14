@@ -174,8 +174,8 @@ export const AdminNewMessageModal: React.FC<AdminNewMessageModalProps> = ({
             title="New Message to Patient"
             icon={<div className="bg-primary-100 p-2 rounded-lg"><MessageSquare className="h-6 w-6 text-primary-600" /></div>}
         >
-                    <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6" autoComplete="off">
-                        <ErrorAlert message={error} />
+                    <form onSubmit={handleSubmit(onSubmit)} className="px-6 pt-4 pb-6 space-y-6" autoComplete="off">
+                        {error && <ErrorAlert message={error} />}
 
                         <div className="space-y-4">
                             {/* Patient Selector */}

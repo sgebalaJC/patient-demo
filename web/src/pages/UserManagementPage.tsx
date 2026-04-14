@@ -344,15 +344,11 @@ export const UserManagementPage: React.FC = () => {
                 <Card key={user.id} className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-start space-x-4">
-                      <div className={`p-3 rounded-lg ${
-                        user.role === 'admin' 
-                          ? 'bg-purple-100' 
-                          : 'bg-blue-100'
-                      }`}>
+                      <div className="p-3 rounded-lg bg-primary-50">
                         {user.role === 'admin' ? (
-                          <Shield className="h-8 w-8 text-purple-600" />
+                          <Shield className="h-8 w-8 text-primary-600" />
                         ) : (
-                          <UserIcon className="h-8 w-8 text-blue-600" />
+                          <UserIcon className="h-8 w-8 text-primary-600" />
                         )}
                       </div>
                       <div className="flex-1">
@@ -361,7 +357,7 @@ export const UserManagementPage: React.FC = () => {
                         </h3>
                         <StatusBadge
                           label={user.role}
-                          colorClass={`capitalize ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}
+                          colorClass="capitalize bg-primary-50 text-primary-700"
                         />
                         <div className="flex items-center mt-2 space-x-4">
                           <div className="flex items-center text-sm text-secondary-600">
@@ -382,7 +378,7 @@ export const UserManagementPage: React.FC = () => {
                           variant="secondary"
                           size="sm"
                           onClick={() => handleManageDocuments(user)}
-                          className="text-blue-600 hover:text-blue-700 !px-2"
+                          className="text-primary-600 hover:text-primary-700 !px-2"
                           title="Manage documents"
                           aria-label="Manage documents"
                         >

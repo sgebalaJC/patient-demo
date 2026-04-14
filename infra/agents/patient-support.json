@@ -1,0 +1,17 @@
+{
+  "id": "patient-support",
+  "name": "patient-support",
+  "workspace": "/root/.openclaw/agents/patient-support/workspace",
+  "agentDir": "/root/.openclaw/agents/patient-support/agent",
+  "model": "openai-codex/gpt-5.4",
+  "identity": {
+    "name": "{{PATIENT_AGENT_NAME}}",
+    "emoji": "\ud83c\udf3b"
+  },
+  "fastModeDefault": true,
+  "params": {
+    "think": "minimal",
+    "maxTokens": 2048,
+    "textVerbosity": "low"
+  }
+}

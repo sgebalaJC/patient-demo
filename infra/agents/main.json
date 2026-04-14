@@ -1,0 +1,9 @@
+{
+  "id": "main",
+  "fastModeDefault": true,
+  "params": {
+    "think": "high",
+    "maxTokens": 4096,
+    "textVerbosity": "low"
+  }
+}

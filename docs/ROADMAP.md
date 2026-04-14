@@ -60,6 +60,7 @@ Connects the portal to the broader healthcare ecosystem.
 | Item | Description | Platform |
 |------|-------------|----------|
 | EHR integration | HL7 FHIR adapter for bidirectional sync with Epic, Cerner, athenahealth | Functions |
+| Inbound fax ingestion (SignalWire) | Receive faxes via SignalWire webhook, store PDFs, AI-extract sender/document type, match patient, upload to DrChrono chart — see [`docs/FAX_INGESTION.md`](FAX_INGESTION.md) | Functions + Sidecar + Web |
 | Insurance verification | Real-time eligibility checks via a clearinghouse API (e.g., Eligible, Change Healthcare) | Web + Functions |
 | Payment plans | Extend Stripe billing with installment plans and payment reminders | Web + Functions |
 | Patient reviews / NPS | Post-visit satisfaction surveys with aggregate reporting for admins | Web + Mobile + Functions |

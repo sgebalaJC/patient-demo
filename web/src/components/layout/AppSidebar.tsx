@@ -18,7 +18,8 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useFeatures } from '../../hooks/useFeatures';
 import { signOut } from '../../lib/firebase';
-import { BrandTextLogo } from '../ui/BrandLogo';
+import { BRANDING } from '../../config/branding';
+import { BrandLogo } from '../ui/BrandLogo';
 import { NotificationBell } from './NotificationBell';
 import logger from '../../lib/logger';
 
@@ -140,7 +141,19 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
           style={{ borderBottom: '1px solid var(--shell-border)' }}
         >
           <Link to="/" className="flex items-center gap-2" onClick={onMobileClose}>
-            <BrandTextLogo className="h-8 brightness-0 invert" />
+            <BrandLogo size="sm" />
+            <span
+              className="text-sm font-semibold tracking-tight"
+              style={{ color: 'var(--shell-text-strong)' }}
+            >
+              {BRANDING.shortName}
+              <span
+                className="ml-1 font-normal"
+                style={{ color: 'var(--shell-text-muted)' }}
+              >
+                {BRANDING.practiceName.replace(BRANDING.shortName, '').trim()}
+              </span>
+            </span>
           </Link>
           <button
             type="button"

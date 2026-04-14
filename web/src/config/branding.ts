@@ -104,9 +104,9 @@ export const BRANDING: Branding = {
   ],
   defaultAppointmentDuration: 20,
   logos: {
-    full: '/branding/logo.svg',
-    fullDark: '/branding/logo-dark.svg',
-    icon: '/branding/icon.svg',
+    full: '/branding/aurelia-logo.png',
+    fullDark: '/branding/aurelia-logo.png',
+    icon: '/branding/aurelia-logo.png',
     alt: 'Acme Primary Care',
   },
   colors: {

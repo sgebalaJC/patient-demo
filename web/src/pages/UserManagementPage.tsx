@@ -382,10 +382,11 @@ export const UserManagementPage: React.FC = () => {
                           variant="secondary"
                           size="sm"
                           onClick={() => handleManageDocuments(user)}
-                          className="text-blue-600 hover:text-blue-700"
+                          className="text-blue-600 hover:text-blue-700 !px-2"
+                          title="Manage documents"
+                          aria-label="Manage documents"
                         >
-                          <FileText className="h-4 w-4 mr-1" />
-                          Documents
+                          <FileText className="h-4 w-4" />
                         </Button>
                       )}
                       {user.email && (
@@ -394,25 +395,20 @@ export const UserManagementPage: React.FC = () => {
                           size="sm"
                           onClick={() => handleResendInvite(user)}
                           loading={resendingInviteFor === user.id}
-                          className={
+                          className={`!px-2 ${
                             resendInviteFlash?.uid === user.id && resendInviteFlash.ok
                               ? 'text-green-600 hover:text-green-700'
                               : resendInviteFlash?.uid === user.id && !resendInviteFlash.ok
                               ? 'text-red-600 hover:text-red-700'
                               : ''
-                          }
-                          title="Send a fresh sign-in link to this user"
+                          }`}
+                          title="Send a fresh sign-in link"
+                          aria-label="Send sign-in link"
                         >
                           {resendInviteFlash?.uid === user.id && resendInviteFlash.ok ? (
-                            <>
-                              <CheckCircle2 className="h-4 w-4 mr-1" />
-                              Sent
-                            </>
+                            <CheckCircle2 className="h-4 w-4" />
                           ) : (
-                            <>
-                              <Send className="h-4 w-4 mr-1" />
-                              Invite
-                            </>
+                            <Send className="h-4 w-4" />
                           )}
                         </Button>
                       )}
@@ -420,9 +416,11 @@ export const UserManagementPage: React.FC = () => {
                         variant="secondary"
                         size="sm"
                         onClick={() => handleEditUser(user)}
+                        className="!px-2"
+                        title="Edit user"
+                        aria-label="Edit user"
                       >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Edit
+                        <Edit className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="secondary"
@@ -433,7 +431,9 @@ export const UserManagementPage: React.FC = () => {
                           setDeleteConfirmText('');
                           setDeleteError(null);
                         }}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 !px-2"
+                        title="Delete user"
+                        aria-label="Delete user"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

@@ -181,7 +181,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   }
 
   .btn-primary {
-    @apply bg-primary-600 text-white hover:bg-primary-700 h-11 px-8;
+    @apply bg-primary-500 text-white hover:bg-primary-600 h-11 px-8;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 0 12px rgba(var(--glow-color), 0.15);
   }
   .btn-primary:hover {

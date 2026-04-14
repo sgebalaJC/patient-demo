@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
-import { BrandTextLogo } from '../ui/BrandLogo';
+import { BrandLogo } from '../ui/BrandLogo';
 import { BRANDING } from '../../config/branding';
 
 const FULL_HEIGHT_ROUTES = ['/support', '/admin/agent'];
@@ -41,8 +41,14 @@ export const Layout: React.FC = () => {
             >
               <Menu className="h-5 w-5" />
             </button>
-            <Link to="/" className="ml-2">
-              <BrandTextLogo className="h-7 brightness-0 invert" />
+            <Link to="/" className="ml-2 flex items-center gap-2">
+              <BrandLogo size="sm" />
+              <span
+                className="text-sm font-semibold"
+                style={{ color: 'var(--shell-text-strong)' }}
+              >
+                {BRANDING.shortName}
+              </span>
             </Link>
           </div>
 

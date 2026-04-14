@@ -56,7 +56,7 @@ export const AppointmentDashboard: React.FC = () => {
             <Button
               onClick={() => setIsRequestOpen(true)}
               variant="secondary"
-              className="flex items-center justify-center flex-1 sm:flex-initial border-purple-200 text-purple-700 hover:bg-purple-50"
+              className="flex items-center justify-center flex-1 sm:flex-initial border-green-200 text-green-700 hover:bg-green-50"
               size="lg"
             >
               <Stethoscope className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />

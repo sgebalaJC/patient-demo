@@ -174,7 +174,7 @@ export const AdminNewMessageModal: React.FC<AdminNewMessageModalProps> = ({
             title="New Message to Patient"
             icon={<div className="bg-primary-100 p-2 rounded-lg"><MessageSquare className="h-6 w-6 text-primary-600" /></div>}
         >
-                    <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
+                    <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6" autoComplete="off">
                         <ErrorAlert message={error} />
 
                         <div className="space-y-4">
@@ -198,6 +198,10 @@ export const AdminNewMessageModal: React.FC<AdminNewMessageModalProps> = ({
                                             }
                                         }}
                                         onFocus={() => setShowPatientDropdown(true)}
+                                        autoComplete="off"
+                                        autoCorrect="off"
+                                        spellCheck={false}
+                                        name="patient-search"
                                         className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                                     />
                                     <input type="hidden" {...register('patientId')} />
@@ -279,6 +283,9 @@ export const AdminNewMessageModal: React.FC<AdminNewMessageModalProps> = ({
                                 label="Subject"
                                 placeholder="Brief description of your message..."
                                 error={errors.subject?.message}
+                                autoComplete="off"
+                                autoCorrect="off"
+                                spellCheck={false}
                             />
 
                             <div>
@@ -307,6 +314,7 @@ export const AdminNewMessageModal: React.FC<AdminNewMessageModalProps> = ({
                                     {...register('message')}
                                     rows={6}
                                     placeholder="Write your message to the patient..."
+                                    autoComplete="off"
                                     className="input w-full resize-none"
                                 />
                                 {errors.message && (

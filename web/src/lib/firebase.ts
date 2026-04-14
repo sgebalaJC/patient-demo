@@ -64,16 +64,19 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Initialize Functions service conditionally
+// Initialize Functions services.
+// Default region is us-west1 (matches `setGlobalOptions` in functions/src/index.ts).
+// Stripe/billing functions live in us-central1 and use `functionsCentral`.
 let functions: any = null;
+let functionsCentral: any = null;
 try {
-    functions = getFunctions(app);
+    functions = getFunctions(app, 'us-west1');
+    functionsCentral = getFunctions(app, 'us-central1');
 } catch (error) {
     logger.error('Failed to initialize Firebase Functions:', error);
 }
 
-// Export functions for use in other parts
-export {functions};
+export {functions, functionsCentral};
 
 // Initialize providers
 export const googleProvider = new GoogleAuthProvider();
@@ -91,6 +94,9 @@ if (useEmulators) {
         // Connect to emulators - make sure functions is initialized first
         if (functions) {
             connectFunctionsEmulator(functions, 'localhost', 5001);
+        }
+        if (functionsCentral) {
+            connectFunctionsEmulator(functionsCentral, 'localhost', 5001);
         }
 
         connectAuthEmulator(auth, 'http://localhost:9099', {disableWarnings: true});

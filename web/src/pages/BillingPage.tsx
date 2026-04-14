@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../lib/firebase';
+import { functionsCentral } from '../lib/firebase';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -54,7 +54,7 @@ export const BillingPage: React.FC = () => {
       const createCheckoutSession = httpsCallable<
         { priceId: string; successUrl: string; cancelUrl: string },
         { url: string }
-      >(functions, 'createCheckoutSession');
+      >(functionsCentral, 'createCheckoutSession');
       const origin = window.location.origin;
       const res = await createCheckoutSession({
         priceId,
@@ -82,7 +82,7 @@ export const BillingPage: React.FC = () => {
     setActionLoading('cancel');
     setError(null);
     try {
-      const cancelSubscription = httpsCallable(functions, 'cancelSubscription');
+      const cancelSubscription = httpsCallable(functionsCentral, 'cancelSubscription');
       await cancelSubscription({});
     } catch (err: any) {
       setError(err.message || 'Could not cancel subscription.');

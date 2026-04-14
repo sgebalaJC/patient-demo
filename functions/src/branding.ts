@@ -28,6 +28,8 @@ export const FUNCTIONS_BRANDING = {
    */
   additionalOrigins: [
     'https://web-patient-demo--patient-demo-project.us-central1.hosted.app',
+    'https://patient-demo-project.web.app',
+    'https://patient-demo-project.firebaseapp.com',
   ] as string[],
   /** Platform vendor (you) — billed on Stripe statements for the practice subscription */
   platformVendor: {

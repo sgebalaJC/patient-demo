@@ -28,12 +28,14 @@ function db() {
 }
 
 /** The redirect URI DrChrono must call back to. Derived from the project id
- *  so each fork gets its own — admin pastes this into DrChrono's app config. */
+ *  so each fork gets its own — admin pastes this into DrChrono's app config.
+ *  Region is pinned to match setGlobalOptions() in index.ts. */
+const FUNCTIONS_REGION = "us-west1";
+
 function getRedirectUri(): string {
   const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
-  const region = process.env.FUNCTION_REGION || "us-central1";
   if (!projectId) throw new HttpsError("internal", "GCLOUD_PROJECT not set");
-  return `https://${region}-${projectId}.cloudfunctions.net/drchronoCallback`;
+  return `https://${FUNCTIONS_REGION}-${projectId}.cloudfunctions.net/drchronoCallback`;
 }
 
 async function requireAdmin(auth: { uid: string } | undefined): Promise<string> {

@@ -3394,3 +3394,11 @@ export const onNotificationCreated = onDocumentCreated({
     }
   }
 });
+
+// ─── DrChrono integration ───────────────────────────────────────────
+export {
+  drchronoSaveCredentials,
+  drchronoAuthorize,
+  drchronoCallback,
+  drchronoSetEnabled,
+} from "./drchrono.js";

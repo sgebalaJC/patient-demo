@@ -3,6 +3,7 @@ import { Link2, MessageCircle, Plug, RefreshCw } from 'lucide-react';
 import { sidecar } from '../../lib/sidecar';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { GoogleWorkspaceSetup } from './GoogleWorkspaceSetup';
+import { DrChronoSetup } from './DrChronoSetup';
 
 interface ChannelInfo {
   name: string;
@@ -79,6 +80,9 @@ export const AgentIntegrations: React.FC = () => {
       <div className="space-y-6 max-w-2xl">
         {/* Google Workspace — interactive card */}
         <GoogleWorkspaceSetup onStateChange={loadConfig} />
+
+        {/* DrChrono — interactive card */}
+        <DrChronoSetup onStateChange={loadConfig} />
 
         {/* Agent config (channels, plugins, model) */}
         {loading ? (

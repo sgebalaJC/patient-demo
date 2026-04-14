@@ -71,6 +71,10 @@ function isAdminOnlyRoute(path: string): boolean {
 
 const server = Bun.serve({
   port: PORT,
+  // Bun's default idleTimeout is 10s. Long ops (workspace tar for /backup/create,
+  // large DrChrono uploads, slow DrChrono API responses) need much longer or
+  // they return "Empty reply from server".
+  idleTimeout: 255,
   async fetch(request, server) {
     const url = new URL(request.url);
     const path = url.pathname;

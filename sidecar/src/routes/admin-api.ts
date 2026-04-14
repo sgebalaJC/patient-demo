@@ -15,6 +15,7 @@
 
 import { getDb } from "../lib/firebase.js";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { proxyDrChrono, assertDrChronoReady } from "../lib/drchrono.js";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -1086,6 +1087,22 @@ export async function handleAdminApi(
         if (method === "PATCH" && id) return await updateSpecialistRequest(db, id, request);
         break;
 
+      // ── DrChrono (generic pass-through) ──
+      // Path: /admin-api/drchrono/<drchrono-path>[?...]
+      // Only active when integrations/drchrono { enabled: true, status: active }.
+      case "drchrono": {
+        try {
+          await assertDrChronoReady();
+        } catch (err: any) {
+          return error(err.message, 403);
+        }
+        const drchronoPath = parts.slice(1).join("/");
+        if (!drchronoPath) {
+          return error("DrChrono path required (e.g. /admin-api/drchrono/patients)", 400);
+        }
+        return await proxyDrChrono(method, drchronoPath, url.searchParams, request);
+      }
+
       default:
         return json({
           error: "Unknown resource",
@@ -1122,6 +1139,7 @@ export async function handleAdminApi(
             "POST   /admin-api/notifications",
             "GET    /admin-api/specialist-requests[?limit=]",
             "PATCH  /admin-api/specialist-requests/:id",
+            "*      /admin-api/drchrono/<path>  (when integration enabled)",
           ],
         }, 404);
     }

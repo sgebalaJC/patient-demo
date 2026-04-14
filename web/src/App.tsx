@@ -31,6 +31,7 @@ const SupportChatPage = lazy(() => import('./pages/SupportChatPage').then(m => (
 const ContactPage = lazy(() => import('./pages/ContactPage').then(m => ({ default: m.ContactPage })));
 const BillingPage = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })));
 const AdminSubscriptionPlansPage = lazy(() => import('./pages/AdminSubscriptionPlansPage').then(m => ({ default: m.AdminSubscriptionPlansPage })));
+const AdminDrChronoCsvPage = lazy(() => import('./pages/AdminDrChronoCsvPage').then(m => ({ default: m.AdminDrChronoCsvPage })));
 
 const isSandbox = import.meta.env.VITE_SANDBOX_MODE === 'true';
 
@@ -121,6 +122,8 @@ function App() {
           <Route path="contact" element={<ContactPage />} />
           <Route path="billing" element={<BillingPage />} />
           <Route path="admin/subscription-plans" element={<AdminSubscriptionPlansPage />} />
+          <Route path="admin/drchrono-csv" element={<AdminDrChronoCsvPage />} />
+          <Route path="admin/drchrono-csv/:jobId" element={<AdminDrChronoCsvPage />} />
           {/* Add more protected routes here */}
         </Route>
       </Routes>

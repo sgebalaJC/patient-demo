@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useFeatures } from '../hooks/useFeatures';
-import { AdminNavigation } from '../components/admin/AdminNavigation';
 import { Card } from '../components/ui/Card';
 import { messageThreadOperations, prescriptionRefillOperations } from '../lib/firestore';
 import { MessageThread, PrescriptionRefillRequest } from '../types';
@@ -252,9 +251,6 @@ export const AdminDashboardPage: React.FC = () => {
                     </Card>
                 )}
             </div>
-
-            {/* Admin Navigation */}
-            <AdminNavigation />
 
         </div>
     );

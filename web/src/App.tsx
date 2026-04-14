@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
+import { AdminLayout } from './components/layout/AdminLayout';
 import { useAuth } from './hooks/useAuth';
 import { AuthProvider } from './contexts/AuthContext';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
@@ -103,27 +104,29 @@ function App() {
             }
           >
           <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="admin" element={<AdminDashboardPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="refills" element={<RefillsPage />} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="messages" element={<MessagesPage />} />
           <Route path="intake" element={<IntakePage />} />
           <Route path="appointments" element={<AppointmentsPage />} />
-          <Route path="admin/users" element={<UserManagementPage />} />
-          <Route path="admin/todos" element={<AdminTodoPage />} />
-          <Route path="admin/refills" element={<AdminRefillsPage />} />
-          <Route path="admin/appointments" element={<AdminAppointmentsPage />} />
-          <Route path="admin/agent" element={<AgentPage />} />
-          <Route path="admin/intake-forms" element={<AdminIntakeFormsPage />} />
-          <Route path="admin/specialist-requests" element={<AdminSpecialistRequestsPage />} />
-          <Route path="admin/settings" element={<AdminSettingsPage />} />
           <Route path="support" element={<SupportChatPage />} />
           <Route path="contact" element={<ContactPage />} />
           <Route path="billing" element={<BillingPage />} />
-          <Route path="admin/subscription-plans" element={<AdminSubscriptionPlansPage />} />
-          <Route path="admin/drchrono-csv" element={<AdminDrChronoCsvPage />} />
-          <Route path="admin/drchrono-csv/:jobId" element={<AdminDrChronoCsvPage />} />
+          <Route path="admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboardPage />} />
+            <Route path="users" element={<UserManagementPage />} />
+            <Route path="todos" element={<AdminTodoPage />} />
+            <Route path="refills" element={<AdminRefillsPage />} />
+            <Route path="appointments" element={<AdminAppointmentsPage />} />
+            <Route path="agent" element={<AgentPage />} />
+            <Route path="intake-forms" element={<AdminIntakeFormsPage />} />
+            <Route path="specialist-requests" element={<AdminSpecialistRequestsPage />} />
+            <Route path="settings" element={<AdminSettingsPage />} />
+            <Route path="subscription-plans" element={<AdminSubscriptionPlansPage />} />
+            <Route path="drchrono-csv" element={<AdminDrChronoCsvPage />} />
+            <Route path="drchrono-csv/:jobId" element={<AdminDrChronoCsvPage />} />
+          </Route>
           {/* Add more protected routes here */}
         </Route>
       </Routes>

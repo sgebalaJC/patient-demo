@@ -110,9 +110,9 @@ export const BRANDING: Branding = {
     alt: 'Acme Primary Care',
   },
   colors: {
-    primary: '#8B1A2B',
-    secondary: '#C5993E',
-    accent: '#F59E0B',
+    primary: '#fcbb00',
+    secondary: '#374058',
+    accent: '#c8973a',
   },
   adminAgent: {
     name: 'Ada',

@@ -29,7 +29,11 @@ function timeAgo(date: Date): string {
   return date.toLocaleDateString();
 }
 
-export const NotificationBell: React.FC = () => {
+interface NotificationBellProps {
+  buttonClassName?: string;
+}
+
+export const NotificationBell: React.FC<NotificationBellProps> = ({ buttonClassName }) => {
   const { user, userProfile } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -87,7 +91,7 @@ export const NotificationBell: React.FC = () => {
       {/* Bell button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative text-secondary-500 hover:text-secondary-700 p-2 rounded-lg hover:bg-secondary-50 transition-colors"
+        className={`relative ${buttonClassName ?? 'text-secondary-500 hover:text-secondary-700 p-2 rounded-lg hover:bg-secondary-50 transition-colors'}`}
         title="Notifications"
       >
         <Bell className="h-5 w-5" />

@@ -18,7 +18,6 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useFeatures } from '../../hooks/useFeatures';
 import { signOut } from '../../lib/firebase';
-import { BRANDING } from '../../config/branding';
 import { BrandTextLogo } from '../ui/BrandLogo';
 import { NotificationBell } from './NotificationBell';
 import logger from '../../lib/logger';
@@ -182,77 +181,65 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
           })}
         </nav>
 
-        {/* Footer */}
-        <div
-          className="shrink-0 px-3 py-3 space-y-1"
-          style={{ borderTop: '1px solid var(--shell-border)' }}
-        >
-          {user && (
-            <div className="flex items-center gap-1 px-1">
-              <div className="flex-1 shell-bell">
-                <NotificationBell buttonClassName="p-2 rounded-lg transition-colors" />
+        {/* User actions */}
+        {user && (
+          <>
+            <div
+              className="shrink-0 px-3 py-3"
+              style={{ borderTop: '1px solid var(--shell-border)' }}
+            >
+              <div className="flex items-center gap-1 px-1">
+                <div className="flex-1 shell-bell">
+                  <NotificationBell buttonClassName="p-2 rounded-lg transition-colors" />
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="p-2 rounded-lg transition-colors"
+                  style={{ color: 'var(--shell-text)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--shell-bg-hover)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+                >
+                  {theme === 'dark' ? (
+                    <Sun className="h-[18px] w-[18px]" />
+                  ) : (
+                    <Moon className="h-[18px] w-[18px]" />
+                  )}
+                </button>
+                <Link
+                  to="/profile"
+                  onClick={onMobileClose}
+                  className="p-2 rounded-lg transition-colors"
+                  style={{ color: 'var(--shell-text)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--shell-bg-hover)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  title="Profile"
+                >
+                  <User className="h-[18px] w-[18px]" />
+                </Link>
               </div>
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="p-2 rounded-lg transition-colors"
-                style={{ color: 'var(--shell-text)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--shell-bg-hover)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-              >
-                {theme === 'dark' ? (
-                  <Sun className="h-[18px] w-[18px]" />
-                ) : (
-                  <Moon className="h-[18px] w-[18px]" />
-                )}
-              </button>
-              <Link
-                to="/profile"
-                onClick={onMobileClose}
-                className="p-2 rounded-lg transition-colors"
-                style={{ color: 'var(--shell-text)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--shell-bg-hover)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                title="Profile"
-              >
-                <User className="h-[18px] w-[18px]" />
-              </Link>
+            </div>
+
+            <div
+              className="shrink-0 px-3 py-2"
+              style={{ borderTop: '1px solid var(--shell-border)' }}
+            >
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="p-2 rounded-lg transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
                 style={{ color: 'var(--shell-text)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--shell-bg-hover)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 title="Sign out"
               >
-                <LogOut className="h-[18px] w-[18px]" />
+                <LogOut className="h-[18px] w-[18px] shrink-0" />
+                <span>Sign out</span>
               </button>
             </div>
-          )}
-
-          <div
-            className="flex flex-wrap gap-x-3 gap-y-1 px-2 pt-2 text-[11px]"
-            style={{ color: 'var(--shell-text-muted)' }}
-          >
-            <Link to="/privacy" className="hover:underline" onClick={onMobileClose}>
-              Privacy
-            </Link>
-            <Link to="/terms" className="hover:underline" onClick={onMobileClose}>
-              Terms
-            </Link>
-            <Link to="/contact" className="hover:underline" onClick={onMobileClose}>
-              Contact
-            </Link>
-          </div>
-          <div
-            className="px-2 text-[11px]"
-            style={{ color: 'var(--shell-text-muted)' }}
-          >
-            &copy; {new Date().getFullYear()} {BRANDING.legalEntity}
-          </div>
-        </div>
+          </>
+        )}
       </aside>
     </>
   );

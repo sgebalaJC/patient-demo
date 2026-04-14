@@ -20,5 +20,19 @@ export const FUNCTIONS_BRANDING = {
   /** Name used to sign admin system messages */
   adminSignatureName: 'Acme Admin System',
   /** Patient portal URL for email links */
-  portalUrl: 'https://web-patient-demo--patient-demo-project.us-central1.hosted.app',
+  portalUrl: 'https://demo.aureliamd.com',
+  /**
+   * Additional origins allowed by the CORS allow-list. Include the App
+   * Hosting default URL so the portal still works when accessed directly,
+   * plus any staging or preview URLs.
+   */
+  additionalOrigins: [
+    'https://web-patient-demo--patient-demo-project.us-central1.hosted.app',
+  ] as string[],
+  /** Platform vendor (you) — billed on Stripe statements for the practice subscription */
+  platformVendor: {
+    name: 'Patient Portal Inc.',
+    supportEmail: 'billing@patientportal.example',
+    billingDescriptor: 'PATIENT PORTAL',
+  },
 } as const;

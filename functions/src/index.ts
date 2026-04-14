@@ -7,12 +7,22 @@
  * - Stripe subscription billing
  */
 
-// Stripe subscription billing
+// Stripe subscription billing — patient pays practice
 export {
   createCheckoutSession,
   cancelSubscription,
   stripeWebhook,
 } from "./stripe.js";
+
+// Stripe platform billing — practice pays platform vendor (you)
+export {
+  createPlatformCheckoutSession,
+  createPlatformTopupSession,
+  createPlatformBillingPortalSession,
+  cancelPlatformSubscription,
+  resumePlatformSubscription,
+  platformStripeWebhook,
+} from "./platformStripe.js";
 
 import {FUNCTIONS_BRANDING} from "./branding.js";
 import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail} from "./email.js";
@@ -49,16 +59,29 @@ const twilio = require("twilio");
 // Simple environment detection for Firebase Functions
 const isProduction = () => {
   const isEmulator = !!(process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.FUNCTIONS_EMULATOR);
-  const projectId = process.env.GCLOUD_PROJECT;
-
-  // Production if: real project ID and not running in emulator
-  return projectId === 'YOUR_FIREBASE_PROJECT' && !isEmulator;
+  return !isEmulator;
 };
 
-// Configure CORS based on environment
+// CORS allow-list.
+// Production origins come from FUNCTIONS_BRANDING (portalUrl + additionalOrigins)
+// plus an optional ALLOWED_ORIGINS env var (comma-separated) for per-env overrides.
+// Local dev keeps localhost.
+const devOrigins = [
+  'http://localhost:3001',
+  'https://localhost:3001',
+  'http://localhost:5173',
+];
+const envOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const brandingOrigins = [
+  FUNCTIONS_BRANDING.portalUrl,
+  ...(FUNCTIONS_BRANDING.additionalOrigins ?? []),
+].filter(Boolean);
 const corsOptions = isProduction()
-  ? ['https://patient.example.com']
-  : ['http://localhost:3001', 'https://localhost:3001'];
+  ? Array.from(new Set([...brandingOrigins, ...envOrigins]))
+  : Array.from(new Set([...devOrigins, ...brandingOrigins, ...envOrigins]));
 
 // Field length limits — must match web/src/lib/validation.ts
 const FIELD_LIMITS = {

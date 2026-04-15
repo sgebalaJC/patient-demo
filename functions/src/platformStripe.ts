@@ -38,10 +38,24 @@
  */
 
 import {onCall, onRequest, HttpsError} from "firebase-functions/v2/https";
+import {defineSecret} from "firebase-functions/params";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
 import Stripe from "stripe";
 import {FUNCTIONS_BRANDING} from "./branding.js";
+
+const PLATFORM_STRIPE_SECRET_KEY = defineSecret("PLATFORM_STRIPE_SECRET_KEY");
+const PLATFORM_STRIPE_WEBHOOK_SECRET = defineSecret("PLATFORM_STRIPE_WEBHOOK_SECRET");
+const PLATFORM_STRIPE_PRICE_MONTHLY = defineSecret("PLATFORM_STRIPE_PRICE_MONTHLY");
+const PLATFORM_STRIPE_PRICE_ANNUAL = defineSecret("PLATFORM_STRIPE_PRICE_ANNUAL");
+const PLATFORM_STRIPE_PRICE_TOPUP = defineSecret("PLATFORM_STRIPE_PRICE_TOPUP");
+const ALL_PLATFORM_SECRETS = [
+  PLATFORM_STRIPE_SECRET_KEY,
+  PLATFORM_STRIPE_WEBHOOK_SECRET,
+  PLATFORM_STRIPE_PRICE_MONTHLY,
+  PLATFORM_STRIPE_PRICE_ANNUAL,
+  PLATFORM_STRIPE_PRICE_TOPUP,
+];
 
 // Amount of bonus output tokens granted per successful $25 top-up. Tunable
 // at runtime via `platform/config.topupBonusTokens`; this is just the fallback
@@ -49,7 +63,7 @@ import {FUNCTIONS_BRANDING} from "./branding.js";
 const DEFAULT_TOPUP_BONUS_TOKENS = 2_500_000;
 
 function getStripe(): Stripe {
-  const key = process.env.PLATFORM_STRIPE_SECRET_KEY;
+  const key = PLATFORM_STRIPE_SECRET_KEY.value();
   if (!key) {
     throw new HttpsError(
       "failed-precondition",
@@ -104,21 +118,20 @@ async function ensurePlatformCustomer(stripe: Stripe): Promise<string> {
 }
 
 function resolvePriceId(plan: "monthly" | "annual"): string {
-  const envKey = plan === "monthly" ?
-    "PLATFORM_STRIPE_PRICE_MONTHLY" :
-    "PLATFORM_STRIPE_PRICE_ANNUAL";
-  const priceId = process.env[envKey];
+  const ref = plan === "monthly" ? PLATFORM_STRIPE_PRICE_MONTHLY : PLATFORM_STRIPE_PRICE_ANNUAL;
+  const envKey = plan === "monthly" ? "PLATFORM_STRIPE_PRICE_MONTHLY" : "PLATFORM_STRIPE_PRICE_ANNUAL";
+  const priceId = ref.value();
   if (!priceId) {
     throw new HttpsError(
       "failed-precondition",
-      `${envKey} is not set. Add it to functions/.env or set via firebase functions:secrets:set.`,
+      `${envKey} is not set. Run \`firebase functions:secrets:set ${envKey}\`.`,
     );
   }
   return priceId;
 }
 
 /** Admin-only: start hosted Stripe Checkout for the platform subscription. */
-export const createPlatformCheckoutSession = onCall(async (request) => {
+export const createPlatformCheckoutSession = onCall({secrets: ALL_PLATFORM_SECRETS}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   await assertAdmin(request.auth.uid);
   const {plan, successUrl, cancelUrl} = request.data as {
@@ -158,7 +171,7 @@ export const createPlatformCheckoutSession = onCall(async (request) => {
 });
 
 /** Admin-only: start Checkout for a one-time $25 token top-up. */
-export const createPlatformTopupSession = onCall(async (request) => {
+export const createPlatformTopupSession = onCall({secrets: ALL_PLATFORM_SECRETS}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   await assertAdmin(request.auth.uid);
   const {successUrl, cancelUrl} = request.data as {
@@ -169,7 +182,7 @@ export const createPlatformTopupSession = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "successUrl and cancelUrl are required.");
   }
 
-  const priceId = process.env.PLATFORM_STRIPE_PRICE_TOPUP;
+  const priceId = PLATFORM_STRIPE_PRICE_TOPUP.value();
   if (!priceId) {
     throw new HttpsError(
       "failed-precondition",
@@ -209,7 +222,7 @@ export const createPlatformTopupSession = onCall(async (request) => {
 });
 
 /** Admin-only: redirect to Stripe's hosted Billing Portal. */
-export const createPlatformBillingPortalSession = onCall(async (request) => {
+export const createPlatformBillingPortalSession = onCall({secrets: ALL_PLATFORM_SECRETS}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   await assertAdmin(request.auth.uid);
   const {returnUrl} = request.data as {returnUrl?: string};
@@ -235,7 +248,7 @@ export const createPlatformBillingPortalSession = onCall(async (request) => {
 });
 
 /** Admin-only: schedule cancellation at the current period end. */
-export const cancelPlatformSubscription = onCall(async (request) => {
+export const cancelPlatformSubscription = onCall({secrets: ALL_PLATFORM_SECRETS}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   await assertAdmin(request.auth.uid);
 
@@ -265,7 +278,7 @@ export const cancelPlatformSubscription = onCall(async (request) => {
 });
 
 /** Admin-only: undo a scheduled cancellation. */
-export const resumePlatformSubscription = onCall(async (request) => {
+export const resumePlatformSubscription = onCall({secrets: ALL_PLATFORM_SECRETS}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   await assertAdmin(request.auth.uid);
 
@@ -303,9 +316,9 @@ export const resumePlatformSubscription = onCall(async (request) => {
  * Firestore. Separate endpoint from `stripeWebhook` (patient billing).
  * Idempotency via `platform-stripe-events/{eventId}` write-once.
  */
-export const platformStripeWebhook = onRequest(async (req, res) => {
+export const platformStripeWebhook = onRequest({secrets: ALL_PLATFORM_SECRETS}, async (req, res) => {
   const signature = req.headers["stripe-signature"];
-  const webhookSecret = process.env.PLATFORM_STRIPE_WEBHOOK_SECRET;
+  const webhookSecret = PLATFORM_STRIPE_WEBHOOK_SECRET.value();
   if (!signature || !webhookSecret) {
     res.status(400).send("Missing signature or webhook secret");
     return;

@@ -359,7 +359,7 @@ export const ProfilePage: React.FC = () => {
               size="sm"
               loading={exportStatus === 'loading'}
               disabled={exportStatus === 'loading'}
-              className="mt-4"
+              className="mt-4 border-green-700 text-green-700 hover:bg-green-50"
             >
               <Download className="h-4 w-4 mr-2" />
               {exportStatus === 'loading' ? 'Preparing export...' : 'Export My Data'}

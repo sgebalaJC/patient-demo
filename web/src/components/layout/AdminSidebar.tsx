@@ -63,17 +63,6 @@ export const AdminSidebar: React.FC = () => {
           borderRight: '1px solid var(--shell-border)',
         }}
       >
-        <div
-          className="px-4 h-16 flex items-center shrink-0"
-          style={{ borderBottom: '1px solid var(--shell-border)' }}
-        >
-          <span
-            className="text-[11px] font-semibold tracking-wider uppercase"
-            style={{ color: 'var(--shell-text-muted)' }}
-          >
-            Admin
-          </span>
-        </div>
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-0.5">
           {visibleItems.map((item) => {
             const active = isActive(item);

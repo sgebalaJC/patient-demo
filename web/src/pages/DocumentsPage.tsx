@@ -148,27 +148,28 @@ export const DocumentsPage: React.FC = () => {
       />
 
       {/* Document Categories */}
-      <div className="grid gap-6">
+      <div className="grid gap-3">
         {documentTypes.map((docType) => {
           const typeDocuments = groupedDocuments[docType.type] || [];
           const IconComponent = docType.icon;
+          const isEmpty = typeDocuments.length === 0;
 
           return (
-            <Card key={docType.type} className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="bg-primary-100 p-2 rounded-lg">
-                    <IconComponent className="h-6 w-6 text-primary-600" />
+            <Card key={docType.type} className={isEmpty ? 'p-3' : 'p-4'}>
+              <div className={`flex items-center justify-between ${isEmpty ? '' : 'mb-3'}`}>
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className="bg-primary-100 p-2 rounded-lg shrink-0">
+                    <IconComponent className="h-5 w-5 text-primary-600" />
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-secondary-900">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-secondary-900 truncate">
                       {docType.label}
                     </h3>
-                    <p className="text-sm text-secondary-600">{docType.description}</p>
+                    <p className="text-xs text-secondary-600 truncate">{docType.description}</p>
                   </div>
                 </div>
-                <span className="text-sm text-secondary-500">
-                  {typeDocuments.length} document{typeDocuments.length !== 1 ? 's' : ''}
+                <span className="text-xs text-secondary-500 shrink-0 ml-2">
+                  {typeDocuments.length} doc{typeDocuments.length !== 1 ? 's' : ''}
                 </span>
               </div>
 
@@ -230,12 +231,7 @@ export const DocumentsPage: React.FC = () => {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="text-center py-8 text-secondary-500">
-                  <IconComponent className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No {docType.label.toLowerCase()} uploaded yet</p>
-                </div>
-              )}
+              ) : null}
             </Card>
           );
         })}

@@ -1,6 +1,6 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { ModalOverlay } from './ModalOverlay';
 
 interface ModalProps {
   isOpen: boolean;
@@ -19,10 +19,8 @@ export const Modal: React.FC<ModalProps> = ({
   maxWidth = 'max-w-2xl',
   children,
 }) => {
-  if (!isOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+  return (
+    <ModalOverlay isOpen={isOpen}>
       <div className={`bg-surface-card rounded-xl ${maxWidth} w-full max-h-[90vh] overflow-y-auto`}>
         <div className="flex items-center justify-between p-6 border-b border-secondary-200">
           <div className="flex items-center space-x-3">
@@ -38,7 +36,6 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
         {children}
       </div>
-    </div>,
-    document.body,
+    </ModalOverlay>
   );
 };

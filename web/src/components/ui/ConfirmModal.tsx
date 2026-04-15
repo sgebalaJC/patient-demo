@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from './Button';
+import { ModalOverlay } from './ModalOverlay';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -49,8 +49,6 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   const [inputValue, setInputValue] = useState('');
   const styles = variantStyles[variant];
 
-  if (!isOpen) return null;
-
   const handleConfirm = () => {
     if (inputRequired && !inputValue.trim()) return;
     onConfirm(inputPrompt ? inputValue : undefined);
@@ -62,8 +60,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     onClose();
   };
 
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+  return (
+    <ModalOverlay isOpen={isOpen}>
       <div className="bg-surface-card rounded-xl max-w-md w-full shadow-xl">
         <div className="p-6">
           <div className="flex items-start space-x-4">
@@ -104,7 +102,6 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </button>
         </div>
       </div>
-    </div>,
-    document.body,
+    </ModalOverlay>
   );
 };

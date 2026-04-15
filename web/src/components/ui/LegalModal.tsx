@@ -1,8 +1,8 @@
 import React from 'react';
-import {createPortal} from 'react-dom';
 import {X, FileText} from 'lucide-react';
 import {Button} from './Button';
 import {BRANDING} from '../../config/branding';
+import {ModalOverlay} from './ModalOverlay';
 
 interface LegalModalProps {
     isOpen: boolean;
@@ -11,8 +11,6 @@ interface LegalModalProps {
 }
 
 export const LegalModal: React.FC<LegalModalProps> = ({isOpen, onClose, type}) => {
-    if (!isOpen) return null;
-
     const content = {
         terms: {
             title: 'Terms of Service',
@@ -80,10 +78,9 @@ export const LegalModal: React.FC<LegalModalProps> = ({isOpen, onClose, type}) =
 
     const currentContent = content[type];
 
-    return createPortal(
-        <div>
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                <div className="bg-surface-card rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    return (
+        <ModalOverlay isOpen={isOpen}>
+            <div className="bg-surface-card rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
                     <div
                         className="flex items-center justify-between p-6 border-b border-secondary-200 sticky top-0 bg-surface-card">
                         <div className="flex items-center space-x-3">
@@ -148,8 +145,6 @@ export const LegalModal: React.FC<LegalModalProps> = ({isOpen, onClose, type}) =
                         </Button>
                     </div>
                 </div>
-            </div>
-        </div>,
-        document.body,
+        </ModalOverlay>
     );
 };

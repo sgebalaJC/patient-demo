@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Phone, Shield } from 'lucide-react';
 import { Button } from './Button';
 import { ErrorAlert } from './ErrorAlert';
+import { ModalOverlay } from './ModalOverlay';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
 import { formatPhoneDisplay } from '../../lib/phone';
@@ -24,8 +24,6 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  if (!isOpen) return null;
 
   const handleSendCode = async () => {
     setLoading(true);
@@ -80,8 +78,8 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
 
   const maskedPhone = formatPhoneDisplay(phoneNumber);
 
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+  return (
+    <ModalOverlay isOpen={isOpen}>
       <div className="bg-surface-card rounded-xl max-w-md w-full shadow-xl">
         <div className="p-6">
           <div className="flex items-center space-x-3 mb-4">
@@ -160,7 +158,6 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
           )}
         </div>
       </div>
-    </div>,
-    document.body,
+    </ModalOverlay>
   );
 };

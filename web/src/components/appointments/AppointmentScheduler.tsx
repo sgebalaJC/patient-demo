@@ -1,6 +1,6 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import {createPortal} from 'react-dom';
 import {useForm, Controller} from 'react-hook-form';
+import {ModalOverlay} from '../ui/ModalOverlay';
 import {zodResolver} from '@hookform/resolvers/zod';
 import {z} from 'zod';
 import {Button} from '../ui/Button';
@@ -254,12 +254,9 @@ export const AppointmentScheduler: React.FC<AppointmentSchedulerProps> = ({
     };
     const minDate = getTomorrowPST();
 
-    if (!isOpen) return null;
-
-    return createPortal(
-        <div>
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                <div className="bg-surface-card rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    return (
+        <ModalOverlay isOpen={isOpen}>
+            <div className="bg-surface-card rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                     <div className="flex items-center justify-between p-6 border-b border-secondary-200">
                         <div className="flex items-center space-x-3">
                             <div className="bg-primary-100 p-2 rounded-lg">
@@ -403,8 +400,6 @@ export const AppointmentScheduler: React.FC<AppointmentSchedulerProps> = ({
                         </form>
                     </div>
                 </div>
-            </div>
-        </div>,
-        document.body,
+        </ModalOverlay>
     );
 };

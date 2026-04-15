@@ -84,7 +84,7 @@ export const SpecialistRequestModal: React.FC<SpecialistRequestModalProps> = ({
       isOpen={isOpen}
       onClose={handleClose}
       title="Request Specialist Appointment"
-      icon={<div className="bg-purple-100 p-2 rounded-lg"><Stethoscope className="h-6 w-6 text-purple-600" /></div>}
+      icon={<div className="bg-primary-100 p-2 rounded-lg"><Stethoscope className="h-6 w-6 text-primary-600" /></div>}
       maxWidth="max-w-md"
     >
       <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -148,7 +148,7 @@ export const SpecialistRequestModal: React.FC<SpecialistRequestModalProps> = ({
           <Button type="button" variant="secondary" onClick={handleClose} disabled={loading}>
             Cancel
           </Button>
-          <Button type="submit" loading={loading} disabled={!specialistType || reason.trim().length < FIELD_LIMITS.specialistReason.min} className="bg-purple-600 hover:bg-purple-700">
+          <Button type="submit" loading={loading} disabled={!specialistType || reason.trim().length < FIELD_LIMITS.specialistReason.min}>
             <CheckCircle2 className="h-4 w-4 mr-2" />
             Submit Request
           </Button>

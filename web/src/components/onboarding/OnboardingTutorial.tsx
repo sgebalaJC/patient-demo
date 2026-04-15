@@ -23,8 +23,6 @@ const TUTORIAL_STEPS = [
     description:
       'Your personal healthcare hub. Manage appointments, message your care team, request prescription refills, and more — all in one place.',
     icon: Heart,
-    iconBg: 'bg-primary-100',
-    iconColor: 'text-primary-600',
     route: '/dashboard',
   },
   {
@@ -33,8 +31,6 @@ const TUTORIAL_STEPS = [
     description:
       'View available time slots and schedule visits with your provider. You can also reschedule or cancel upcoming appointments.',
     icon: Calendar,
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-600',
     route: '/appointments',
   },
   {
@@ -43,8 +39,6 @@ const TUTORIAL_STEPS = [
     description:
       'Send secure messages with file attachments to your provider. Get responses directly in the app — no phone tag needed.',
     icon: MessageSquare,
-    iconBg: 'bg-green-100',
-    iconColor: 'text-green-600',
     route: '/messages',
   },
   {
@@ -53,8 +47,6 @@ const TUTORIAL_STEPS = [
     description:
       'Submit refill requests for your medications. Track the status of each request and get notified when they are ready.',
     icon: Pill,
-    iconBg: 'bg-orange-100',
-    iconColor: 'text-orange-600',
     route: '/refills',
   },
   {
@@ -63,8 +55,6 @@ const TUTORIAL_STEPS = [
     description:
       'Fill out your patient information, medical history, and consent forms — all digitally, at your own pace.',
     icon: FileText,
-    iconBg: 'bg-purple-100',
-    iconColor: 'text-purple-600',
     route: '/intake',
   },
   {
@@ -73,8 +63,6 @@ const TUTORIAL_STEPS = [
     description:
       `Have questions about the practice, appointment hours, or how things work? ${BRANDING.patientAgent.name} can help you find answers instantly.`,
     icon: Headphones,
-    iconBg: 'bg-amber-100',
-    iconColor: 'text-amber-600',
     route: '/support',
   },
 ];
@@ -192,11 +180,9 @@ export const OnboardingTutorial: React.FC = () => {
 
         {/* Content */}
         <div className="px-8 pt-10 pb-6 text-center">
-          {/* Icon */}
-          <div
-            className={`mx-auto w-16 h-16 rounded-2xl ${step.iconBg} flex items-center justify-center mb-6`}
-          >
-            <Icon className={`h-8 w-8 ${step.iconColor}`} />
+          {/* Icon — always uses the brand theme so colors don't clash per-step */}
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center mb-6">
+            <Icon className="h-8 w-8 text-primary-600" />
           </div>
 
           {/* Title */}

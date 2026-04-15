@@ -11,8 +11,7 @@ import {
   Shield,
   LogOut,
   X,
-  ChevronLeft,
-  ChevronRight,
+  Menu,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeatures } from '../../hooks/useFeatures';
@@ -143,7 +142,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
             }`}
             onClick={onMobileClose}
           >
-            <BrandLogo size={collapsed ? 'lg' : 'sm'} />
+            <BrandLogo size={collapsed ? 'lg' : 'md'} />
             <span
               className={`text-sm font-semibold tracking-tight truncate ${labelClass}`}
               style={{ color: 'var(--shell-text-strong)' }}
@@ -171,12 +170,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
             <button
               type="button"
               onClick={toggleCollapsed}
-              className="hidden md:inline-flex items-center justify-center p-1 rounded hover:bg-white/5 shrink-0"
+              className="hidden md:inline-flex items-center justify-center p-2 rounded hover:bg-white/5 shrink-0"
               style={{ color: 'var(--shell-text-muted)' }}
               aria-label="Collapse sidebar"
               title="Collapse sidebar"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <Menu className="h-5 w-5" />
             </button>
           )}
         </div>
@@ -190,12 +189,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
             <button
               type="button"
               onClick={toggleCollapsed}
-              className="p-1 rounded hover:bg-white/5"
+              className="p-2 rounded hover:bg-white/5"
               style={{ color: 'var(--shell-text-muted)' }}
               aria-label="Expand sidebar"
               title="Expand sidebar"
             >
-              <ChevronRight className="h-4 w-4" />
+              <Menu className="h-5 w-5" />
             </button>
           </div>
         )}

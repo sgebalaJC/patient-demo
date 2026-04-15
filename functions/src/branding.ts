@@ -12,13 +12,13 @@
  */
 export const FUNCTIONS_BRANDING = {
   /** Short marketing name used in SMS bodies */
-  shortName: 'Acme',
+  shortName: 'Aurelia',
   /** Full legal/display name */
-  practiceName: 'Acme Primary Care',
+  practiceName: 'Aurelia MD',
   /** Legal entity for legal/audit text */
-  legalEntity: 'Acme Primary Care, LLC',
+  legalEntity: 'Aurelia Primary Care, LLC',
   /** Name used to sign admin system messages */
-  adminSignatureName: 'Acme Admin System',
+  adminSignatureName: 'Aurelia Admin System',
   /** Patient portal URL for email links */
   portalUrl: 'https://demo.aureliamd.com',
   /**

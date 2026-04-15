@@ -122,11 +122,11 @@ class Branding {
 }
 
 const branding = Branding(
-  practiceName: 'Acme Primary Care',
-  shortName: 'Acme',
-  legalEntity: 'Acme Primary Care, LLC',
+  practiceName: 'Aurelia MD',
+  shortName: 'Aurelia MD',
+  legalEntity: 'Aurelia Primary Care, LLC',
   domain: 'patient-demo-project.web.app',
-  supportEmail: 'support@acme-primary-care.example',
+  supportEmail: 'support@aureliamd.com',
   supportPhone: null,
   defaultAppointmentDuration: 20,
   colors: BrandingColors(

@@ -93,14 +93,14 @@ export interface Branding {
 }
 
 export const BRANDING: Branding = {
-  practiceName: 'Acme Primary Care',
-  shortName: 'Acme',
-  legalEntity: 'Acme Primary Care, LLC',
+  practiceName: 'Aurelia MD',
+  shortName: 'Aurelia MD',
+  legalEntity: 'Aurelia Primary Care, LLC',
   domain: 'patient-demo-project.web.app',
   supportEmail: 'support@aureliamd.com',
   supportPhone: undefined,
   fax: undefined,
-  smsSenderName: 'Acme',
+  smsSenderName: 'Aurelia',
   address: {
     street: '500 Main Street',
     city: 'Palo Alto',
@@ -118,7 +118,7 @@ export const BRANDING: Branding = {
     full: '/branding/aurelia-logo.png',
     fullDark: '/branding/aurelia-logo.png',
     icon: '/branding/aurelia-logo.png',
-    alt: 'Acme Primary Care',
+    alt: 'Aurelia MD',
   },
   colors: {
     primary: '#fcbb00',

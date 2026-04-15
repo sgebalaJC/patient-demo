@@ -26,8 +26,8 @@ import { appSettingsOperations } from '../lib/firestore/app-settings';
 import { BRANDING } from '../config/branding';
 
 const PLAN_LABELS: Record<string, { label: string; price: string; cadence: string }> = {
-  monthly: { label: 'Monthly', price: '$300', cadence: 'per month' },
-  annual: { label: 'Annual', price: '$3,000', cadence: 'per year (2 months free)' },
+  monthly: { label: 'Monthly', price: '$299', cadence: 'per month' },
+  annual: { label: 'Annual', price: '$2,999', cadence: 'per year (2 months free)' },
 };
 
 const STATUS_BADGE: Record<string, { label: string; classes: string }> = {

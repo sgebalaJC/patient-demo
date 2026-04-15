@@ -19,10 +19,9 @@ const userSchema = z.object({
     firstName: z.string().min(FIELD_LIMITS.firstName.min, `First name must be at least ${FIELD_LIMITS.firstName.min} characters`).max(FIELD_LIMITS.firstName.max, `First name must be less than ${FIELD_LIMITS.firstName.max} characters`),
     lastName: z.string().min(FIELD_LIMITS.lastName.min, `Last name must be at least ${FIELD_LIMITS.lastName.min} characters`).max(FIELD_LIMITS.lastName.max, `Last name must be less than ${FIELD_LIMITS.lastName.max} characters`),
     phoneNumber: z.string()
-        .min(1, 'Phone number is required')
         .max(FIELD_LIMITS.phoneNumber.max, 'Phone number is too long')
         .refine(
-            (val) => /^\+?[\d\s\-\(\)]{10,}$/.test(val.replace(/\s/g, '')),
+            (val) => val === '' || /^\+?[\d\s\-\(\)]{10,}$/.test(val.replace(/\s/g, '')),
             'Please enter a valid phone number'
         ),
     role: z.enum(['patient', 'assistant', 'admin'] as const, {
@@ -330,7 +329,7 @@ export const UserForm: React.FC<UserFormProps> = ({
                                 <div>
                                     <label className="block text-sm font-medium text-secondary-700 mb-2">
                                         <Phone className="inline h-4 w-4 mr-2"/>
-                                        Phone Number *
+                                        Phone Number
                                     </label>
                                     <input
                                         {...register('phoneNumber')}

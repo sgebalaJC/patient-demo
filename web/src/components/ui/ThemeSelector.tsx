@@ -1,12 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Palette } from 'lucide-react';
+import React, { useState } from 'react';
+import { Moon, Sun } from 'lucide-react';
 
-const THEMES = [
-  { id: 'classic', label: 'Light', primary: '#fdfcf7', secondary: '#1c1a15' },
-  { id: 'dark', label: 'Dark', primary: '#e0b84c', secondary: '#1c1a15' },
-] as const;
-
-type ThemeId = typeof THEMES[number]['id'];
+type ThemeId = 'classic' | 'dark';
 
 const STORAGE_KEY = 'patient-theme';
 
@@ -35,55 +30,32 @@ export function initTheme() {
   applyTheme(getSavedTheme());
 }
 
-export const ThemeSelector: React.FC = () => {
+interface ThemeToggleProps {
+  className?: string;
+}
+
+export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
   const [current, setCurrent] = useState<ThemeId>(getSavedTheme);
 
-  useEffect(() => {
-    applyTheme(current);
-  }, [current]);
-
-  const handleSelect = (id: ThemeId) => {
-    setCurrent(id);
-    localStorage.setItem(STORAGE_KEY, id);
-    applyTheme(id);
+  const toggle = () => {
+    const next: ThemeId = current === 'dark' ? 'classic' : 'dark';
+    setCurrent(next);
+    localStorage.setItem(STORAGE_KEY, next);
+    applyTheme(next);
   };
 
+  const isDark = current === 'dark';
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center space-x-2 text-sm font-medium text-secondary-700">
-        <Palette className="h-4 w-4" />
-        <span>Theme</span>
-      </div>
-      <div className="flex space-x-3">
-        {THEMES.map((theme) => {
-          const selected = current === theme.id;
-          return (
-            <button
-              key={theme.id}
-              onClick={() => handleSelect(theme.id)}
-              className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl border-2 transition-all ${
-                selected
-                  ? 'border-primary-600 bg-primary-50 shadow-sm'
-                  : 'border-secondary-200 bg-surface-card hover:border-secondary-300'
-              }`}
-            >
-              <div className="flex -space-x-1">
-                <div
-                  className="w-5 h-5 rounded-full border-2 border-secondary-200 shadow-sm"
-                  style={{ backgroundColor: theme.primary }}
-                />
-                <div
-                  className="w-5 h-5 rounded-full border-2 border-secondary-200 shadow-sm"
-                  style={{ backgroundColor: theme.secondary }}
-                />
-              </div>
-              <span className={`text-sm font-medium ${selected ? 'text-primary-700' : 'text-secondary-600'}`}>
-                {theme.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={toggle}
+      className={className}
+      style={{ color: 'var(--shell-text)' }}
+      aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+      title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+    >
+      {isDark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
+    </button>
   );
 };

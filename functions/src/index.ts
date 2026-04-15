@@ -27,8 +27,14 @@ export {
 import {FUNCTIONS_BRANDING} from "./branding.js";
 import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail} from "./email.js";
 import {setGlobalOptions} from "firebase-functions/v2";
+import {defineSecret} from "firebase-functions/params";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onCall, onRequest} from "firebase-functions/v2/https";
+
+// Sidecar binding secrets — bound to functions that need to call the sidecar
+// running on the customer-owned VPS.
+const SIDECAR_URL_SECRET = defineSecret("SIDECAR_URL");
+const SIDECAR_API_KEY_SECRET = defineSecret("SIDECAR_API_KEY");
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
@@ -2522,6 +2528,7 @@ export const sidecarProxy = onRequest({
   cors: corsOptions,
   timeoutSeconds: 120,
   memory: '512MiB',
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
 }, async (req, res) => {
   try {
     // Verify Firebase auth
@@ -2652,6 +2659,7 @@ const MAX_CLOUD_BACKUPS = 30;
 export const dailySidecarBackup = onSchedule({
   schedule: '0 2 * * *',
   timeZone: 'America/Los_Angeles',
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
 }, async () => {
   const sidecarUrl = process.env.SIDECAR_URL || 'http://YOUR_VPS_IP:8081';
   const sidecarKey = process.env.SIDECAR_API_KEY || '';

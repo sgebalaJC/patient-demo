@@ -5,6 +5,7 @@ import { AppSidebar } from './AppSidebar';
 import { BrandLogo } from '../ui/BrandLogo';
 import { BRANDING } from '../../config/branding';
 import { NotificationBell } from './NotificationBell';
+import { ThemeToggle } from '../ui/ThemeSelector';
 import { useAuth } from '../../hooks/useAuth';
 
 const FULL_HEIGHT_ROUTES = ['/support', '/admin/agent'];
@@ -62,6 +63,7 @@ export const Layout: React.FC = () => {
                   <div className="shell-bell">
                     <NotificationBell buttonClassName="p-2 rounded-lg transition-colors hover:bg-white/10" />
                   </div>
+                  <ThemeToggle className="p-2 rounded-lg transition-colors hover:bg-white/10" />
                   <Link
                     to="/profile"
                     className="p-2 rounded-lg transition-colors hover:bg-white/10"

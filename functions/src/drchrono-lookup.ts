@@ -21,7 +21,11 @@ import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {onSchedule} from "firebase-functions/v2/scheduler";
+import {defineSecret} from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
+
+const SIDECAR_URL_SECRET = defineSecret("SIDECAR_URL");
+const SIDECAR_API_KEY_SECRET = defineSecret("SIDECAR_API_KEY");
 
 const COLLECTION = "drchrono-lookups";
 
@@ -32,8 +36,10 @@ const LOCK_STALENESS_MS = 15 * 60 * 1000;
 // Polite pacing between DrChrono calls; sidecar already handles 429 backoff.
 const MIN_CALL_INTERVAL_MS = 600;
 
-const SIDECAR_URL = process.env.SIDECAR_URL || "";
-const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || "";
+// Read at call time — secrets are populated only when the function declares
+// them via the `secrets:` option below.
+const sidecarUrl = () => process.env.SIDECAR_URL || "";
+const sidecarApiKey = () => process.env.SIDECAR_API_KEY || "";
 
 function db() {
   return admin.firestore();
@@ -219,7 +225,9 @@ interface PatientsEnvelope {
 /** Call the sidecar's DrChrono proxy. The sidecar handles token refresh,
  *  429 backoff, and the enabled-check. */
 async function fetchPatientsViaProxy(firstName: string, lastName: string): Promise<DrChronoPatient[]> {
-  if (!SIDECAR_URL || !SIDECAR_API_KEY) {
+  const url0 = sidecarUrl();
+  const key0 = sidecarApiKey();
+  if (!url0 || !key0) {
     throw new Error("SIDECAR_URL / SIDECAR_API_KEY not configured");
   }
   const qs = new URLSearchParams({
@@ -227,10 +235,10 @@ async function fetchPatientsViaProxy(firstName: string, lastName: string): Promi
     last_name: lastName,
     page_size: "50",
   });
-  const url = `${SIDECAR_URL}/admin-api/drchrono/patients?${qs}`;
+  const url = `${url0}/admin-api/drchrono/patients?${qs}`;
   const res = await fetch(url, {
     method: "GET",
-    headers: {Authorization: `Bearer ${SIDECAR_API_KEY}`},
+    headers: {Authorization: `Bearer ${key0}`},
     signal: AbortSignal.timeout(45_000),
   });
   if (!res.ok) {
@@ -427,6 +435,7 @@ export const drchronoLookupKickoff = onDocumentCreated({
   document: `${COLLECTION}/{jobId}`,
   timeoutSeconds: 540,
   memory: "512MiB",
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
 }, async (event) => {
   const jobId = event.params.jobId;
   await processJob(jobId);
@@ -436,6 +445,7 @@ export const drchronoLookupContinue = onSchedule({
   schedule: "every 2 minutes",
   timeoutSeconds: 540,
   memory: "512MiB",
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
 }, async () => {
   // Find the oldest job waiting for continuation. One at a time keeps the
   // per-minute DrChrono call rate predictable across concurrent jobs.

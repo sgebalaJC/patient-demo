@@ -12,7 +12,6 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { PhoneVerificationModal } from '../components/ui/PhoneVerificationModal';
 import { signOut } from '../lib/firebase';
-import { ThemeSelector } from '../components/ui/ThemeSelector';
 import { formatPhoneDisplay } from '../lib/phone';
 import logger from '../lib/logger';
 
@@ -330,11 +329,6 @@ export const ProfilePage: React.FC = () => {
             )}
           </div>
         </div>
-      </Card>
-
-      {/* Theme */}
-      <Card className="p-4 sm:p-6">
-        <ThemeSelector />
       </Card>
 
       {/* Export Data */}

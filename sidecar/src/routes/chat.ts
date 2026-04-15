@@ -176,17 +176,33 @@ async function sendToGateway(
     );
   }
 
-  const data = (await res.json()) as { reply?: string; usage?: GatewayUsage };
-  const reply = data.reply || "";
+  // OpenClaw web-chat returns SSE: a stream of `data: {...}` lines. We
+  // collect the full reply rather than streaming to the client (the patient
+  // UI is non-streaming). The terminal `data: {"done":true,"usage":{...}}`
+  // event carries gateway-reported token usage; if absent (older builds), we
+  // fall back to a char/4 estimate.
+  const raw = await res.text();
+  let reply = "";
+  let gatewayUsage: GatewayUsage | undefined;
+  for (const line of raw.split("\n")) {
+    if (!line.startsWith("data:")) continue;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === "[DONE]") continue;
+    try {
+      const evt = JSON.parse(payload) as {
+        chunk?: string;
+        done?: boolean;
+        usage?: { inputTokens?: number; outputTokens?: number; model?: string };
+      };
+      if (typeof evt.chunk === "string") reply += evt.chunk;
+      if (evt.done && evt.usage) gatewayUsage = evt.usage;
+    } catch { /* ignore malformed event */ }
+  }
 
-  // Record usage fire-and-forget. Prefer the gateway's own `usage` numbers;
-  // fall back to a char/4 estimate so monitoring still works on older
-  // OpenClaw builds that don't surface usage.
-  // TODO(openclaw): return `{ usage: { inputTokens, outputTokens, model } }`
-  // from the web-chat webhook so token accounting is exact instead of
-  // estimated. See docs/AI_AGENTS.md § Platform token budget.
-  if (data.usage && (data.usage.inputTokens || data.usage.outputTokens)) {
-    recordUsage(data.usage);
+  // TODO(openclaw): if a future build switches back to plain JSON
+  // ({ reply, usage }), add a content-type sniff and parse accordingly.
+  if (gatewayUsage && (gatewayUsage.inputTokens || gatewayUsage.outputTokens)) {
+    recordUsage(gatewayUsage);
   } else {
     recordUsage({
       inputTokens: estimateTokens(body),

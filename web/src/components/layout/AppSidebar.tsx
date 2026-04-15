@@ -217,6 +217,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
                 style={{
                   background: active ? 'var(--shell-active-bg)' : 'transparent',
                   color: active ? 'var(--shell-active-text)' : 'var(--shell-text)',
+                  border: active ? '1px solid var(--secondary-200)' : '1px solid transparent',
                 }}
                 onMouseEnter={(e) => {
                   if (!active) e.currentTarget.style.background = 'var(--shell-bg-hover)';

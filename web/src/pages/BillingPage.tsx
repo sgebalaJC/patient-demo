@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
+import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { useAuth } from '../hooks/useAuth';
 import { subscriptionOperations } from '../lib/firestore/subscriptions';
 import type { SubscriptionPlan, PatientSubscription } from '../types';
@@ -29,6 +30,7 @@ export const BillingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -77,10 +79,7 @@ export const BillingPage: React.FC = () => {
 
   const handleCancel = async () => {
     if (!user) return;
-    const confirmed = window.confirm(
-      'Cancel your subscription at the end of the current period? You will keep access until then.',
-    );
-    if (!confirmed) return;
+    setCancelConfirmOpen(false);
     setActionLoading('cancel');
     setError(null);
     try {
@@ -150,8 +149,9 @@ export const BillingPage: React.FC = () => {
               {!activeSub.cancelAtPeriodEnd && (
                 <Button
                   variant="secondary"
-                  onClick={handleCancel}
+                  onClick={() => setCancelConfirmOpen(true)}
                   loading={actionLoading === 'cancel'}
+                  className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
                 >
                   <XCircle className="h-4 w-4 mr-2" />
                   Cancel membership
@@ -223,6 +223,24 @@ export const BillingPage: React.FC = () => {
           </div>
         )
       )}
+
+      <ConfirmModal
+        isOpen={cancelConfirmOpen}
+        onClose={() => setCancelConfirmOpen(false)}
+        onConfirm={(value) => {
+          if (value?.trim().toUpperCase() === 'CANCEL') {
+            handleCancel();
+          }
+        }}
+        title="Cancel membership"
+        message="Your membership will end on the next renewal date. You'll keep access until then. To confirm, type CANCEL below."
+        confirmLabel="Cancel membership"
+        cancelLabel="Keep membership"
+        variant="danger"
+        inputPrompt="Type CANCEL to confirm"
+        inputPlaceholder="CANCEL"
+        inputRequired
+      />
     </div>
   );
 };

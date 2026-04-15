@@ -67,41 +67,20 @@ export const IntakeFormBanner: React.FC = () => {
   const isSentBack = state === 'sent_back';
 
   return (
-    <div className={`relative flex items-center justify-between p-4 rounded-lg border ${
-      isSentBack
-        ? 'bg-amber-50 border-amber-200'
-        : 'bg-amber-50 border-amber-200'
-    }`}>
-      <Link
-        to="/intake"
-        className="flex items-center space-x-3 flex-1 min-w-0"
-      >
-        <div className={`p-2 rounded-lg flex-shrink-0 ${
-          isSentBack ? 'bg-amber-100' : 'bg-amber-100'
-        }`}>
-          <FileText className={`h-5 w-5 ${
-            isSentBack ? 'text-amber-600' : 'text-amber-600'
-          }`} />
-        </div>
+    <div className="relative flex items-center justify-between p-4 rounded-lg border bg-amber-50 border-amber-200">
+      <Link to="/intake" className="flex items-center space-x-3 flex-1 min-w-0">
+        <FileText className="h-5 w-5 text-amber-600 flex-shrink-0" />
         <div className="min-w-0">
-          <p className={`text-sm font-medium ${
-            isSentBack ? 'text-amber-900' : 'text-amber-900'
-          }`}>
-            {isSentBack
-              ? 'Your intake forms need attention'
-              : 'Complete your intake forms'}
+          <p className="text-sm font-medium text-amber-900">
+            {isSentBack ? 'Your intake forms need attention' : 'Complete your intake forms'}
           </p>
-          <p className={`text-xs mt-0.5 ${
-            isSentBack ? 'text-amber-700' : 'text-amber-700'
-          }`}>
+          <p className="text-xs mt-0.5 text-amber-700">
             {isSentBack
               ? 'Your provider requested updates — please review and resubmit'
               : 'Patient information, medical history, consent forms, and membership agreement'}
           </p>
         </div>
-        <ArrowRight className={`h-4 w-4 flex-shrink-0 ${
-          isSentBack ? 'text-amber-600' : 'text-amber-600'
-        }`} />
+        <ArrowRight className="h-4 w-4 flex-shrink-0 text-amber-600" />
       </Link>
 
       {!isSentBack && (

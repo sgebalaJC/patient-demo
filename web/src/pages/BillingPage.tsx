@@ -103,7 +103,7 @@ export const BillingPage: React.FC = () => {
   const currentPlan = activeSub?.priceId ? plans.find((p) => p.id === activeSub.priceId) : null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="space-y-6">
       <PageHeader
         backTo="/dashboard"
         icon={CreditCard}
@@ -111,14 +111,10 @@ export const BillingPage: React.FC = () => {
         subtitle={`Manage your ${BRANDING.shortName} membership subscription.`}
       />
 
-      {error && (
-        <div className="mt-6">
-          <ErrorAlert message={error} />
-        </div>
-      )}
+      {error && <ErrorAlert message={error} />}
 
       {activeSub && (
-        <Card className="mt-6">
+        <Card>
           <div className="p-6">
             <div className="flex items-start justify-between">
               <div>
@@ -167,21 +163,24 @@ export const BillingPage: React.FC = () => {
       )}
 
       {!activeSub && (
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold text-secondary-900 mb-4">
-            {plans.length === 0 ? 'No plans available yet' : 'Choose a membership'}
-          </h3>
-          {plans.length === 0 ? (
-            <Card>
-              <div className="p-6 text-center text-sm text-secondary-500">
+        plans.length === 0 ? (
+          <Card>
+            <div className="p-6 text-center">
+              <h3 className="text-lg font-semibold text-secondary-900 mb-2">
+                No plans available yet
+              </h3>
+              <p className="text-sm text-secondary-500">
                 Membership plans are not yet configured. Please check back later or contact{' '}
                 <a className="text-primary-600" href={`mailto:${supportEmail}`}>
                   {supportEmail}
                 </a>
                 .
-              </div>
-            </Card>
-          ) : (
+              </p>
+            </div>
+          </Card>
+        ) : (
+          <div>
+            <h3 className="text-lg font-semibold text-secondary-900 mb-4">Choose a membership</h3>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {plans.map((plan) => (
                 <Card key={plan.id}>
@@ -221,8 +220,8 @@ export const BillingPage: React.FC = () => {
                 </Card>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )
       )}
     </div>
   );

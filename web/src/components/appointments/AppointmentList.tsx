@@ -11,12 +11,12 @@ import {
   Edit3,
   Trash2,
   AlertCircle,
-  Loader,
   Stethoscope,
   MapPin,
 } from 'lucide-react';
 import { PaginationBar } from '../ui/PaginationBar';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { LoadingState } from '../ui/LoadingState';
 import { Timestamp } from 'firebase/firestore';
 import { getAppointmentStatusColor } from '../../lib/status-helpers';
 import { formatDate, formatTime } from '../../lib/date-helpers';
@@ -136,14 +136,7 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
   };
 
   if (loading) {
-    return (
-      <Card className="p-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <Loader className="h-6 w-6 animate-spin text-primary-600" />
-          <h3 className="text-lg font-semibold text-secondary-900">Loading Appointments...</h3>
-        </div>
-      </Card>
-    );
+    return <LoadingState title="Loading appointments…" />;
   }
 
   if (error) {
@@ -250,7 +243,7 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
                                 className="flex items-center text-red-600 hover:text-red-700"
                             >
                                 {deletingId === appointment.id ? (
-                                    <Loader className="h-4 w-4 mr-1 animate-spin" />
+                                    <div className="h-4 w-4 mr-1 rounded-full border-2 border-current border-t-transparent animate-spin" />
                                 ) : (
                                     <Trash2 className="h-4 w-4 mr-1" />
                                 )}

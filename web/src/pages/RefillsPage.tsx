@@ -197,7 +197,8 @@ export const RefillsPage: React.FC = () => {
                             <div className="min-w-0">
                                 <h1 className="text-lg sm:text-xl font-bold text-secondary-900 truncate">Prescription Refills</h1>
                                 <p className="text-secondary-600 text-sm sm:text-base">
-                                    {paginationState.total > 0 && `${paginationState.total} total requests`}
+                                    Request medicine prescriptions
+                                    {paginationState.total > 0 && ` · ${paginationState.total} total`}
                                 </p>
                             </div>
                         </div>
@@ -215,14 +216,16 @@ export const RefillsPage: React.FC = () => {
             </Card>
 
             {paginationState.refills.length === 0 ? (
-                <Card className="p-12 text-center">
-                    <Pill className="h-16 w-16 text-secondary-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-secondary-900 mb-2">
-                        No refill requests yet
-                    </h3>
-                    <p className="text-secondary-600">
-                        You haven't submitted any prescription refill requests yet. Use the 'New Request' button above to get started.
-                    </p>
+                <Card className="p-8 text-center">
+                    <div className="flex flex-col items-center space-y-4">
+                        <div className="bg-secondary-100 p-4 rounded-full">
+                            <Pill className="h-8 w-8 text-secondary-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-secondary-900">No refill requests yet</h3>
+                        <p className="text-secondary-600">
+                            You haven't submitted any prescription refill requests yet. Use the 'New Request' button above to get started.
+                        </p>
+                    </div>
                 </Card>
             ) : (
                 <>

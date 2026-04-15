@@ -153,8 +153,10 @@ export const MessagesPage: React.FC = () => {
               }
             />
 
-            {/* Messages Interface */}
-            <div className="h-[calc(100vh-16rem)] flex bg-surface-card rounded-lg shadow-sm border border-secondary-200 overflow-hidden">
+            {/* Messages Interface — height accounts for top header (3.5rem) +
+                page padding (3rem) + PageHeader card (~6rem) + gap (1.5rem) +
+                footer (3.5rem) ≈ 17.5rem of chrome. 20rem leaves a small gap. */}
+            <div className="h-[calc(100vh-20rem)] min-h-[400px] flex bg-surface-card rounded-lg shadow-sm border border-secondary-200 overflow-hidden">
                 {/* Thread List */}
                 <div className={`${
                     selectedThread ? 'hidden md:flex md:w-1/3' : 'w-full md:w-1/3'

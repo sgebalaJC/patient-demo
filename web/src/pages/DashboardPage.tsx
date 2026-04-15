@@ -6,7 +6,6 @@ import { useFeatures } from '../hooks/useFeatures';
 import { messageThreadOperations, appointmentOperations } from '../lib/firestore';
 import { MessageThread, Appointment } from '../types';
 import { EmailVerificationBanner } from '../components/EmailVerificationBanner';
-import { PatientQuickActions } from '../components/patient/PatientQuickActions';
 import {
     Calendar,
     MessageSquare,
@@ -107,7 +106,6 @@ export const DashboardPage: React.FC = () => {
         <div className="space-y-6">
             <OnboardingTutorial />
             <EmailVerificationBanner />
-            <IntakeFormBanner />
 
             {/* Phone verification prompt — non-blocking */}
             {userProfile && !userProfile.phoneVerified && userProfile.phoneNumber && (
@@ -125,14 +123,7 @@ export const DashboardPage: React.FC = () => {
                 </Link>
             )}
 
-            <div>
-                <h1 className="text-xl font-bold text-secondary-900">
-                    Welcome back, {userProfile ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || userProfile.firstName || 'User' : 'User'}
-                </h1>
-                <p className="text-secondary-600 mt-2">
-                    Here's an overview of your health information.
-                </p>
-            </div>
+            <IntakeFormBanner />
 
             <div className={`grid gap-6 ${features.appointments && features.messages ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
                 {/* Upcoming Appointments */}
@@ -297,8 +288,6 @@ export const DashboardPage: React.FC = () => {
                 )}
             </div>
 
-            {/* Quick Actions - Now using the new component */}
-            <PatientQuickActions />
         </div>
     );
 };

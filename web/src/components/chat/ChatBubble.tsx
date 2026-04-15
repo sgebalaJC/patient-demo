@@ -40,10 +40,14 @@ export function ChatBubble({ role, content, attachments, onDelete }: ChatBubbleP
         <div
           className={`rounded-xl px-4 py-2.5 text-sm ${
             role === 'user'
-              ? 'bg-primary-600 text-white rounded-br-sm'
+              ? 'rounded-br-sm'
               : 'text-secondary-900 rounded-bl-sm border border-secondary-200'
           }`}
-          style={role === 'assistant' ? { background: 'var(--chat-bubble-assistant)' } : undefined}
+          style={
+            role === 'user'
+              ? { background: 'var(--chat-bubble-user)', color: 'var(--chat-bubble-user-text)' }
+              : { background: 'var(--chat-bubble-assistant)' }
+          }
         >
           <ChatMarkdown content={content} variant={role} />
           {attachments && attachments.length > 0 && (

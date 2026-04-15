@@ -97,9 +97,9 @@ export const EmailVerificationBanner: React.FC = () => {
           </p>
 
           {message && (
-            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded flex items-center space-x-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <p className="text-sm text-green-600">{message}</p>
+            <div className="mt-3 p-3 bg-green-50 border border-green-300 rounded flex items-center space-x-2">
+              <CheckCircle2 className="h-4 w-4 text-green-700" />
+              <p className="text-sm text-green-700">{message}</p>
             </div>
           )}
 

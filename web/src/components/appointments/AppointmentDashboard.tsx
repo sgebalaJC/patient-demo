@@ -47,7 +47,7 @@ export const AppointmentDashboard: React.FC = () => {
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-2xl font-bold text-secondary-900 truncate">Appointments</h1>
                 <p className="text-secondary-600 text-sm sm:text-base">
-                  Schedule, manage, and track your appointments
+                  Request and schedule
                 </p>
               </div>
             </div>

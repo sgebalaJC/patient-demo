@@ -114,7 +114,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <button
           onClick={handleSend}
           disabled={(!value.trim() && pendingFiles.length === 0) || sending}
-          className="flex-shrink-0 p-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="chat-send-btn flex-shrink-0 p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Send className="h-4 w-4" />
         </button>

@@ -42,9 +42,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   --gradient-end: #f7f4ec;
 
   /* Assistant chat bubble (admin agent Aurelia + patient agent Sunny) —
-     reuses the active sidebar item tint so the two read as the same accent.
-     Dark theme overrides below to keep the inky look. */
+     reuses the active sidebar item tint so the two read as the same accent. */
   --chat-bubble-assistant: var(--shell-active-bg);
+  /* User chat bubble — same gold as the send button so they visually match.
+     Both `<ChatBubble role="user">` and the send button in `<ChatInput>`
+     read this var. */
+  --chat-bubble-user: var(--primary-600);
+  --chat-bubble-user-hover: var(--primary-700);
+  --chat-bubble-user-text: #ffffff;
 
   /* Shell chrome — cream glass (light) with ink text. */
   --shell-bg: #faf7ec;
@@ -72,6 +77,16 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .shell-icon-btn:hover {
   background: var(--shell-bg-hover);
   color: var(--shell-text-strong);
+}
+
+/* Chat send button — same gold as the user message bubble so the two
+   visually rhyme. Drives `<ChatInput>`'s send affordance. */
+.chat-send-btn {
+  background: var(--chat-bubble-user);
+  color: var(--chat-bubble-user-text);
+}
+.chat-send-btn:not(:disabled):hover {
+  background: var(--chat-bubble-user-hover);
 }
 
 /* ── Theme: Dark ── Aurelia dark (gold accent + ink surfaces) ── */
@@ -119,8 +134,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   --shell-active-text: #e0b84c;
   --shell-accent: #d4a54c;
 
-  /* Dark theme keeps the surface-card appearance for assistant bubbles. */
-  --chat-bubble-assistant: var(--surface-card);
+  /* Dark theme: assistant bubble matches the menu-item active highlight
+     (gold tint over ink) so the chat feels of-a-piece with the chrome. */
+  --chat-bubble-assistant: var(--shell-active-bg);
+  /* Dark theme: nudge the user bubble + send button one shade darker
+     (primary-500 reads as deeper gold against the ink background). */
+  --chat-bubble-user: var(--primary-500);
+  --chat-bubble-user-hover: var(--primary-400);
+  --chat-bubble-user-text: #100f0c;
 }
 
 @layer base {

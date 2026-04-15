@@ -21,7 +21,8 @@ import {
     ChevronUp,
     ChevronDown,
     Send,
-    CheckCircle2
+    CheckCircle2,
+    KeyRound
 } from 'lucide-react';
 import { sendInviteLink } from '../lib/firebase';
 import { useAppSettings } from '../contexts/AppSettingsContext';
@@ -75,6 +76,15 @@ export const UserManagementPage: React.FC = () => {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Set-password state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordTarget, setPasswordTarget] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSaved, setPasswordSaved] = useState(false);
 
   // Fetch stats once on mount
   useEffect(() => {
@@ -213,6 +223,60 @@ export const UserManagementPage: React.FC = () => {
       setDeleteError(error.message || 'Failed to delete user');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const openSetPassword = (user: User) => {
+    setPasswordTarget(user);
+    setNewPassword('');
+    setNewPasswordConfirm('');
+    setPasswordError(null);
+    setPasswordSaved(false);
+    setShowPasswordModal(true);
+  };
+
+  const closeSetPassword = () => {
+    if (passwordSaving) return;
+    setShowPasswordModal(false);
+    setPasswordTarget(null);
+    setNewPassword('');
+    setNewPasswordConfirm('');
+    setPasswordError(null);
+    setPasswordSaved(false);
+  };
+
+  const handleSetPassword = async () => {
+    if (!passwordTarget) return;
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+      return;
+    }
+    if (newPassword.length > 128) {
+      setPasswordError('Password must be less than 128 characters');
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordError(null);
+    try {
+      const { firebaseService } = await import('../lib/firebase');
+      const result = await firebaseService.setUserPassword(passwordTarget.id, newPassword);
+      if (result?.success) {
+        setPasswordSaved(true);
+        setNewPassword('');
+        setNewPasswordConfirm('');
+      } else {
+        setPasswordError(result?.error || 'Failed to set password');
+      }
+    } catch (err: any) {
+      // Password intentionally not logged.
+      logger.error('Set password failed:', { code: err.code, message: err.message });
+      setPasswordError(err.message || 'Failed to set password');
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -421,6 +485,16 @@ export const UserManagementPage: React.FC = () => {
                       <Button
                         variant="secondary"
                         size="sm"
+                        onClick={() => openSetPassword(user)}
+                        className="!px-2"
+                        title="Set password"
+                        aria-label="Set password"
+                      >
+                        <KeyRound className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => {
                           setUserToDelete(user);
                           setShowDeleteModal(true);
@@ -556,6 +630,86 @@ export const UserManagementPage: React.FC = () => {
               <Trash2 className="h-4 w-4 mr-2" />
               Delete User
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Set Password Modal */}
+      <Modal
+        isOpen={showPasswordModal}
+        onClose={closeSetPassword}
+        title={`Set Password — ${passwordTarget ? `${passwordTarget.firstName} ${passwordTarget.lastName}`.trim() : ''}`}
+        icon={<div className="bg-primary-100 p-2 rounded-lg"><KeyRound className="h-6 w-6 text-primary-600" /></div>}
+        maxWidth="max-w-md"
+      >
+        <div className="p-6 space-y-4">
+          <ErrorAlert message={passwordError} />
+
+          {passwordSaved ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800 flex items-start space-x-2">
+              <CheckCircle2 className="h-5 w-5 mt-0.5 flex-shrink-0" />
+              <span>
+                Password updated. The user can now sign in with their email and the new password.
+                Share the password through a secure channel — it isn't stored or shown again.
+              </span>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-secondary-600">
+                Set a password so this user can sign in with email + password in addition
+                to email-link / Google / phone OTP. Minimum 8 characters.
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary-700 mb-2">
+                  New password
+                </label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  autoComplete="new-password"
+                  disabled={passwordSaving}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary-700 mb-2">
+                  Confirm password
+                </label>
+                <Input
+                  type="password"
+                  value={newPasswordConfirm}
+                  onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                  placeholder="Re-enter password"
+                  autoComplete="new-password"
+                  disabled={passwordSaving}
+                />
+              </div>
+            </>
+          )}
+
+          <div className="flex items-center justify-end space-x-3 pt-2">
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={closeSetPassword}
+              disabled={passwordSaving}
+            >
+              {passwordSaved ? 'Close' : 'Cancel'}
+            </Button>
+            {!passwordSaved && (
+              <Button
+                size="md"
+                onClick={handleSetPassword}
+                loading={passwordSaving}
+                disabled={passwordSaving || newPassword.length < 8 || newPassword !== newPasswordConfirm}
+              >
+                <KeyRound className="h-4 w-4 mr-2" />
+                Set Password
+              </Button>
+            )}
           </div>
         </div>
       </Modal>

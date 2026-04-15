@@ -95,7 +95,7 @@ const FIELD_LIMITS = {
   lastName: { min: 2, max: 100 },
   email: { max: 254 },
   phoneNumber: { max: 20 },
-  password: { max: 128 },
+  password: { min: 8, max: 128 },
   role: { max: 20 },
 } as const;
 
@@ -493,6 +493,64 @@ export const updateUserAuth = onCall({
       success: false,
       error: error.message || 'An unexpected error occurred while updating the user',
       code: error.code
+    };
+  }
+});
+
+
+/**
+ * Admin sets a password for any user. The system is passwordless by default,
+ * so this is an explicit opt-in per user (useful for kiosk-style logins or
+ * when a user can't receive email links / SMS). Never logs the password.
+ */
+export const setUserPassword = onCall({
+  cors: corsOptions,
+}, async (request) => {
+  try {
+    const context = request.auth;
+    if (!context) throw new Error('Authentication required');
+
+    await checkRateLimit(context.uid, 'setUserPassword', 20, 10);
+
+    const callerDoc = await db.collection('users').doc(context.uid).get();
+    const callerData = callerDoc.data();
+    if (!callerDoc.exists || callerData?.role !== 'admin' || callerData?.isActive === false) {
+      throw new Error('Admin privileges required');
+    }
+
+    const { uid, password } = request.data ?? {};
+    if (!uid || typeof uid !== 'string') {
+      throw new Error('User UID is required');
+    }
+    if (typeof password !== 'string') {
+      throw new Error('Password must be a string');
+    }
+    if (password.length < FIELD_LIMITS.password.min) {
+      throw new Error(`Password must be at least ${FIELD_LIMITS.password.min} characters`);
+    }
+    if (password.length > FIELD_LIMITS.password.max) {
+      throw new Error(`Password must be less than ${FIELD_LIMITS.password.max} characters`);
+    }
+
+    await admin.auth().updateUser(uid, { password });
+
+    logger.info('[AUDIT]', {
+      audit: true,
+      actorId: context.uid,
+      actorRole: 'admin',
+      action: 'user.password_set',
+      resourceType: 'user',
+      resourceId: uid,
+      timestamp: new Date().toISOString(),
+    });
+
+    return { success: true, message: 'Password set successfully' };
+  } catch (error: any) {
+    logger.error('Error in setUserPassword:', { code: error.code, message: error.message });
+    return {
+      success: false,
+      error: error.message || 'Failed to set password',
+      code: error.code,
     };
   }
 });

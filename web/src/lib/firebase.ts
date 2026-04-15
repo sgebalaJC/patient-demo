@@ -146,7 +146,20 @@ export const firebaseService = {
             logger.error('Error updating user auth:', error);
             throw error;
         }
-    }
+    },
+
+    setUserPassword: async (uid: string, password: string) => {
+        try {
+            const {httpsCallable} = await import('firebase/functions');
+            const fn = httpsCallable(functions, 'setUserPassword');
+            const result = await fn({uid, password});
+            return result.data as { success: boolean; error?: string; message?: string };
+        } catch (error: any) {
+            // Password intentionally not logged.
+            logger.error('Error setting user password:', { code: error.code, message: error.message });
+            throw error;
+        }
+    },
 };
 
 // Helper function to create user document in Firestore.

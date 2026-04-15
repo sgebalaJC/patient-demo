@@ -1,4 +1,5 @@
 import React from 'react';
+import {createPortal} from 'react-dom';
 import {X, FileText} from 'lucide-react';
 import {Button} from './Button';
 import {BRANDING} from '../../config/branding';
@@ -79,7 +80,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({isOpen, onClose, type}) =
 
     const currentContent = content[type];
 
-    return (
+    return createPortal(
         <div>
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                 <div className="bg-surface-card rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -148,6 +149,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({isOpen, onClose, type}) =
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 };

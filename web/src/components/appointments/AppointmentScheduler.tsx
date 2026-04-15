@@ -1,4 +1,5 @@
 import React, {useState, useEffect, useCallback} from 'react';
+import {createPortal} from 'react-dom';
 import {useForm, Controller} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
 import {z} from 'zod';
@@ -255,7 +256,7 @@ export const AppointmentScheduler: React.FC<AppointmentSchedulerProps> = ({
 
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div>
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                 <div className="bg-surface-card rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -403,6 +404,7 @@ export const AppointmentScheduler: React.FC<AppointmentSchedulerProps> = ({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 };

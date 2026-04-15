@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from './Button';
 
@@ -61,7 +62,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     onClose();
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-surface-card rounded-xl max-w-md w-full shadow-xl">
         <div className="p-6">
@@ -103,6 +104,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

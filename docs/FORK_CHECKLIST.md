@@ -26,9 +26,7 @@ rm -rf .git && git init && git add -A && git commit -m "Initial import from temp
 - [ ] Create Firebase project in the customer's Google Workspace org (ensures BAA applies)
 - [ ] Enable: Authentication (Email/Password, Email Link, Google, Phone), Firestore, Storage, Functions, App Hosting
 - [ ] Set `default` in `.firebaserc` to the new project id
-- [ ] Replace all `YOUR_FIREBASE_PROJECT` + `REPLACE_*` placeholders in:
-  - [ ] `apphosting.yaml`
-  - [ ] `web/apphosting.yaml`
+- [ ] Replace all `YOUR_FIREBASE_PROJECT` + `REPLACE_*` placeholders in `web/apphosting.yaml` (with `rootDir: "web"` this is the only apphosting config App Hosting reads)
 - [ ] Run `flutterfire configure` from `mobile/` — this regenerates `lib/firebase_options.dart`, `android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist`
 - [ ] Delete the `*.template` placeholder files once the real ones exist
 

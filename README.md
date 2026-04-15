@@ -66,8 +66,9 @@ HIPAA posture clearer (no shared database). When you onboard a new customer:
 
 3. **Update Firebase project id**
    - `.firebaserc` → replace `YOUR_FIREBASE_PROJECT` with the new id
-   - `apphosting.yaml` and `web/apphosting.yaml` → replace all
-     `YOUR_FIREBASE_PROJECT`, `REPLACE_WITH_*` placeholders
+   - `web/apphosting.yaml` → replace all `YOUR_FIREBASE_PROJECT`,
+     `REPLACE_WITH_*` placeholders (the App Hosting `rootDir` is `web/`, so
+     this is the only apphosting file read at build time)
    - Run `flutterfire configure` from `mobile/` — this will generate
      `mobile/lib/firebase_options.dart`,
      `mobile/android/app/google-services.json`, and

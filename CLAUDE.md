@@ -110,8 +110,8 @@ Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000
 Before first deploy to a new customer project:
 
 1. **Branding** — edit `web/src/config/branding.ts`, `mobile/lib/config/branding.dart`, `functions/src/branding.ts`
-2. **Firebase project** — update `.firebaserc`, `apphosting.yaml` (with new project's Firebase config values)
-3. **Firebase Web API key in Secret Manager** — NEVER put it in `apphosting.yaml` with `value:`; GitHub's scanner flags it, and `secret:` is cleaner for rotation:
+2. **Firebase project** — update `.firebaserc` and `web/apphosting.yaml` (with new project's Firebase config values). With `rootDir: "web"` in `firebase.json`, App Hosting reads only `web/apphosting.yaml` — there is no root-level `apphosting.yaml`.
+3. **Firebase Web API key in Secret Manager** — NEVER put it in `web/apphosting.yaml` with `value:`; GitHub's scanner flags it, and `secret:` is cleaner for rotation:
    ```bash
    echo -n "AIzaSy..." | gcloud secrets create VITE_FIREBASE_API_KEY \
      --project=<PROJECT_ID> --data-file=-

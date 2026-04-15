@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { StatusBadge } from '../ui/StatusBadge';
-import { Appointment } from '../../types';
-import { appointmentOperations, notificationOperations } from '../../lib/firestore';
+import { Appointment, SpecialistRequest } from '../../types';
+import { appointmentOperations, notificationOperations, specialistRequestOperations } from '../../lib/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Calendar,
@@ -34,9 +34,12 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
 }) => {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<SpecialistRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [cancelRequestId, setCancelRequestId] = useState<string | null>(null);
+  const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(null);
   const [error, setError] = useState<string>('');
 
   // Pagination state
@@ -65,7 +68,10 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
         pageSize
       });
 
-      const response = await appointmentOperations.getUserAppointments(user.uid, pageSize, page);
+      const [response, requestsResponse] = await Promise.all([
+        appointmentOperations.getUserAppointments(user.uid, pageSize, page),
+        specialistRequestOperations.getPatientRequests(user.uid),
+      ]);
 
       if (response.success && response.data) {
         setAppointments(response.data.appointments);
@@ -79,6 +85,10 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
         });
       } else {
         setError(response.error || 'Failed to fetch appointments');
+      }
+
+      if (requestsResponse.success && requestsResponse.data) {
+        setPendingRequests(requestsResponse.data.filter(r => r.status === 'pending'));
       }
     } catch (error: any) {
       setError('Error loading appointments');
@@ -121,6 +131,23 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
     }
   };
 
+  const handleCancelRequest = async (requestId: string) => {
+    setCancelRequestId(null);
+    try {
+      setCancellingRequestId(requestId);
+      const response = await specialistRequestOperations.updateRequest(requestId, { status: 'cancelled' });
+      if (response.success) {
+        setPendingRequests(prev => prev.filter(r => r.id !== requestId));
+      } else {
+        setError('Failed to cancel request: ' + (response.error || 'Unknown error'));
+      }
+    } catch (error: any) {
+      setError('Error cancelling request: ' + error.message);
+    } finally {
+      setCancellingRequestId(null);
+    }
+  };
+
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage);
     fetchAppointments(newPage);
@@ -154,7 +181,7 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
     );
   }
 
-  if (appointments.length === 0) {
+  if (appointments.length === 0 && pendingRequests.length === 0) {
     return (
       <Card className="p-8 text-center">
         <div className="flex flex-col items-center space-y-4">
@@ -172,6 +199,50 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
 
   return (
     <div className="space-y-4">
+      {pendingRequests.map((request) => (
+        <Card key={request.id} className="p-4 border-l-4 border-l-amber-500">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start space-x-3 min-w-0">
+              <div className="flex items-center justify-center w-10 h-10 bg-amber-100 rounded-full flex-shrink-0">
+                <Stethoscope className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-medium text-secondary-900">
+                  {getSpecialistLabel(request.specialistType)} request
+                </p>
+                <div className="flex items-center flex-wrap gap-2 mt-1">
+                  <StatusBadge
+                    label="Awaiting review"
+                    colorClass="bg-amber-50 text-amber-700"
+                  />
+                </div>
+                {request.reason && (
+                  <p className="text-sm text-secondary-600 mt-2 break-words">
+                    {request.reason}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center space-x-2 ml-4 min-w-[150px] justify-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setCancelRequestId(request.id)}
+                disabled={cancellingRequestId === request.id}
+                className="flex items-center text-red-600 hover:text-red-700"
+              >
+                {cancellingRequestId === request.id ? (
+                  <div className="h-4 w-4 mr-1 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-1" />
+                )}
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ))}
+
       {appointments.map((appointment) => {
         const date = formatDate(appointment.appointmentDate);
         const time = formatTime(appointment.appointmentDate);
@@ -287,6 +358,16 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
         title="Cancel Appointment"
         message="Are you sure you want to cancel this appointment?"
         confirmLabel="Cancel Appointment"
+        variant="warning"
+      />
+
+      <ConfirmModal
+        isOpen={!!cancelRequestId}
+        onClose={() => setCancelRequestId(null)}
+        onConfirm={() => cancelRequestId && handleCancelRequest(cancelRequestId)}
+        title="Cancel Request"
+        message="Are you sure you want to cancel this appointment request?"
+        confirmLabel="Cancel Request"
         variant="warning"
       />
     </div>

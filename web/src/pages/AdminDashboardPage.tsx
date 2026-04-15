@@ -114,7 +114,7 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
 
             {/* Recent Activity Section */}
-            <div className={`grid gap-6 ${features.messages && features.prescriptions ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+            <div className="grid gap-6 grid-cols-1">
                 {/* Recent Messages */}
                 {features.messages && (
                     <Card className="p-6">
@@ -127,7 +127,7 @@ export const AdminDashboardPage: React.FC = () => {
                                 View all
                             </Link>
                         </div>
-                        <div className="space-y-3 min-h-[280px]">
+                        <div className="space-y-3">
                             {recentMessages.length > 0 ? (
                                 recentMessages.map((thread) => {
                                     const isUnread = thread.unreadForAdmin;
@@ -196,7 +196,7 @@ export const AdminDashboardPage: React.FC = () => {
                                 View all
                             </Link>
                         </div>
-                        <div className="space-y-3 min-h-[280px]">
+                        <div className="space-y-3">
                             {recentRefills.length > 0 ? (
                                 recentRefills.map((refill) => {
                                     const patientName = patientNames[refill.patientId];

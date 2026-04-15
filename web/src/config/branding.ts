@@ -122,7 +122,7 @@ export const BRANDING: Branding = {
   ],
   defaultAppointmentDuration: 20,
   logos: {
-    full: '/branding/aurelia-logo.png',
+    full: '/branding/aurelia-logo-black.png',
     fullDark: '/branding/aurelia-logo.png',
     icon: '/branding/aurelia-logo.png',
     alt: 'Aurelia MD',

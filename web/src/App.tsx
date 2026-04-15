@@ -22,7 +22,6 @@ const MessagesPage = lazy(() => import('./pages/MessagesPage').then(m => ({ defa
 const IntakePage = lazy(() => import('./pages/IntakePage').then(m => ({ default: m.IntakePage })));
 const AppointmentsPage = lazy(() => import('./pages/AppointmentsPage').then(m => ({ default: m.AppointmentsPage })));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage').then(m => ({ default: m.UserManagementPage })));
-const AdminTodoPage = lazy(() => import('./pages/AdminTodoPage').then(m => ({ default: m.AdminTodoPage })));
 const AdminAppointmentsPage = lazy(() => import('./pages/AdminAppointmentsPage').then(m => ({ default: m.AdminAppointmentsPage })));
 const AgentPage = lazy(() => import('./pages/AgentPage').then(m => ({ default: m.AgentPage })));
 const AdminIntakeFormsPage = lazy(() => import('./pages/AdminIntakeFormsPage').then(m => ({ default: m.AdminIntakeFormsPage })));
@@ -115,7 +114,6 @@ function App() {
           <Route path="admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboardPage />} />
             <Route path="users" element={<UserManagementPage />} />
-            <Route path="todos" element={<AdminTodoPage />} />
             <Route path="refills" element={<AdminRefillsPage />} />
             <Route path="appointments" element={<AdminAppointmentsPage />} />
             <Route path="agent" element={<AgentPage />} />

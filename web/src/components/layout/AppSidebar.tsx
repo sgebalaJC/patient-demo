@@ -32,7 +32,7 @@ interface NavItem {
   icon: React.ElementType;
   roles?: Role[];
   featureFlag?: keyof ReturnType<typeof useFeatures>['features'];
-  featureKey?: 'userManagement' | 'adminTodos';
+  featureKey?: 'userManagement';
   matchPrefix?: boolean;
 }
 
@@ -76,7 +76,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
   const location = useLocation();
   const navigate = useNavigate();
   const { user, userProfile } = useAuth();
-  const { features, canUseAdminTodos } = useFeatures();
+  const { features } = useFeatures();
   const [collapsed, setCollapsed] = useState<boolean>(getInitialCollapsed);
 
   const toggleCollapsed = () => {
@@ -113,7 +113,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
     if (item.roles && !item.roles.includes(role)) return false;
     if (item.featureFlag && !features[item.featureFlag]) return false;
     if (item.featureKey === 'userManagement' && !features.userManagement) return false;
-    if (item.featureKey === 'adminTodos' && !canUseAdminTodos()) return false;
     return true;
   });
 

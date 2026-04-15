@@ -94,7 +94,7 @@ Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000
 
 ## Firestore Collections
 
-`users`, `message-threads`, `thread-messages`, `appointments`, `prescription-refills`, `patient-documents`, `patient-intake-forms`, `admin-todos`, `notifications`, `phone-verifications`, `rate-limits`, `agent-chat`, `support-chat`, `agent-skills`, `specialist-requests`, `daily-reminders`, `system` (`system/settings` publicly readable), `bootstrap-requests` (write-once, `list` denied), `subscription-plans`, `patient-subscriptions`
+`users`, `message-threads`, `thread-messages`, `appointments`, `prescription-refills`, `patient-documents`, `patient-intake-forms`, `notifications`, `phone-verifications`, `rate-limits`, `agent-chat`, `support-chat`, `agent-skills`, `specialist-requests`, `daily-reminders`, `system` (`system/settings` publicly readable), `bootstrap-requests` (write-once, `list` denied), `subscription-plans`, `patient-subscriptions`
 
 ## Deployment
 

@@ -793,114 +793,6 @@ async function sendBackIntakeForm(db: Db, formId: string, req: Request): Promise
 }
 
 // ---------------------------------------------------------------------------
-// Todos
-// ---------------------------------------------------------------------------
-
-async function listTodos(db: Db, url: URL): Promise<Response> {
-  const limit = parseLimit(url);
-  const filter = url.searchParams.get("filter");
-
-  let query = db.collection("admin-todos")
-    .where("isActive", "==", true)
-    .orderBy("createdAt", "desc")
-    .limit(limit);
-
-  if (filter === "completed") {
-    query = db.collection("admin-todos")
-      .where("isActive", "==", true)
-      .where("isCompleted", "==", true)
-      .orderBy("createdAt", "desc")
-      .limit(limit);
-  } else if (filter === "upcoming" || filter === "overdue") {
-    query = db.collection("admin-todos")
-      .where("isActive", "==", true)
-      .where("isCompleted", "==", false)
-      .orderBy("scheduledDateTime", "asc")
-      .limit(limit);
-  }
-
-  const snap = await query.get();
-  const now = new Date();
-  let todos = snap.docs.map(doc => {
-    const d = doc.data();
-    const scheduledDateTime = d.scheduledDateTime?.toDate?.() ?? null;
-    return {
-      id: doc.id,
-      title: d.title,
-      description: d.description ?? null,
-      isCompleted: d.isCompleted ?? false,
-      scheduledDateTime: scheduledDateTime?.toISOString() ?? null,
-      isOverdue: scheduledDateTime ? scheduledDateTime < now && !d.isCompleted : false,
-      reminderSent: d.reminderSent ?? false,
-      createdAt: tsToISO(d.createdAt),
-    };
-  });
-
-  if (filter === "upcoming") todos = todos.filter(t => !t.isOverdue && !t.isCompleted);
-  if (filter === "overdue") todos = todos.filter(t => t.isOverdue);
-
-  return json({ todos, count: todos.length });
-}
-
-async function createTodo(db: Db, req: Request): Promise<Response> {
-  const body = await req.json() as Record<string, any>;
-  if (!body.title?.trim()) return error("title is required");
-
-  const data: Record<string, any> = {
-    title: String(body.title).trim().slice(0, 200),
-    isCompleted: false,
-    isActive: true,
-    reminderSent: false,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  };
-  if (body.description) data.description = String(body.description).trim().slice(0, 1000);
-  if (body.scheduledDateTime) {
-    const d = new Date(body.scheduledDateTime);
-    if (isNaN(d.getTime())) return error("Invalid scheduledDateTime format (use ISO 8601)");
-    data.scheduledDateTime = Timestamp.fromDate(d);
-  }
-
-  const ref = await db.collection("admin-todos").add(data);
-  return json({ success: true, todoId: ref.id }, 201);
-}
-
-async function updateTodo(db: Db, id: string, req: Request): Promise<Response> {
-  const doc = await db.collection("admin-todos").doc(id).get();
-  if (!doc.exists) return error("Todo not found", 404);
-
-  const body = await req.json() as Record<string, any>;
-  const updates: Record<string, any> = { updatedAt: FieldValue.serverTimestamp() };
-  if ("title" in body) updates.title = String(body.title).trim().slice(0, 200);
-  if ("description" in body) updates.description = String(body.description).trim().slice(0, 1000);
-  if ("isCompleted" in body) updates.isCompleted = !!body.isCompleted;
-  if ("scheduledDateTime" in body) {
-    if (body.scheduledDateTime) {
-      const d = new Date(body.scheduledDateTime);
-      if (isNaN(d.getTime())) return error("Invalid scheduledDateTime format (use ISO 8601)");
-      updates.scheduledDateTime = Timestamp.fromDate(d);
-    } else {
-      updates.scheduledDateTime = null;
-    }
-  }
-  if ("isActive" in body) updates.isActive = !!body.isActive;
-
-  await db.collection("admin-todos").doc(id).update(updates);
-  return json({ success: true, todoId: id });
-}
-
-async function deleteTodo(db: Db, id: string): Promise<Response> {
-  const doc = await db.collection("admin-todos").doc(id).get();
-  if (!doc.exists) return error("Todo not found", 404);
-
-  await db.collection("admin-todos").doc(id).update({
-    isActive: false,
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  return json({ success: true, todoId: id });
-}
-
-// ---------------------------------------------------------------------------
 // Notifications
 // ---------------------------------------------------------------------------
 
@@ -1067,14 +959,6 @@ export async function handleAdminApi(
         if (method === "POST" && id && action === "send-back") return await sendBackIntakeForm(db, id, request);
         break;
 
-      // ── Todos ──
-      case "todos":
-        if (method === "GET" && !id) return await listTodos(db, url);
-        if (method === "POST" && !id) return await createTodo(db, request);
-        if (method === "PATCH" && id) return await updateTodo(db, id, request);
-        if (method === "DELETE" && id) return await deleteTodo(db, id);
-        break;
-
       // ── Notifications ──
       case "notifications":
         if (method === "GET" && !id) return await listNotifications(db, url);
@@ -1131,10 +1015,6 @@ export async function handleAdminApi(
             "GET    /admin-api/intake-forms/patient/:patientId",
             "POST   /admin-api/intake-forms/:id/approve",
             "POST   /admin-api/intake-forms/:id/send-back",
-            "GET    /admin-api/todos[?filter=all|upcoming|overdue|completed&limit=]",
-            "POST   /admin-api/todos",
-            "PATCH  /admin-api/todos/:id",
-            "DELETE /admin-api/todos/:id",
             "GET    /admin-api/notifications[?limit=]",
             "POST   /admin-api/notifications",
             "GET    /admin-api/specialist-requests[?limit=]",

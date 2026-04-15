@@ -76,11 +76,6 @@ service cloud.firestore {
       allow create: if isOwner(request.resource.data.patientId) || isAdmin();
     }
 
-    // Admin todos
-    match /admin-todos/{todoId} {
-      allow read, write, list, create: if isAdmin();
-    }
-
     // Notifications — admins full access, patients can only see and update their own
     match /notifications/{notificationId} {
       allow read, list, write: if isAdmin();

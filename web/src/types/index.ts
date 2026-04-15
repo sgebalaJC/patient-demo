@@ -380,23 +380,6 @@ export interface PatientIntakeForm {
   reviewNotes?: string;
 }
 
-export interface TodoItem {
-  id: string;
-  adminId: string;
-  title: string;
-  description?: string;
-  scheduledDateTime: Timestamp;
-  isCompleted: boolean;
-  isReminderSent: boolean;
-  enableSmsReminder: boolean;
-  reminderSentAt?: Timestamp;
-  priority: 'low' | 'medium' | 'high';
-  category?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  isActive: boolean;
-}
-
 // API Response types
 export interface ApiResponse<T> {
   success: boolean;

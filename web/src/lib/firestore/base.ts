@@ -17,7 +17,6 @@ export const collections = {
   appointments: collection(db, 'appointments'),
   messageThreads: collection(db, 'message-threads'),
   threadMessages: collection(db, 'thread-messages'),
-  todos: collection(db, 'admin-todos'),
   prescriptionRefills: collection(db, 'prescription-refills'),
   patientDocuments: collection(db, 'patient-documents'),
   patientIntakeForms: collection(db, 'patient-intake-forms'),

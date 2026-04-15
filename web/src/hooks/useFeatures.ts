@@ -9,7 +9,6 @@ import {
   canUseDocuments,
   canUsePatientIntake,
   canUseAdminTools,
-  canUseAdminTodos
 } from '../config/features';
 
 /**
@@ -33,7 +32,6 @@ export const useFeatures = () => {
     canUseDocuments,
     canUsePatientIntake,
     canUseAdminTools,
-    canUseAdminTodos,
 
     // Quick access to features
     features,

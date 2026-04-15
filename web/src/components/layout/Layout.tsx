@@ -97,7 +97,7 @@ export const Layout: React.FC = () => {
             full-height and its Sign out button anchors to the viewport bottom.
             Three-column grid: spacer | centered links | right-aligned copyright. */}
         <footer
-          className="shrink-0 grid grid-cols-3 items-center px-4 sm:px-6 py-2 text-[11px]"
+          className="shrink-0 grid grid-cols-3 items-center px-4 sm:px-6 h-14 text-sm"
           style={{
             background: 'var(--shell-bg)',
             color: 'var(--shell-text-muted)',

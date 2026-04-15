@@ -211,9 +211,8 @@ const createUserDocument = async (user: User, additionalData: Partial<AppUser> =
 
     // Only set role and createdAt for new users, don't overwrite existing role on login
     if (isNewUser) {
-        const isSandbox = import.meta.env.VITE_SANDBOX_MODE === 'true';
         baseUserData.role = 'patient';
-        baseUserData.isActive = isSandbox; // Sandbox: active immediately. Production: needs admin activation.
+        baseUserData.isActive = false;
         baseUserData.createdAt = serverTimestamp();
         baseUserData.phoneNumber = normalizePhoneNumber(user.phoneNumber || additionalData.phoneNumber || '');
     }

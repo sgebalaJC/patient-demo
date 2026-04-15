@@ -35,8 +35,6 @@ const AdminSubscriptionPlansPage = lazy(() => import('./pages/AdminSubscriptionP
 const AdminPlatformSubscriptionPage = lazy(() => import('./pages/AdminPlatformSubscriptionPage').then(m => ({ default: m.AdminPlatformSubscriptionPage })));
 const AdminDrChronoCsvPage = lazy(() => import('./pages/AdminDrChronoCsvPage').then(m => ({ default: m.AdminDrChronoCsvPage })));
 
-const isSandbox = import.meta.env.VITE_SANDBOX_MODE === 'true';
-
 const PageLoader = () => (
   <div className="flex items-center justify-center h-64">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
@@ -57,9 +55,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  // In non-sandbox mode, inactive patients see the pending screen
-  // Admins always pass through (they manage the system)
-  if (!isSandbox && userProfile && !userProfile.isActive && userProfile.role !== 'admin') {
+  // Inactive patients see the pending screen. Admins always pass through.
+  if (userProfile && !userProfile.isActive && userProfile.role !== 'admin') {
     return <PendingApproval />;
   }
 

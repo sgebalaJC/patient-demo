@@ -36,8 +36,6 @@ env:
     value: "1:29134217143:web:070111ca71126265475232"
 
   # App config
-  - variable: VITE_SANDBOX_MODE
-    value: "true"
   - variable: VITE_APP_ENV
     value: demo
   - variable: VITE_STRIPE_PUBLIC_KEY

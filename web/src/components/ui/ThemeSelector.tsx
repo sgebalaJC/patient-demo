@@ -5,21 +5,12 @@ type ThemeId = 'classic' | 'dark';
 
 const STORAGE_KEY = 'patient-theme';
 
-function applyFavicon() {
-  const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-  if (link) {
-    link.type = 'image/png';
-    link.href = '/favicon.png';
-  }
-}
-
 function applyTheme(id: ThemeId) {
   if (id === 'classic') {
     document.documentElement.removeAttribute('data-theme');
   } else {
     document.documentElement.setAttribute('data-theme', id);
   }
-  applyFavicon();
 }
 
 function getSavedTheme(): ThemeId {

@@ -41,10 +41,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   --gradient-start: #fdfcf7;
   --gradient-end: #f7f4ec;
 
-  /* Assistant chat bubble (admin agent Aurelia + patient agent Sunny) — matches
-     the active sidebar nav item tone (shell-active-bg blended on shell-bg).
+  /* Assistant chat bubble (admin agent Aurelia + patient agent Sunny) —
+     reuses the active sidebar item tint so the two read as the same accent.
      Dark theme overrides below to keep the inky look. */
-  --chat-bubble-assistant: #f3e8d1;
+  --chat-bubble-assistant: var(--shell-active-bg);
 
   /* Shell chrome — cream glass (light) with ink text. */
   --shell-bg: #faf7ec;

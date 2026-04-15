@@ -107,7 +107,7 @@ export const BillingPage: React.FC = () => {
       <PageHeader
         backTo="/dashboard"
         icon={CreditCard}
-        title="Membership & Billing"
+        title="Membership"
         subtitle={`Manage your ${BRANDING.shortName} membership subscription.`}
       />
 

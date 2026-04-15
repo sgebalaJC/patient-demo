@@ -42,7 +42,7 @@ const PATIENT_NAV_ITEMS: NavItem[] = [
   { label: 'Appointments', href: '/appointments', icon: Calendar, featureFlag: 'appointments' },
   { label: 'Refills', href: '/refills', icon: Pill, featureFlag: 'prescriptions' },
   { label: 'Documents', href: '/documents', icon: FileText, featureFlag: 'documents' },
-  { label: 'Billing', href: '/billing', icon: CreditCard },
+  { label: 'Membership', href: '/billing', icon: CreditCard },
   { label: 'Support', href: '/support', icon: Bot },
 ];
 

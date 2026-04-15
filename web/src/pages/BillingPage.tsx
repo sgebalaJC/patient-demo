@@ -6,7 +6,9 @@ import { Button } from '../components/ui/Button';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
-import { ConfirmModal } from '../components/ui/ConfirmModal';
+import { Modal } from '../components/ui/Modal';
+import { Input } from '../components/ui/Input';
+import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { subscriptionOperations } from '../lib/firestore/subscriptions';
 import type { SubscriptionPlan, PatientSubscription } from '../types';
@@ -31,6 +33,7 @@ export const BillingPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelConfirmText, setCancelConfirmText] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -77,9 +80,14 @@ export const BillingPage: React.FC = () => {
     }
   };
 
+  const closeCancelModal = () => {
+    setCancelConfirmOpen(false);
+    setCancelConfirmText('');
+  };
+
   const handleCancel = async () => {
     if (!user) return;
-    setCancelConfirmOpen(false);
+    closeCancelModal();
     setActionLoading('cancel');
     setError(null);
     try {
@@ -224,23 +232,54 @@ export const BillingPage: React.FC = () => {
         )
       )}
 
-      <ConfirmModal
+      <Modal
         isOpen={cancelConfirmOpen}
-        onClose={() => setCancelConfirmOpen(false)}
-        onConfirm={(value) => {
-          if (value?.trim().toUpperCase() === 'CANCEL') {
-            handleCancel();
-          }
-        }}
+        onClose={closeCancelModal}
         title="Cancel membership"
-        message="Your membership will end on the next renewal date. You'll keep access until then. To confirm, type CANCEL below."
-        confirmLabel="Cancel membership"
-        cancelLabel="Keep membership"
-        variant="danger"
-        inputPrompt="Type CANCEL to confirm"
-        inputPlaceholder="CANCEL"
-        inputRequired
-      />
+        icon={<div className="bg-red-100 p-2 rounded-lg"><AlertTriangle className="h-6 w-6 text-red-600" /></div>}
+        maxWidth="max-w-md"
+      >
+        <div className="p-6 space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-sm text-red-800">
+              Your membership will end on the next renewal date. You'll keep access until then, but
+              you won't be charged again.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">
+              Type <span className="font-bold">CANCEL</span> to confirm
+            </label>
+            <Input
+              value={cancelConfirmText}
+              onChange={(e) => setCancelConfirmText(e.target.value)}
+              placeholder="Type CANCEL"
+            />
+          </div>
+
+          <div className="flex items-center justify-end space-x-3 pt-2">
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={closeCancelModal}
+              disabled={actionLoading === 'cancel'}
+            >
+              Keep membership
+            </Button>
+            <Button
+              size="md"
+              onClick={handleCancel}
+              disabled={cancelConfirmText !== 'CANCEL' || actionLoading === 'cancel'}
+              loading={actionLoading === 'cancel'}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Cancel membership
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

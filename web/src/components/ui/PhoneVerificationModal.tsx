@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Phone, Shield } from 'lucide-react';
 import { Button } from './Button';
 import { ErrorAlert } from './ErrorAlert';
@@ -79,7 +80,7 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
 
   const maskedPhone = formatPhoneDisplay(phoneNumber);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-surface-card rounded-xl max-w-md w-full shadow-xl">
         <div className="p-6">
@@ -159,6 +160,7 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

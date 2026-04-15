@@ -70,29 +70,29 @@ export const IntakeFormBanner: React.FC = () => {
     <div className={`relative flex items-center justify-between p-4 rounded-lg border ${
       isSentBack
         ? 'bg-amber-50 border-amber-200'
-        : 'bg-purple-50 border-purple-200'
+        : 'bg-amber-50 border-amber-200'
     }`}>
       <Link
         to="/intake"
         className="flex items-center space-x-3 flex-1 min-w-0"
       >
         <div className={`p-2 rounded-lg flex-shrink-0 ${
-          isSentBack ? 'bg-amber-100' : 'bg-purple-100'
+          isSentBack ? 'bg-amber-100' : 'bg-amber-100'
         }`}>
           <FileText className={`h-5 w-5 ${
-            isSentBack ? 'text-amber-600' : 'text-purple-600'
+            isSentBack ? 'text-amber-600' : 'text-amber-600'
           }`} />
         </div>
         <div className="min-w-0">
           <p className={`text-sm font-medium ${
-            isSentBack ? 'text-amber-900' : 'text-purple-900'
+            isSentBack ? 'text-amber-900' : 'text-amber-900'
           }`}>
             {isSentBack
               ? 'Your intake forms need attention'
               : 'Complete your intake forms'}
           </p>
           <p className={`text-xs mt-0.5 ${
-            isSentBack ? 'text-amber-700' : 'text-purple-700'
+            isSentBack ? 'text-amber-700' : 'text-amber-700'
           }`}>
             {isSentBack
               ? 'Your provider requested updates — please review and resubmit'
@@ -100,7 +100,7 @@ export const IntakeFormBanner: React.FC = () => {
           </p>
         </div>
         <ArrowRight className={`h-4 w-4 flex-shrink-0 ${
-          isSentBack ? 'text-amber-600' : 'text-purple-600'
+          isSentBack ? 'text-amber-600' : 'text-amber-600'
         }`} />
       </Link>
 
@@ -110,7 +110,7 @@ export const IntakeFormBanner: React.FC = () => {
             e.preventDefault();
             handleSkip();
           }}
-          className="ml-3 p-1 rounded-full hover:bg-purple-100 text-purple-400 hover:text-purple-600 transition-colors flex-shrink-0"
+          className="ml-3 p-1 rounded-full hover:bg-amber-100 text-amber-400 hover:text-amber-600 transition-colors flex-shrink-0"
           title="Skip for now"
         >
           <X className="h-4 w-4" />

@@ -102,7 +102,7 @@ export const BRANDING: Branding = {
   appName: 'Aurelia MD',
   practiceName: 'Aurelia MD',
   shortName: 'Aurelia MD',
-  legalEntity: 'Aurelia Primary Care, LLC',
+  legalEntity: 'Aurelia Primary Care',
   domain: 'patient-demo-project.web.app',
   supportEmail: 'support@aureliamd.com',
   supportPhone: undefined,

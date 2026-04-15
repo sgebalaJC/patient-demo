@@ -38,10 +38,10 @@ export function ChatBubble({ role, content, attachments, onDelete }: ChatBubbleP
     >
       <div className="relative max-w-[80%]">
         <div
-          className={`rounded-xl px-4 py-2.5 text-sm ${
+          className={`px-4 py-2.5 text-sm ${
             role === 'user'
-              ? 'bg-primary-600 text-white rounded-br-sm'
-              : 'text-secondary-900 rounded-bl-sm border border-secondary-200'
+              ? 'bg-primary-600 text-white'
+              : 'text-secondary-900 border border-secondary-200'
           }`}
           style={role === 'assistant' ? { background: 'var(--chat-bubble-assistant)' } : undefined}
         >
@@ -61,7 +61,7 @@ export function ChatBubble({ role, content, attachments, onDelete }: ChatBubbleP
                       src={att.url}
                       alt={att.name}
                       loading="lazy"
-                      className="max-h-48 rounded-md border border-secondary-200 bg-white"
+                      className="max-h-48 border border-secondary-200 bg-white"
                     />
                   </a>
                 ) : (
@@ -87,7 +87,7 @@ export function ChatBubble({ role, content, attachments, onDelete }: ChatBubbleP
           }`}>
             <button
               onClick={handleCopy}
-              className="p-1 rounded hover:bg-secondary-100 text-secondary-400 hover:text-secondary-600 transition-colors"
+              className="p-1 hover:bg-secondary-100 text-secondary-400 hover:text-secondary-600 transition-colors"
               title="Copy message"
             >
               {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
@@ -95,7 +95,7 @@ export function ChatBubble({ role, content, attachments, onDelete }: ChatBubbleP
             {onDelete && (
               <button
                 onClick={onDelete}
-                className="p-1 rounded hover:bg-red-50 text-secondary-400 hover:text-red-500 transition-colors"
+                className="p-1 hover:bg-red-50 text-secondary-400 hover:text-red-500 transition-colors"
                 title="Delete message"
               >
                 <Trash2 className="h-3.5 w-3.5" />

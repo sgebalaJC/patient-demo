@@ -18,46 +18,77 @@ export const ChatMarkdown: React.FC<ChatMarkdownProps> = ({ content, variant }) 
   return <div className="space-y-1.5">{parseBlocks(content)}</div>;
 };
 
-/** Parse inline markdown: **bold**, *italic*, `code`, [links](url) */
+/**
+ * URL allowlist for inline images returned by the agent. Only renders
+ * https URLs and Firebase Storage download URLs; everything else falls
+ * back to a regular link to keep arbitrary data URIs / file:// out.
+ */
+function isSafeImageUrl(url: string): boolean {
+  if (!url) return false;
+  if (url.startsWith('https://')) return true;
+  if (url.startsWith('http://') && url.includes('localhost')) return true;
+  return false;
+}
+
+/** Parse inline markdown: ![alt](url) images, **bold**, *italic*, `code`, [links](url) */
 function parseInline(text: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
-  // Match: **bold**, *italic*, `code`, [text](url)
-  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|\[([^\]]+)\]\(([^)]+)\))/g;
+  // Image syntax must come before plain link syntax so `![alt](url)` doesn't
+  // get matched as a link followed by a stray `!`.
+  const regex =
+    /(!\[([^\]]*)\]\(([^)]+)\)|\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`|\[([^\]]+)\]\(([^)]+)\))/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
-    // Text before match
     if (match.index > lastIndex) {
       nodes.push(text.slice(lastIndex, match.index));
     }
 
-    if (match[2]) {
-      // **bold**
-      nodes.push(<strong key={match.index} className="font-semibold">{match[2]}</strong>);
-    } else if (match[3]) {
-      // *italic*
-      nodes.push(<em key={match.index}>{match[3]}</em>);
+    if (match[3] !== undefined) {
+      // ![alt](url) — agent-returned inline image
+      const alt = match[2];
+      const url = match[3];
+      if (isSafeImageUrl(url)) {
+        nodes.push(
+          <a key={match.index} href={url} target="_blank" rel="noopener noreferrer" className="block my-1">
+            <img
+              src={url}
+              alt={alt}
+              loading="lazy"
+              className="max-h-64 border border-secondary-200 bg-white"
+            />
+          </a>,
+        );
+      } else {
+        // Unsafe URL → fall back to a labelled link.
+        nodes.push(
+          <a key={match.index} href={url} target="_blank" rel="noopener noreferrer" className="text-primary-400 underline">
+            {alt || 'image'}
+          </a>,
+        );
+      }
     } else if (match[4]) {
-      // `code`
+      nodes.push(<strong key={match.index} className="font-semibold">{match[4]}</strong>);
+    } else if (match[5]) {
+      nodes.push(<em key={match.index}>{match[5]}</em>);
+    } else if (match[6]) {
       nodes.push(
-        <code key={match.index} className="bg-secondary-200/60 rounded px-1 py-0.5 text-xs font-mono">
-          {match[4]}
-        </code>
+        <code key={match.index} className="bg-secondary-200/60 px-1 py-0.5 text-xs font-mono">
+          {match[6]}
+        </code>,
       );
-    } else if (match[5] && match[6]) {
-      // [text](url)
+    } else if (match[7] && match[8]) {
       nodes.push(
-        <a key={match.index} href={match[6]} target="_blank" rel="noopener noreferrer" className="text-primary-400 underline">
-          {match[5]}
-        </a>
+        <a key={match.index} href={match[8]} target="_blank" rel="noopener noreferrer" className="text-primary-400 underline">
+          {match[7]}
+        </a>,
       );
     }
 
     lastIndex = match.index + match[0].length;
   }
 
-  // Remaining text
   if (lastIndex < text.length) {
     nodes.push(text.slice(lastIndex));
   }

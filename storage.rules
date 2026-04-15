@@ -30,6 +30,24 @@ service firebase.storage {
       );
     }
 
+    // Chat attachments (admin agent + patient support). Path:
+    //   chat-attachments/{senderId}/{attachmentId}/{fileName}
+    // Owner uploads + reads their own; admins read any (for moderation /
+    // troubleshooting). Hard delete by owner or admin.
+    match /chat-attachments/{senderId}/{allPaths=**} {
+      allow read: if request.auth != null && (
+        request.auth.uid == senderId ||
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+      allow create: if request.auth != null
+        && request.auth.uid == senderId
+        && request.resource.size < 25 * 1024 * 1024;
+      allow delete: if request.auth != null && (
+        request.auth.uid == senderId ||
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
     // Export archives — only accessible via signed URLs from Cloud Function
     match /exports/{patientId}/{allPaths=**} {
       allow read, write: if false;

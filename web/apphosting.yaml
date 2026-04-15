@@ -40,3 +40,11 @@ env:
     value: demo
   - variable: VITE_STRIPE_PUBLIC_KEY
     value: pk_test_replace_me
+
+  # AI agent sidecar proxy — auth-gated Cloud Function that forwards
+  # browser requests to the openclaw sidecar (5.78.123.70:8081). The
+  # function reads SIDECAR_URL + SIDECAR_API_KEY from Secret Manager
+  # (see functions/src/index.ts:2587). Without this var the /support
+  # chat and /admin/agent dashboard render "Offline".
+  - variable: VITE_SIDECAR_PROXY_URL
+    value: https://sidecarproxy-yyyd7cxnba-uw.a.run.app

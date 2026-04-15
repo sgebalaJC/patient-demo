@@ -99,13 +99,14 @@ service cloud.firestore {
       allow read, list, write: if isAdmin();
     }
 
-    // Agent chat messages — admin only
+    // Agent chat messages — admin only. Any admin can hard-delete (curate).
     match /agent-chat/{messageId} {
       allow read, list, create: if isAdmin();
-      allow delete: if false; // cleanup via Cloud Function only
+      allow delete: if isAdmin();
     }
 
-    // Support chat messages — patients can read/create their own, admins can read all
+    // Support chat messages — patients can read/create/delete their own,
+    // admins can read + delete any. Updates are still locked.
     match /support-chat/{messageId} {
       allow create: if request.auth != null
         && request.resource.data.patientId == request.auth.uid;
@@ -115,7 +116,9 @@ service cloud.firestore {
       allow list: if request.auth != null && (
         resource.data.patientId == request.auth.uid || isAdmin()
       );
-      allow delete: if false;
+      allow delete: if request.auth != null && (
+        resource.data.patientId == request.auth.uid || isAdmin()
+      );
     }
 
     // Phone verifications — server-side only (Cloud Functions)

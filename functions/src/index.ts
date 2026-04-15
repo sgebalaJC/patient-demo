@@ -2573,8 +2573,10 @@ export const serveFile = onRequest({
 // Sidecar Proxy (keeps API key server-side)
 // =============================================================================
 
-const SIDECAR_URL = process.env.SIDECAR_URL || 'http://YOUR_VPS_IP:8081';
-const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || '';
+// Read at call time so the values reflect the runtime-bound secret rather
+// than whatever was in the env at module init.
+const sidecarUrlEnv = () => process.env.SIDECAR_URL || 'http://YOUR_VPS_IP:8081';
+const sidecarApiKeyEnv = () => process.env.SIDECAR_API_KEY || '';
 
 /**
  * HTTP proxy for the sidecar API. Admin-only.
@@ -2661,19 +2663,24 @@ export const sidecarProxy = onRequest({
       return;
     }
 
-    if (!SIDECAR_API_KEY) {
+    const sidecarUrl = sidecarUrlEnv();
+    const sidecarApiKey = sidecarApiKeyEnv();
+    if (!sidecarApiKey) {
       res.status(503).json({ error: 'Sidecar not configured' });
       return;
     }
 
     const userName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown';
 
-    // Forward request to sidecar with user context headers
-    const sidecarRes = await fetch(`${SIDECAR_URL}${sidecarPath}`, {
+    // Tell the sidecar we want SSE for /chat. Other endpoints are JSON.
+    const wantsStream = sidecarPath === '/chat';
+
+    const sidecarRes = await fetch(`${sidecarUrl}${sidecarPath}`, {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SIDECAR_API_KEY}`,
+        ...(wantsStream ? { Accept: 'text/event-stream' } : {}),
+        'Authorization': `Bearer ${sidecarApiKey}`,
         'X-User-Uid': decodedToken.uid,
         'X-User-Role': userRole,
         'X-User-Name': userName,
@@ -2682,6 +2689,34 @@ export const sidecarProxy = onRequest({
     });
 
     const contentType = sidecarRes.headers.get('content-type') || '';
+
+    // SSE pass-through — pipe upstream chunks straight to the client. Cloud
+    // Run supports streaming responses; we must flush headers before write
+    // so the browser gets the first chunk without buffering the whole reply.
+    if (contentType.includes('text/event-stream') && sidecarRes.body) {
+      res.status(sidecarRes.status);
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders?.();
+      const reader = sidecarRes.body.getReader();
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            res.write(Buffer.from(value));
+            // Encourage immediate flush; node defaults to Nagle-ish buffering.
+            (res as any).flush?.();
+          }
+        }
+      } finally {
+        res.end();
+      }
+      return;
+    }
+
     if (contentType.includes('application/json')) {
       const data = await sidecarRes.json();
       res.status(sidecarRes.status).json(data);
@@ -2695,7 +2730,7 @@ export const sidecarProxy = onRequest({
       code: error.code,
       cause: error.cause?.message,
       stack: error.stack?.slice(0, 200),
-      sidecarUrl: SIDECAR_URL,
+      sidecarUrl: sidecarUrlEnv(),
     });
     res.status(502).json({ error: `Sidecar unreachable: ${error.message}` });
   }
@@ -2719,8 +2754,8 @@ export const dailySidecarBackup = onSchedule({
   timeZone: 'America/Los_Angeles',
   secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
 }, async () => {
-  const sidecarUrl = process.env.SIDECAR_URL || 'http://YOUR_VPS_IP:8081';
-  const sidecarKey = process.env.SIDECAR_API_KEY || '';
+  const sidecarUrl = sidecarUrlEnv();
+  const sidecarKey = sidecarApiKeyEnv();
 
   if (!sidecarKey) {
     logger.warn('SIDECAR_API_KEY not set, skipping backup');

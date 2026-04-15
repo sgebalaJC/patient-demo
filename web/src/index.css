@@ -41,9 +41,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   --gradient-start: #fdfcf7;
   --gradient-end: #f7f4ec;
 
-  /* Assistant chat bubble (admin agent Aurelia + patient agent Sunny). Only
-     applied in the light theme — dark theme overrides to keep the inky look. */
-  --chat-bubble-assistant: #ece5cf;
+  /* Assistant chat bubble (admin agent Aurelia + patient agent Sunny) — matches
+     the active sidebar nav item tone (shell-active-bg blended on shell-bg).
+     Dark theme overrides below to keep the inky look. */
+  --chat-bubble-assistant: #f3e8d1;
 
   /* Shell chrome — cream glass (light) with ink text. */
   --shell-bg: #faf7ec;
@@ -62,6 +63,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: var(--shell-text);
 }
 .shell-bell > div > button:hover {
+  background: var(--shell-bg-hover);
+  color: var(--shell-text-strong);
+}
+
+/* Theme toggle in the sidebar footer — match the bell's hover affordance. */
+.shell-theme:hover {
   background: var(--shell-bg-hover);
   color: var(--shell-text-strong);
 }

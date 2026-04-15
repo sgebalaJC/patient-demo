@@ -141,24 +141,23 @@ async function sendToGateway(
   body: string,
   attachments?: { mimeType: string; content: string; name?: string }[],
 ): Promise<Response> {
-  // Check the platform token budget before calling the gateway. If over
-  // allowance, pass X-Model-Override so OpenClaw falls back to the economy
-  // model.
+  // Budget check — if over allowance, request the economy model via header.
   // TODO(openclaw): honor `X-Model-Override` on the web-chat webhook. Until
   // then this header is a no-op — see docs/AI_AGENTS.md § Platform token
   // budget.
   const budget = await getBudgetState();
-  const headers: Record<string, string> = {
+  const upstreamHeaders: Record<string, string> = {
     "Content-Type": "application/json",
     "X-Webhook-Secret": cachedToken!,
+    Accept: "text/event-stream",
   };
   if (budget.overBudget) {
-    headers["X-Model-Override"] = budget.economyModel;
+    upstreamHeaders["X-Model-Override"] = budget.economyModel;
   }
 
   const res = await fetch(`${GATEWAY_URL}/webhook/web-chat`, {
     method: "POST",
-    headers,
+    headers: upstreamHeaders,
     body: JSON.stringify({
       sessionId,
       body,
@@ -168,49 +167,74 @@ async function sendToGateway(
     signal: AbortSignal.timeout(120_000),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
     return Response.json(
       { error: `Gateway returned ${res.status}`, detail: text },
       { status: 502 },
     );
   }
 
-  // OpenClaw web-chat returns SSE: a stream of `data: {...}` lines. We
-  // collect the full reply rather than streaming to the client (the patient
-  // UI is non-streaming). The terminal `data: {"done":true,"usage":{...}}`
-  // event carries gateway-reported token usage; if absent (older builds), we
-  // fall back to a char/4 estimate.
-  const raw = await res.text();
-  let reply = "";
+  // SSE pass-through: forward upstream chunks to the client byte-for-byte,
+  // while also intercepting the terminal `data: {"done":true,"usage":{...}}`
+  // event so we can record token usage. Using a TransformStream keeps memory
+  // bounded — we don't buffer the full reply.
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let lineBuf = "";
+  let totalReplyLen = 0;
   let gatewayUsage: GatewayUsage | undefined;
-  for (const line of raw.split("\n")) {
-    if (!line.startsWith("data:")) continue;
-    const payload = line.slice(5).trim();
-    if (!payload || payload === "[DONE]") continue;
-    try {
-      const evt = JSON.parse(payload) as {
-        chunk?: string;
-        done?: boolean;
-        usage?: { inputTokens?: number; outputTokens?: number; model?: string };
-      };
-      if (typeof evt.chunk === "string") reply += evt.chunk;
-      if (evt.done && evt.usage) gatewayUsage = evt.usage;
-    } catch { /* ignore malformed event */ }
-  }
 
-  // TODO(openclaw): if a future build switches back to plain JSON
-  // ({ reply, usage }), add a content-type sniff and parse accordingly.
-  if (gatewayUsage && (gatewayUsage.inputTokens || gatewayUsage.outputTokens)) {
-    recordUsage(gatewayUsage);
-  } else {
-    recordUsage({
-      inputTokens: estimateTokens(body),
-      outputTokens: estimateTokens(reply),
-    });
-  }
+  const pipe = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      // Sniff usage events without altering the bytes the client receives.
+      lineBuf += decoder.decode(chunk, { stream: true });
+      const lines = lineBuf.split("\n");
+      lineBuf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        try {
+          const evt = JSON.parse(payload) as {
+            chunk?: string;
+            done?: boolean;
+            usage?: { inputTokens?: number; outputTokens?: number; model?: string };
+          };
+          if (typeof evt.chunk === "string") totalReplyLen += evt.chunk.length;
+          if (evt.done && evt.usage) gatewayUsage = evt.usage;
+        } catch { /* malformed event — let the client deal with it */ }
+      }
+      controller.enqueue(chunk);
+    },
+    flush() {
+      // Fire-and-forget usage record. Prefer gateway's own numbers; fall
+      // back to a char/4 estimate when missing (older OpenClaw builds).
+      // TODO(openclaw): when usage is consistently surfaced, drop the
+      // estimate fallback. See docs/AI_AGENTS.md § Platform token budget.
+      if (gatewayUsage && (gatewayUsage.inputTokens || gatewayUsage.outputTokens)) {
+        recordUsage(gatewayUsage);
+      } else {
+        recordUsage({
+          inputTokens: estimateTokens(body),
+          outputTokens: Math.ceil(totalReplyLen / 4),
+        });
+      }
+    },
+  });
 
-  return Response.json({ role: "assistant", content: reply });
+  // Best-effort: hint encoder is unused if upstream is already utf-8 bytes.
+  void encoder;
+
+  return new Response(res.body.pipeThrough(pipe), {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
 
 /** POST /chat — route to the appropriate agent via web-chat webhook */

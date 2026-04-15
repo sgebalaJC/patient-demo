@@ -174,6 +174,27 @@ export const getMessageAttachmentPath = (threadId: string, fileName: string) => 
   return `messages/${threadId}/attachments/${fileName}`;
 };
 
+// Chat attachments path — for AI chat (admin agent + patient support).
+// Scoped per-uploader (`senderId`) so Firestore rules can enforce write owner.
+export const getChatAttachmentPath = (senderId: string, attachmentId: string, fileName: string) => {
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return `chat-attachments/${senderId}/${attachmentId}/${safeName}`;
+};
+
+/** Upload a chat attachment (image, doc, etc.). Returns the download URL +
+ *  storage path so callers can persist both for later cleanup. */
+export const uploadChatAttachment = async (
+  file: File,
+  senderId: string,
+): Promise<{ url: string; storagePath: string; name: string; mimeType: string; size: number }> => {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const path = getChatAttachmentPath(senderId, id, file.name);
+  const storageRef = ref(storage, path);
+  const snap = await uploadBytes(storageRef, file);
+  const url = await getDownloadURL(snap.ref);
+  return { url, storagePath: path, name: file.name, mimeType: file.type, size: file.size };
+};
+
 // Upload message attachment
 export const uploadMessageAttachment = (
   file: File,

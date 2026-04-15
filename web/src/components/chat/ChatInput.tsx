@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { Send, Paperclip, X, FileText, Image } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Send, Paperclip, X, FileText } from 'lucide-react';
 
 const ALLOWED_TYPES = [
   'image/png', 'image/jpeg', 'image/gif', 'image/webp',
@@ -60,21 +60,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div className="border-t border-secondary-200 p-3">
-      {/* Pending files preview */}
+      {/* Pending files preview — image thumbnails for image/*, chip for others */}
       {pendingFiles.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
-          {pendingFiles.map((file, i) => (
-            <div key={i} className="flex items-center gap-1.5 bg-secondary-100 rounded-lg px-2 py-1 text-xs text-secondary-700">
-              {isImage(file.type)
-                ? <Image className="h-3 w-3 text-secondary-500" />
-                : <FileText className="h-3 w-3 text-secondary-500" />
-              }
-              <span className="truncate max-w-[120px]">{file.name}</span>
-              <button onClick={() => removeFile(i)} className="text-secondary-400 hover:text-secondary-600">
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
+          {pendingFiles.map((file, i) =>
+            isImage(file.type) ? (
+              <PendingImageThumb key={i} file={file} onRemove={() => removeFile(i)} />
+            ) : (
+              <div
+                key={i}
+                className="flex items-center gap-1.5 bg-secondary-100 px-2 py-1 text-xs text-secondary-700"
+              >
+                <FileText className="h-3 w-3 text-secondary-500" />
+                <span className="truncate max-w-[120px]">{file.name}</span>
+                <button onClick={() => removeFile(i)} className="text-secondary-400 hover:text-secondary-600">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ),
+          )}
         </div>
       )}
 
@@ -83,7 +87,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={sending}
-          className="flex-shrink-0 p-2 rounded-lg text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 transition-colors disabled:opacity-50"
+          className="flex-shrink-0 p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 transition-colors disabled:opacity-50"
           title="Attach file"
         >
           <Paperclip className="h-4 w-4" />
@@ -104,17 +108,46 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           rows={1}
-          className="flex-1 resize-none rounded-lg border border-secondary-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="flex-1 resize-none border border-secondary-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
 
         <button
           onClick={handleSend}
           disabled={(!value.trim() && pendingFiles.length === 0) || sending}
-          className="flex-shrink-0 p-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-shrink-0 p-2 bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Send className="h-4 w-4" />
         </button>
       </div>
+    </div>
+  );
+};
+
+/** Image preview chip — uses an object URL to render the local file as a
+ *  thumbnail before the upload completes. Revokes the URL on unmount. */
+const PendingImageThumb: React.FC<{ file: File; onRemove: () => void }> = ({ file, onRemove }) => {
+  const [url, setUrl] = useState<string>('');
+  useEffect(() => {
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  return (
+    <div className="relative group">
+      {url && (
+        <img
+          src={url}
+          alt={file.name}
+          className="h-16 w-16 object-cover border border-secondary-200"
+        />
+      )}
+      <button
+        onClick={onRemove}
+        className="absolute -top-1.5 -right-1.5 bg-secondary-700 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+        title={`Remove ${file.name}`}
+      >
+        <X className="h-3 w-3" />
+      </button>
     </div>
   );
 };

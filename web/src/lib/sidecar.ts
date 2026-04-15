@@ -78,6 +78,86 @@ class SidecarClient {
     });
   }
 
+  /**
+   * Streaming chat — POST /chat with Accept: text/event-stream, parse the
+   * `data: {chunk:...}` lines as they arrive, fire `onChunk` for each text
+   * fragment, and resolve with the full assembled reply when the stream
+   * terminates. The chain is browser → sidecarProxy CF → sidecar → gateway,
+   * each hop forwarding SSE without buffering.
+   */
+  async streamChat(args: {
+    messages: { role: string; content: string }[];
+    attachments?: { mimeType: string; content: string; name: string }[];
+    support?: boolean;
+    onChunk: (text: string) => void;
+    signal?: AbortSignal;
+  }): Promise<string> {
+    if (!this.isConfigured) {
+      throw new Error('Sidecar not configured. Set VITE_SIDECAR_PROXY_URL.');
+    }
+    const user = auth.currentUser;
+    if (!user) throw new Error('Authentication required');
+    const idToken = await user.getIdToken();
+
+    const res = await fetch(
+      `${this.proxyBase}?path=${encodeURIComponent('/chat')}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          messages: args.messages,
+          attachments: args.attachments,
+          ...(args.support ? { support: true } : {}),
+        }),
+        signal: args.signal,
+      },
+    );
+
+    if (!res.ok || !res.body) {
+      let detail = '';
+      try {
+        detail = ((await res.json()) as { error?: string }).error || '';
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(detail || `Chat stream failed: ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let assembled = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+          const evt = JSON.parse(payload) as {
+            chunk?: string;
+            done?: boolean;
+          };
+          if (typeof evt.chunk === 'string' && evt.chunk.length > 0) {
+            assembled += evt.chunk;
+            args.onChunk(evt.chunk);
+          }
+        } catch {
+          /* ignore malformed event */
+        }
+      }
+    }
+    return assembled;
+  }
+
   // ── Status ────────────────────────────────────
 
   async getStatus(): Promise<{ processStatus: string; healthy: boolean; version: string }> {

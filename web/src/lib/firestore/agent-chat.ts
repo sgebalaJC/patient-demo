@@ -18,6 +18,10 @@ export interface ChatAttachment {
   name: string;
   mimeType: string;
   size?: number;
+  /** Cloud Storage download URL — set after upload, persisted with the message. */
+  url?: string;
+  /** Storage path (`chat-attachments/...`) for cleanup on hard delete. */
+  storagePath?: string;
 }
 
 export interface AgentChatMessage {

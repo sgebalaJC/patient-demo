@@ -237,7 +237,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
         {user && (
           <>
             <div
-              className="shrink-0 px-3 py-2"
+              className="shrink-0 h-14 flex items-center px-3"
               style={{ borderTop: '1px solid var(--shell-border)' }}
             >
               <button

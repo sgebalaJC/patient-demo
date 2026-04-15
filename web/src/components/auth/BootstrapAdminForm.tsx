@@ -212,7 +212,7 @@ export const BootstrapAdminForm: React.FC<BootstrapAdminFormProps> = ({ onSubmit
           <label className="block text-sm font-medium text-secondary-700 mb-1">
             Phone number <span className="text-secondary-400 font-normal">(optional)</span>
           </label>
-          <Input {...register('phoneNumber')} type="tel" placeholder="+1 (555) 123-4567" error={errors.phoneNumber?.message} />
+          <Input {...register('phoneNumber')} type="tel" placeholder="(555) 123-4567" error={errors.phoneNumber?.message} />
         </div>
 
         <Button type="submit" className="w-full" loading={loading}>

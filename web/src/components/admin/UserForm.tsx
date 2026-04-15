@@ -334,7 +334,7 @@ export const UserForm: React.FC<UserFormProps> = ({
                                     <input
                                         {...register('phoneNumber')}
                                         type="tel"
-                                        placeholder="e.g. +1 (555) 123-4567"
+                                        placeholder="e.g. (555) 123-4567"
                                         className="input w-full"
                                     />
                                     {errors.phoneNumber && (

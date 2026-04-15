@@ -36,22 +36,20 @@
  */
 
 import {onCall, onRequest, HttpsError} from "firebase-functions/v2/https";
+import {defineSecret} from "firebase-functions/params";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
 import Stripe from "stripe";
 
-// Stripe credentials come from function env vars (set in the function's .env
-// file for emulator / runtime config for production). This avoids Secret
-// Manager API usage, which carries a per-secret-version monthly cost.
-// For production customer forks, switch to `defineSecret` + Secret Manager
-// once you're past the zero-idle-cost demo stage.
+const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
+const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 function getStripe(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY;
+  const key = STRIPE_SECRET_KEY.value();
   if (!key) {
     throw new HttpsError(
       "failed-precondition",
-      "STRIPE_SECRET_KEY is not set. Add it to functions/.env (or set via firebase deploy env vars).",
+      "STRIPE_SECRET_KEY is not set. Run `firebase functions:secrets:set STRIPE_SECRET_KEY`.",
     );
   }
   return new Stripe(key, {apiVersion: "2024-12-18.acacia" as any});
@@ -69,6 +67,7 @@ function getStripe(): Stripe {
  * Returns `{ url: string }` — the Stripe hosted checkout URL.
  */
 export const createCheckoutSession = onCall(
+  {secrets: [STRIPE_SECRET_KEY]},
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Sign in required.");
@@ -133,6 +132,7 @@ export const createCheckoutSession = onCall(
  * Returns `{ cancelAt: number }` — unix seconds when the subscription ends.
  */
 export const cancelSubscription = onCall(
+  {secrets: [STRIPE_SECRET_KEY]},
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Sign in required.");
@@ -173,9 +173,10 @@ export const cancelSubscription = onCall(
  * Signature verified via STRIPE_WEBHOOK_SECRET.
  */
 export const stripeWebhook = onRequest(
+  {secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET]},
   async (req, res) => {
     const signature = req.headers["stripe-signature"];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    const webhookSecret = STRIPE_WEBHOOK_SECRET.value();
     if (!signature || !webhookSecret) {
       res.status(400).send("Missing signature or webhook secret");
       return;

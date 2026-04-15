@@ -41,6 +41,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   --gradient-start: #fdfcf7;
   --gradient-end: #f7f4ec;
 
+  /* Assistant chat bubble (admin agent Aurelia + patient agent Sunny). Only
+     applied in the light theme — dark theme overrides to keep the inky look. */
+  --chat-bubble-assistant: #ece5cf;
+
   /* Shell chrome — cream glass (light) with ink text. */
   --shell-bg: #faf7ec;
   --shell-bg-hover: rgba(28, 26, 21, 0.05);
@@ -106,6 +110,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   --shell-active-bg: rgba(212, 165, 76, 0.16);
   --shell-active-text: #e0b84c;
   --shell-accent: #d4a54c;
+
+  /* Dark theme keeps the surface-card appearance for assistant bubbles. */
+  --chat-bubble-assistant: var(--surface-card);
 }
 
 @layer base {

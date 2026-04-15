@@ -6,6 +6,9 @@ interface ChatAttachment {
   name: string;
   mimeType: string;
   size?: number;
+  /** Cloud Storage download URL — when present, image attachments render inline. */
+  url?: string;
+  storagePath?: string;
 }
 
 interface ChatBubbleProps {
@@ -38,20 +41,41 @@ export function ChatBubble({ role, content, attachments, onDelete }: ChatBubbleP
           className={`rounded-xl px-4 py-2.5 text-sm ${
             role === 'user'
               ? 'bg-primary-600 text-white rounded-br-sm'
-              : 'bg-surface-card text-secondary-900 rounded-bl-sm border border-secondary-200'
+              : 'text-secondary-900 rounded-bl-sm border border-secondary-200'
           }`}
+          style={role === 'assistant' ? { background: 'var(--chat-bubble-assistant)' } : undefined}
         >
           <ChatMarkdown content={content} variant={role} />
           {attachments && attachments.length > 0 && (
-            <div className="mt-2 space-y-1">
-              {attachments.map((att, i) => (
-                <div key={i} className={`flex items-center gap-1.5 text-xs ${
-                  role === 'user' ? 'text-white/80' : 'text-secondary-500'
-                }`}>
-                  {isImg(att.mimeType) ? <Image className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
-                  <span className="truncate">{att.name}</span>
-                </div>
-              ))}
+            <div className="mt-2 space-y-1.5">
+              {attachments.map((att, i) =>
+                isImg(att.mimeType) && att.url ? (
+                  <a
+                    key={i}
+                    href={att.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block"
+                  >
+                    <img
+                      src={att.url}
+                      alt={att.name}
+                      loading="lazy"
+                      className="max-h-48 rounded-md border border-secondary-200 bg-white"
+                    />
+                  </a>
+                ) : (
+                  <div
+                    key={i}
+                    className={`flex items-center gap-1.5 text-xs ${
+                      role === 'user' ? 'text-white/80' : 'text-secondary-500'
+                    }`}
+                  >
+                    {isImg(att.mimeType) ? <Image className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+                    <span className="truncate">{att.name}</span>
+                  </div>
+                ),
+              )}
             </div>
           )}
         </div>

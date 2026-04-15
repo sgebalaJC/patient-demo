@@ -62,10 +62,10 @@ export const Layout: React.FC = () => {
                 <div className="shell-bell">
                   <NotificationBell buttonClassName="p-2 rounded-lg transition-colors hover:bg-white/10" />
                 </div>
-                <ThemeToggle className="p-2 rounded-lg transition-colors hover:bg-white/10" />
+                <ThemeToggle className="shell-icon-btn p-2 rounded-lg transition-colors" />
                 <Link
                   to="/profile"
-                  className="p-2 rounded-lg transition-colors hover:bg-white/10"
+                  className="shell-icon-btn p-2 rounded-lg transition-colors"
                   style={{ color: 'var(--shell-text)' }}
                   title="Profile"
                   aria-label="Profile"

@@ -8,10 +8,14 @@ import {
   FileText,
   CreditCard,
   Bot,
-  Shield,
   LogOut,
   X,
   Menu,
+  Users,
+  Stethoscope,
+  Search,
+  Zap,
+  Settings,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeatures } from '../../hooks/useFeatures';
@@ -28,10 +32,11 @@ interface NavItem {
   icon: React.ElementType;
   roles?: Role[];
   featureFlag?: keyof ReturnType<typeof useFeatures>['features'];
+  featureKey?: 'userManagement' | 'adminTodos';
   matchPrefix?: boolean;
 }
 
-const NAV_ITEMS: NavItem[] = [
+const PATIENT_NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: Home },
   { label: 'Messages', href: '/messages', icon: MessageSquare, featureFlag: 'messages' },
   { label: 'Appointments', href: '/appointments', icon: Calendar, featureFlag: 'appointments' },
@@ -39,7 +44,20 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Documents', href: '/documents', icon: FileText, featureFlag: 'documents' },
   { label: 'Billing', href: '/billing', icon: CreditCard },
   { label: 'Support', href: '/support', icon: Bot },
-  { label: 'Admin', href: '/admin', icon: Shield, roles: ['admin', 'assistant'], matchPrefix: true },
+];
+
+const ADMIN_NAV_ITEMS: NavItem[] = [
+  { label: 'Dashboard', href: '/admin', icon: Home },
+  { label: 'AI Agent', href: '/admin/agent', icon: Bot, matchPrefix: true },
+  { label: 'Dr Chrono', href: '/admin/drchrono', icon: Search },
+  { label: 'Users', href: '/admin/users', icon: Users, featureKey: 'userManagement' },
+  { label: 'Appointments', href: '/admin/appointments', icon: Calendar, featureFlag: 'appointments' },
+  { label: 'Specialist Requests', href: '/admin/specialist-requests', icon: Stethoscope },
+  { label: 'Refills', href: '/admin/refills', icon: Pill, featureFlag: 'prescriptions' },
+  { label: 'Intake Forms', href: '/admin/intake-forms', icon: FileText, featureFlag: 'patientIntake' },
+  { label: 'Subscriptions', href: '/admin/subscription-plans', icon: CreditCard },
+  { label: 'Platform Billing', href: '/admin/platform-subscription', icon: Zap },
+  { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
 interface AppSidebarProps {
@@ -58,7 +76,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
   const location = useLocation();
   const navigate = useNavigate();
   const { user, userProfile } = useAuth();
-  const { features } = useFeatures();
+  const { features, canUseAdminTodos } = useFeatures();
   const [collapsed, setCollapsed] = useState<boolean>(getInitialCollapsed);
 
   const toggleCollapsed = () => {
@@ -80,14 +98,22 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
     }
   };
 
+  const isAdminRole = role === 'admin' || role === 'assistant';
+
   const isActive = (item: NavItem) => {
+    // Admin "Dashboard" (/admin) is an exact match so the prefix /admin/users
+    // doesn't also highlight it.
+    if (item.href === '/admin') return location.pathname === '/admin';
     if (item.matchPrefix) return location.pathname.startsWith(item.href);
     return location.pathname === item.href;
   };
 
-  const visibleItems = NAV_ITEMS.filter((item) => {
+  const sourceItems = isAdminRole ? ADMIN_NAV_ITEMS : PATIENT_NAV_ITEMS;
+  const visibleItems = sourceItems.filter((item) => {
     if (item.roles && !item.roles.includes(role)) return false;
     if (item.featureFlag && !features[item.featureFlag]) return false;
+    if (item.featureKey === 'userManagement' && !features.userManagement) return false;
+    if (item.featureKey === 'adminTodos' && !canUseAdminTodos()) return false;
     return true;
   });
 

@@ -67,8 +67,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: var(--shell-text-strong);
 }
 
-/* Theme toggle in the sidebar footer — match the bell's hover affordance. */
-.shell-theme:hover {
+/* Shared hover affordance for sidebar/header icon buttons (theme toggle,
+   profile link, etc.) — matches the bell's hover tone. */
+.shell-icon-btn:hover {
   background: var(--shell-bg-hover);
   color: var(--shell-text-strong);
 }

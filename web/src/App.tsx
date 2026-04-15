@@ -65,7 +65,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Role-based redirect component
 const RoleBasedRedirect: React.FC = () => {
-  const { loading } = useAuth();
+  const { loading, userProfile } = useAuth();
 
   if (loading) {
     return (
@@ -75,8 +75,9 @@ const RoleBasedRedirect: React.FC = () => {
     );
   }
 
-  // Always redirect to regular dashboard - users can switch to admin mode from there
-  return <Navigate to="/dashboard" replace />;
+  const role = userProfile?.role;
+  const home = role === 'admin' || role === 'assistant' ? '/admin' : '/dashboard';
+  return <Navigate to={home} replace />;
 };
 
 function App() {

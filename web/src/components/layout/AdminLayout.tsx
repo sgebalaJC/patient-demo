@@ -2,7 +2,6 @@ import React from 'react';
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { AdminSidebar } from './AdminSidebar';
 import { AccessDenied } from '../ui/AccessDenied';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { usePlatformSubscription } from '../../hooks/usePlatformSubscription';
@@ -70,20 +69,17 @@ export const AdminLayout: React.FC = () => {
   return (
     <div className="flex flex-col flex-1 min-h-0 min-w-0">
       {banner}
-      <div className="flex flex-col md:flex-row flex-1 min-h-0 min-w-0">
-        <AdminSidebar />
-        {isFullHeight ? (
-          <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+      {isFullHeight ? (
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+          <Outlet />
+        </div>
+      ) : (
+        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto">
+          <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
             <Outlet />
           </div>
-        ) : (
-          <div className="flex-1 min-w-0 min-h-0 overflow-y-auto">
-            <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
-              <Outlet />
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

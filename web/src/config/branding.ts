@@ -17,6 +17,15 @@ export interface BrandingAgent {
   tagline: string;
 }
 
+export interface BrandingPlatformVendor {
+  /** Legal name of the platform vendor (you) that bills the practice */
+  name: string;
+  /** Support email for platform billing questions */
+  supportEmail: string;
+  /** Short descriptor shown on the practice's credit card statement */
+  billingDescriptor: string;
+}
+
 export interface BrandingColors {
   /** Primary brand color in hex, e.g. "#8B1A2B" */
   primary: string;
@@ -79,6 +88,8 @@ export interface Branding {
   adminAgent: BrandingAgent;
   /** Patient support AI agent identity */
   patientAgent: BrandingAgent;
+  /** Platform vendor (you) — the entity the practice pays to run the system */
+  platformVendor: BrandingPlatformVendor;
 }
 
 export const BRANDING: Branding = {
@@ -86,7 +97,7 @@ export const BRANDING: Branding = {
   shortName: 'Acme',
   legalEntity: 'Acme Primary Care, LLC',
   domain: 'patient-demo-project.web.app',
-  supportEmail: 'support@acme-primary-care.example',
+  supportEmail: 'support@aureliamd.com',
   supportPhone: undefined,
   fax: undefined,
   smsSenderName: 'Acme',
@@ -115,12 +126,20 @@ export const BRANDING: Branding = {
     accent: '#c8973a',
   },
   adminAgent: {
-    name: 'Ada',
+    name: 'Aurelia',
     tagline: 'Your practice management assistant',
   },
   patientAgent: {
-    name: 'Poppy',
+    name: 'Sunny',
     tagline: 'Here to help with your questions',
+  },
+  // TODO(per-fork): set real platform vendor name + billing email before
+  // the first production deploy. Mirror the same values in
+  // functions/src/branding.ts and mobile/lib/config/branding.dart.
+  platformVendor: {
+    name: 'Patient Portal Inc.',
+    supportEmail: 'billing@patientportal.example',
+    billingDescriptor: 'PATIENT PORTAL',
   },
 };
 

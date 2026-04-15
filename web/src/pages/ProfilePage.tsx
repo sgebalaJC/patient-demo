@@ -340,8 +340,8 @@ export const ProfilePage: React.FC = () => {
       {/* Export Data */}
       <Card className="p-4 sm:p-6">
         <div className="flex items-start space-x-4">
-          <div className="bg-blue-100 p-3 rounded-lg flex-shrink-0">
-            <Download className="h-6 w-6 text-blue-600" />
+          <div className="bg-primary-100 p-3 rounded-lg flex-shrink-0">
+            <Download className="h-6 w-6 text-primary-600" />
           </div>
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-secondary-900">Export My Data</h3>

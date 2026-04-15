@@ -15,7 +15,9 @@ import {
   AlertTriangle,
   Sliders,
   UserPlus,
+  Mail,
 } from 'lucide-react';
+import { BRANDING } from '../config/branding';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -33,9 +35,11 @@ export const AdminSettingsPage: React.FC = () => {
   const [appSettingsDraft, setAppSettingsDraft] = useState<{
     registrationEnabled: boolean;
     paginationSize: number;
+    supportEmail: string;
   }>({
     registrationEnabled: liveAppSettings.registrationEnabled,
     paginationSize: liveAppSettings.paginationSize,
+    supportEmail: liveAppSettings.supportEmail || '',
   });
   const [appSettingsSaving, setAppSettingsSaving] = useState(false);
   const [appSettingsSaved, setAppSettingsSaved] = useState(false);
@@ -46,8 +50,13 @@ export const AdminSettingsPage: React.FC = () => {
     setAppSettingsDraft({
       registrationEnabled: liveAppSettings.registrationEnabled,
       paginationSize: liveAppSettings.paginationSize,
+      supportEmail: liveAppSettings.supportEmail || '',
     });
-  }, [liveAppSettings.registrationEnabled, liveAppSettings.paginationSize]);
+  }, [
+    liveAppSettings.registrationEnabled,
+    liveAppSettings.paginationSize,
+    liveAppSettings.supportEmail,
+  ]);
 
   const handleSaveAppSettings = async () => {
     setAppSettingsSaving(true);
@@ -65,7 +74,8 @@ export const AdminSettingsPage: React.FC = () => {
 
   const appSettingsDirty =
     appSettingsDraft.registrationEnabled !== liveAppSettings.registrationEnabled ||
-    appSettingsDraft.paginationSize !== liveAppSettings.paginationSize;
+    appSettingsDraft.paginationSize !== liveAppSettings.paginationSize ||
+    appSettingsDraft.supportEmail !== (liveAppSettings.supportEmail || '');
 
   useEffect(() => {
     if (userProfile?.role === 'admin') loadTemplates();
@@ -223,6 +233,35 @@ export const AdminSettingsPage: React.FC = () => {
                 className="w-32"
               />
             </label>
+          </div>
+
+          {/* Support email */}
+          <div className="p-4 border border-secondary-200 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <div className="bg-secondary-100 p-2 rounded-lg mt-0.5">
+                <Mail className="h-4 w-4 text-secondary-600" />
+              </div>
+              <label className="block flex-1 min-w-0">
+                <p className="text-sm font-medium text-secondary-900">Support email</p>
+                <p className="text-xs text-secondary-500 mt-0.5 mb-2">
+                  The address shown across the patient and admin UI for support
+                  inquiries (Billing fallback, Contact page, legal pages). Leave
+                  empty to use the build-time default
+                  (<code className="bg-secondary-100 px-1 rounded">{BRANDING.supportEmail}</code>).
+                </p>
+                <Input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder={BRANDING.supportEmail}
+                  value={appSettingsDraft.supportEmail}
+                  onChange={(e) =>
+                    setAppSettingsDraft((d) => ({ ...d, supportEmail: e.target.value }))
+                  }
+                  className="w-full max-w-md"
+                />
+              </label>
+            </div>
           </div>
         </div>
       </Card>

@@ -32,6 +32,7 @@ const SupportChatPage = lazy(() => import('./pages/SupportChatPage').then(m => (
 const ContactPage = lazy(() => import('./pages/ContactPage').then(m => ({ default: m.ContactPage })));
 const BillingPage = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })));
 const AdminSubscriptionPlansPage = lazy(() => import('./pages/AdminSubscriptionPlansPage').then(m => ({ default: m.AdminSubscriptionPlansPage })));
+const AdminPlatformSubscriptionPage = lazy(() => import('./pages/AdminPlatformSubscriptionPage').then(m => ({ default: m.AdminPlatformSubscriptionPage })));
 const AdminDrChronoCsvPage = lazy(() => import('./pages/AdminDrChronoCsvPage').then(m => ({ default: m.AdminDrChronoCsvPage })));
 
 const isSandbox = import.meta.env.VITE_SANDBOX_MODE === 'true';
@@ -124,6 +125,7 @@ function App() {
             <Route path="specialist-requests" element={<AdminSpecialistRequestsPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
             <Route path="subscription-plans" element={<AdminSubscriptionPlansPage />} />
+            <Route path="platform-subscription" element={<AdminPlatformSubscriptionPage />} />
             <Route path="drchrono-csv" element={<AdminDrChronoCsvPage />} />
             <Route path="drchrono-csv/:jobId" element={<AdminDrChronoCsvPage />} />
           </Route>

@@ -26,6 +26,17 @@ export interface AppSettings {
   paginationSize: number;
   /** Write-once flag — true after the first admin has been created. */
   bootstrapped: boolean;
+  /**
+   * When true, admin panel shows a 7-day grace banner after subscription
+   * lapse then hard-blocks admin routes. Patient-facing routes are never
+   * blocked. Defaults to false so practices can opt in.
+   */
+  practiceSubscriptionEnforced: boolean;
+  /**
+   * Public support email shown across the patient + admin UI. When empty,
+   * falls back to BRANDING.supportEmail from config/branding.ts.
+   */
+  supportEmail?: string;
   updatedAt?: any;
 }
 
@@ -33,6 +44,8 @@ export const APP_SETTINGS_DEFAULTS: AppSettings = {
   registrationEnabled: false,
   paginationSize: 25,
   bootstrapped: false,
+  practiceSubscriptionEnforced: false,
+  supportEmail: '',
 };
 
 const DOC_REF = doc(db, 'system', 'settings');
@@ -51,6 +64,14 @@ function normalize(data: Partial<AppSettings> | undefined): AppSettings {
       typeof data?.bootstrapped === 'boolean'
         ? data.bootstrapped
         : APP_SETTINGS_DEFAULTS.bootstrapped,
+    practiceSubscriptionEnforced:
+      typeof data?.practiceSubscriptionEnforced === 'boolean'
+        ? data.practiceSubscriptionEnforced
+        : APP_SETTINGS_DEFAULTS.practiceSubscriptionEnforced,
+    supportEmail:
+      typeof data?.supportEmail === 'string'
+        ? data.supportEmail.trim()
+        : APP_SETTINGS_DEFAULTS.supportEmail,
   };
 }
 
@@ -86,20 +107,38 @@ export const appSettingsOperations = {
     );
   },
 
-  /** Save the admin-editable subset of settings. Never writes `bootstrapped`. */
+  /**
+   * Save admin-editable settings. Merges into the existing doc — only fields
+   * provided in `settings` are written. Never writes `bootstrapped`.
+   */
   async saveSettings(
-    settings: Pick<AppSettings, 'registrationEnabled' | 'paginationSize'>,
+    settings: Partial<
+      Pick<
+        AppSettings,
+        | 'registrationEnabled'
+        | 'paginationSize'
+        | 'practiceSubscriptionEnforced'
+        | 'supportEmail'
+      >
+    >,
   ): Promise<ApiResponse<void>> {
     try {
-      await setDoc(
-        DOC_REF,
-        {
-          registrationEnabled: !!settings.registrationEnabled,
-          paginationSize: Math.max(1, Math.floor(settings.paginationSize)),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      const payload: Record<string, any> = {
+        updatedAt: serverTimestamp(),
+      };
+      if (settings.registrationEnabled !== undefined) {
+        payload.registrationEnabled = !!settings.registrationEnabled;
+      }
+      if (settings.paginationSize !== undefined) {
+        payload.paginationSize = Math.max(1, Math.floor(settings.paginationSize));
+      }
+      if (settings.practiceSubscriptionEnforced !== undefined) {
+        payload.practiceSubscriptionEnforced = !!settings.practiceSubscriptionEnforced;
+      }
+      if (settings.supportEmail !== undefined) {
+        payload.supportEmail = String(settings.supportEmail).trim().slice(0, 254);
+      }
+      await setDoc(DOC_REF, payload, { merge: true });
       return { success: true };
     } catch (error: any) {
       logger.error('Error saving app settings:', error);

@@ -181,11 +181,13 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   }
 
   .btn-primary {
-    @apply bg-primary-500 text-white hover:bg-primary-600 h-11 px-8;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 0 12px rgba(var(--glow-color), 0.15);
+    @apply border h-11 px-8 transition-colors;
+    background: transparent;
+    color: var(--primary-600);
+    border-color: var(--primary-600);
   }
   .btn-primary:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 0 20px rgba(var(--glow-color), 0.25);
+    background: var(--primary-50);
   }
 
   .btn-secondary {

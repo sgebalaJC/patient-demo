@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { subscriptionOperations } from '../lib/firestore/subscriptions';
 import type { SubscriptionPlan, PatientSubscription } from '../types';
 import { BRANDING } from '../config/branding';
+import { useSupportEmail } from '../hooks/useSupportEmail';
 import { CreditCard, CheckCircle, XCircle } from 'lucide-react';
 
 const statusLabels: Record<string, { label: string; color: string }> = {
@@ -22,6 +23,7 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 
 export const BillingPage: React.FC = () => {
   const { user, userProfile } = useAuth();
+  const supportEmail = useSupportEmail();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [subscription, setSubscription] = useState<PatientSubscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,8 +175,8 @@ export const BillingPage: React.FC = () => {
             <Card>
               <div className="p-6 text-center text-sm text-secondary-500">
                 Membership plans are not yet configured. Please check back later or contact{' '}
-                <a className="text-primary-600" href={`mailto:${BRANDING.supportEmail}`}>
-                  {BRANDING.supportEmail}
+                <a className="text-primary-600" href={`mailto:${supportEmail}`}>
+                  {supportEmail}
                 </a>
                 .
               </div>

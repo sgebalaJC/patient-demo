@@ -34,6 +34,23 @@ class BrandingColors {
   });
 }
 
+class BrandingPlatformVendor {
+  /// Legal name of the platform vendor that bills the practice
+  final String name;
+
+  /// Support email for platform billing questions
+  final String supportEmail;
+
+  /// Short descriptor on the practice's credit card statement
+  final String billingDescriptor;
+
+  const BrandingPlatformVendor({
+    required this.name,
+    required this.supportEmail,
+    required this.billingDescriptor,
+  });
+}
+
 class BrandingLogos {
   /// Full logo for light backgrounds (assets/branding/logo.png)
   final String full;
@@ -85,6 +102,9 @@ class Branding {
   /// Patient support AI agent identity
   final BrandingAgent patientAgent;
 
+  /// Platform vendor (you) — the entity the practice pays to run the system
+  final BrandingPlatformVendor platformVendor;
+
   const Branding({
     required this.practiceName,
     required this.shortName,
@@ -97,6 +117,7 @@ class Branding {
     required this.logos,
     required this.adminAgent,
     required this.patientAgent,
+    required this.platformVendor,
   });
 }
 
@@ -119,11 +140,16 @@ const branding = Branding(
     icon: 'assets/branding/icon.png',
   ),
   adminAgent: BrandingAgent(
-    name: 'Ada',
+    name: 'Aurelia',
     tagline: 'Your practice management assistant',
   ),
   patientAgent: BrandingAgent(
-    name: 'Poppy',
+    name: 'Sunny',
     tagline: 'Here to help with your questions',
+  ),
+  platformVendor: BrandingPlatformVendor(
+    name: 'Patient Portal Inc.',
+    supportEmail: 'billing@patientportal.example',
+    billingDescriptor: 'PATIENT PORTAL',
   ),
 );

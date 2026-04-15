@@ -1,6 +1,12 @@
 import { readFileSync, watch } from "fs";
 import { CONFIG_PATH, GATEWAY_URL } from "../lib/paths.js";
 import type { UserContext } from "../lib/auth.js";
+import {
+  getBudgetState,
+  recordUsage,
+  estimateTokens,
+  type GatewayUsage,
+} from "../lib/platform-budget.js";
 
 let cachedToken: string | null = null;
 
@@ -135,12 +141,24 @@ async function sendToGateway(
   body: string,
   attachments?: { mimeType: string; content: string; name?: string }[],
 ): Promise<Response> {
+  // Check the platform token budget before calling the gateway. If over
+  // allowance, pass X-Model-Override so OpenClaw falls back to the economy
+  // model.
+  // TODO(openclaw): honor `X-Model-Override` on the web-chat webhook. Until
+  // then this header is a no-op — see docs/AI_AGENTS.md § Platform token
+  // budget.
+  const budget = await getBudgetState();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Webhook-Secret": cachedToken!,
+  };
+  if (budget.overBudget) {
+    headers["X-Model-Override"] = budget.economyModel;
+  }
+
   const res = await fetch(`${GATEWAY_URL}/webhook/web-chat`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Webhook-Secret": cachedToken!,
-    },
+    headers,
     body: JSON.stringify({
       sessionId,
       body,
@@ -158,8 +176,25 @@ async function sendToGateway(
     );
   }
 
-  const data = await res.json() as { reply?: string };
-  return Response.json({ role: "assistant", content: data.reply || "" });
+  const data = (await res.json()) as { reply?: string; usage?: GatewayUsage };
+  const reply = data.reply || "";
+
+  // Record usage fire-and-forget. Prefer the gateway's own `usage` numbers;
+  // fall back to a char/4 estimate so monitoring still works on older
+  // OpenClaw builds that don't surface usage.
+  // TODO(openclaw): return `{ usage: { inputTokens, outputTokens, model } }`
+  // from the web-chat webhook so token accounting is exact instead of
+  // estimated. See docs/AI_AGENTS.md § Platform token budget.
+  if (data.usage && (data.usage.inputTokens || data.usage.outputTokens)) {
+    recordUsage(data.usage);
+  } else {
+    recordUsage({
+      inputTokens: estimateTokens(body),
+      outputTokens: estimateTokens(reply),
+    });
+  }
+
+  return Response.json({ role: "assistant", content: reply });
 }
 
 /** POST /chat — route to the appropriate agent via web-chat webhook */

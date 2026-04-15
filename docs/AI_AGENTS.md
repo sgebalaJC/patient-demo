@@ -158,6 +158,33 @@ Patient Firebase tokens are **NOT** forwarded to the sidecar for patient-facing 
 - WhatsApp channel can't run on two hosts simultaneously — fights for the session with `status=440`. During parallel runs, disable on the non-primary via `channels.whatsapp.enabled = false`.
 - `memory.backend = "none"` is invalid — only `"builtin"` or `"qmd"`.
 
+## Platform token budget — pending OpenClaw hook
+
+The platform subscription feature tracks per-month token usage and falls back
+to the economy model (default `gpt-4.1-mini`) when the practice has
+exhausted its monthly allowance + bonus top-ups. Enforcement lives in the
+sidecar: `sidecar/src/routes/chat.ts` reads budget state from the
+`platform/*` Firestore docs, injects an **`X-Model-Override`** request
+header on the gateway call when over budget, and records usage
+fire-and-forget after each reply.
+
+Two OpenClaw-side hooks are required for this to work end-to-end. Both are
+optional for shipping the feature — without them the sidecar falls back to
+a char/4 token estimate and the override header is a no-op — but they're
+necessary for accurate accounting and real model fallback:
+
+1. **Honor `X-Model-Override` on the web-chat webhook.** When present and
+   non-empty, OpenClaw should treat its value as the effective model id for
+   that single turn, overriding the agent's configured model.
+2. **Surface `usage` in the web-chat JSON response.** Current response shape
+   is `{ reply: string }`; the sidecar additionally reads a `usage` object
+   of shape `{ inputTokens, outputTokens, model }` when present and uses
+   those numbers instead of estimating.
+
+Until these land in OpenClaw, monitoring remains approximate (char/4
+estimation) and the "fall back to economy model" step is a no-op — but the
+admin UI, subscription lifecycle, and top-up flow are fully functional.
+
 ## OpenClaw update
 
 `./scripts/openclaw-update.sh [tag]` — creates a backup on the host, uploads to GCS, runs `openclaw update`. `--dry-run` to preview. **Always recompile the web-chat plugin after an update** (it's patched for agent-scoped routing).

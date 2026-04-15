@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home,
@@ -9,18 +9,16 @@ import {
   CreditCard,
   Bot,
   Shield,
-  User,
   LogOut,
   X,
-  Sun,
-  Moon,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeatures } from '../../hooks/useFeatures';
 import { signOut } from '../../lib/firebase';
 import { BRANDING } from '../../config/branding';
 import { BrandLogo } from '../ui/BrandLogo';
-import { NotificationBell } from './NotificationBell';
 import logger from '../../lib/logger';
 
 type Role = 'admin' | 'assistant' | 'patient';
@@ -50,18 +48,11 @@ interface AppSidebarProps {
   onMobileClose: () => void;
 }
 
-const THEME_STORAGE_KEY = 'patient-theme';
+const COLLAPSE_STORAGE_KEY = 'patient-sidebar-collapsed';
 
-function getCurrentTheme(): string {
-  return document.documentElement.getAttribute('data-theme') || 'classic';
-}
-
-function applyTheme(id: string) {
-  if (id === 'classic') {
-    document.documentElement.removeAttribute('data-theme');
-  } else {
-    document.documentElement.setAttribute('data-theme', id);
-  }
+function getInitialCollapsed(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1';
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClose }) => {
@@ -69,22 +60,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
   const navigate = useNavigate();
   const { user, userProfile } = useAuth();
   const { features } = useFeatures();
-  const [theme, setTheme] = useState<string>(getCurrentTheme);
+  const [collapsed, setCollapsed] = useState<boolean>(getInitialCollapsed);
 
-  useEffect(() => {
-    const observer = new MutationObserver(() => setTheme(getCurrentTheme()));
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme'],
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? '1' : '0');
+      return next;
     });
-    return () => observer.disconnect();
-  }, []);
-
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'classic' : 'dark';
-    applyTheme(next);
-    localStorage.setItem(THEME_STORAGE_KEY, next);
-    setTheme(next);
   };
 
   const role = (userProfile?.role ?? 'patient') as Role;
@@ -109,12 +92,21 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
     return true;
   });
 
+  // Mobile drawer is always full width when open. Collapse only applies on md+.
+  const widthClass = collapsed ? 'w-60 md:w-16' : 'w-60';
   const sidebarClasses = [
-    'flex flex-col shrink-0 w-60 h-full',
+    'flex flex-col shrink-0 h-full',
+    widthClass,
     'fixed md:static inset-y-0 left-0 z-40',
-    'transition-transform duration-200 ease-out',
+    'transition-[width,transform] duration-200 ease-out',
     mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
   ].join(' ');
+
+  // Helpers: hide on desktop when collapsed, but keep visible on mobile.
+  const labelClass = collapsed ? 'md:hidden whitespace-nowrap' : 'whitespace-nowrap';
+  const rowClass = collapsed
+    ? 'flex items-center gap-3 px-3 py-2 md:gap-0 md:justify-center md:px-0 rounded-lg text-sm font-medium transition-colors'
+    : 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors';
 
   return (
     <>
@@ -137,13 +129,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between h-16 px-4 shrink-0"
+          className={`flex items-center justify-between gap-2 h-16 shrink-0 ${
+            collapsed ? 'px-4 md:px-2' : 'px-4'
+          }`}
           style={{ borderBottom: '1px solid var(--shell-border)' }}
         >
-          <Link to="/" className="flex items-center gap-2" onClick={onMobileClose}>
+          <Link to="/" className="flex items-center gap-2 min-w-0 flex-1" onClick={onMobileClose}>
             <BrandLogo size="sm" />
             <span
-              className="text-sm font-semibold tracking-tight"
+              className={`text-sm font-semibold tracking-tight truncate ${labelClass}`}
               style={{ color: 'var(--shell-text-strong)' }}
             >
               {BRANDING.shortName}
@@ -155,6 +149,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
               </span>
             </span>
           </Link>
+          {/* Mobile close */}
           <button
             type="button"
             onClick={onMobileClose}
@@ -162,6 +157,17 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
+          </button>
+          {/* Desktop collapse toggle */}
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className="hidden md:inline-flex items-center justify-center p-1 rounded hover:bg-white/5 shrink-0"
+            style={{ color: 'var(--shell-text-muted)' }}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
         </div>
 
@@ -175,7 +181,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
                 key={item.href}
                 to={item.href}
                 onClick={onMobileClose}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                className={rowClass}
+                title={collapsed ? item.label : undefined}
                 style={{
                   background: active ? 'var(--shell-active-bg)' : 'transparent',
                   color: active ? 'var(--shell-active-text)' : 'var(--shell-text)',
@@ -188,52 +195,16 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
                 }}
               >
                 <Icon className="h-[18px] w-[18px] shrink-0" />
-                <span>{item.label}</span>
+                <span className={labelClass}>{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        {/* User actions */}
+        {/* User actions: only sign-out remains; notifications + profile moved
+            to the top header bar; theme toggle moved to the Profile page. */}
         {user && (
           <>
-            <div
-              className="shrink-0 px-3 py-3"
-              style={{ borderTop: '1px solid var(--shell-border)' }}
-            >
-              <div className="flex items-center gap-1 px-1">
-                <div className="flex-1 shell-bell">
-                  <NotificationBell buttonClassName="p-2 rounded-lg transition-colors" />
-                </div>
-                <button
-                  type="button"
-                  onClick={toggleTheme}
-                  className="p-2 rounded-lg transition-colors"
-                  style={{ color: 'var(--shell-text)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--shell-bg-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-                >
-                  {theme === 'dark' ? (
-                    <Sun className="h-[18px] w-[18px]" />
-                  ) : (
-                    <Moon className="h-[18px] w-[18px]" />
-                  )}
-                </button>
-                <Link
-                  to="/profile"
-                  onClick={onMobileClose}
-                  className="p-2 rounded-lg transition-colors"
-                  style={{ color: 'var(--shell-text)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--shell-bg-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  title="Profile"
-                >
-                  <User className="h-[18px] w-[18px]" />
-                </Link>
-              </div>
-            </div>
-
             <div
               className="shrink-0 px-3 py-2"
               style={{ borderTop: '1px solid var(--shell-border)' }}
@@ -241,14 +212,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                className={`w-full ${rowClass}`}
                 style={{ color: 'var(--shell-text)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--shell-bg-hover)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 title="Sign out"
               >
                 <LogOut className="h-[18px] w-[18px] shrink-0" />
-                <span>Sign out</span>
+                <span className={labelClass}>Sign out</span>
               </button>
             </div>
           </>

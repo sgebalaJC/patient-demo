@@ -140,7 +140,12 @@ export const MessagesPage: React.FC = () => {
               subtitle="Communicate with your healthcare team"
               action={
                 (userProfile?.role === 'patient' || userProfile?.role === 'admin') ? (
-                    <Button onClick={() => setShowNewMessage(true)} size="lg" className="flex items-center justify-center">
+                    <Button
+                      onClick={() => setShowNewMessage(true)}
+                      size="lg"
+                      variant="secondary"
+                      className="flex items-center justify-center !border-primary-600 !text-primary-600 hover:!bg-primary-50"
+                    >
                       <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                       New
                     </Button>
@@ -171,10 +176,10 @@ export const MessagesPage: React.FC = () => {
                                 <button
                                     key={tab.key}
                                     onClick={() => setFilter(tab.key)}
-                                    className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium transition-colors ${
+                                    className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium border transition-colors ${
                                         filter === tab.key
-                                            ? 'bg-primary-600 text-white'
-                                            : 'bg-secondary-100 text-secondary-600 hover:bg-secondary-200'
+                                            ? 'border-primary-600 text-primary-600 bg-transparent'
+                                            : 'border-transparent bg-secondary-100 text-secondary-600 hover:bg-secondary-200'
                                     }`}
                                 >
                                     {tab.label}

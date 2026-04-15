@@ -114,7 +114,7 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
 
             {/* Recent Activity Section */}
-            <div className={`grid gap-6 ${features.messages && features.prescriptions ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+            <div className={`grid gap-6 ${features.messages && features.prescriptions ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                 {/* Recent Messages */}
                 {features.messages && (
                     <Card className="p-6">

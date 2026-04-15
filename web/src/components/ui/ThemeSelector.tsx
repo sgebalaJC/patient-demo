@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Palette } from 'lucide-react';
-import { BRANDING } from '../../config/branding';
 
 const THEMES = [
-  { id: 'classic', label: 'Classic', primary: '#2563eb', secondary: '#64748b' },
-  { id: 'brand', label: BRANDING.shortName, primary: BRANDING.colors.primary, secondary: BRANDING.colors.secondary },
-  { id: 'dark', label: 'Dark', primary: '#14b8a6', secondary: '#334155' },
+  { id: 'classic', label: 'Light', primary: '#fdfcf7', secondary: '#1c1a15' },
+  { id: 'dark', label: 'Dark', primary: '#e0b84c', secondary: '#1c1a15' },
 ] as const;
 
 type ThemeId = typeof THEMES[number]['id'];

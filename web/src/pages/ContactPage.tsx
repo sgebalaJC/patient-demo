@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, MapPin, Phone, Clock, Printer, Building2, Mail } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { BRANDING } from '../config/branding';
+import { useSupportEmail } from '../hooks/useSupportEmail';
 
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 export const ContactPage: React.FC = () => {
+  const supportEmail = useSupportEmail();
   const mapsEmbedUrl = `https://www.google.com/maps/embed/v1/place?key=${MAPS_API_KEY}&q=${BRANDING.address.mapsQuery}&zoom=15`;
   const mapsLinkUrl = `https://www.google.com/maps/search/?api=1&query=${BRANDING.address.mapsQuery}`;
 
@@ -88,7 +90,7 @@ export const ContactPage: React.FC = () => {
               </div>
             )}
 
-            {BRANDING.supportEmail && (
+            {supportEmail && (
               <div className="flex items-start space-x-4">
                 <div className="bg-primary-100 p-3 rounded-lg">
                   <Mail className="h-6 w-6 text-primary-600" />
@@ -96,10 +98,10 @@ export const ContactPage: React.FC = () => {
                 <div>
                   <h3 className="font-semibold text-secondary-900">Email</h3>
                   <a
-                    href={`mailto:${BRANDING.supportEmail}`}
+                    href={`mailto:${supportEmail}`}
                     className="text-primary-600 hover:text-primary-700 mt-1 inline-block"
                   >
-                    {BRANDING.supportEmail}
+                    {supportEmail}
                   </a>
                 </div>
               </div>

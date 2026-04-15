@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Menu, User as UserIcon } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
 import { BrandLogo } from '../ui/BrandLogo';
 import { BRANDING } from '../../config/branding';
+import { NotificationBell } from './NotificationBell';
+import { useAuth } from '../../hooks/useAuth';
 
 const FULL_HEIGHT_ROUTES = ['/support', '/admin/agent'];
 
 export const Layout: React.FC = () => {
   const location = useLocation();
+  const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -24,32 +27,53 @@ export const Layout: React.FC = () => {
         <AppSidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
 
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
-          {/* Mobile top bar */}
+          {/* Top header bar (always visible) */}
           <div
-            className="md:hidden flex items-center h-14 px-3 shrink-0"
+            className="flex items-center h-14 px-3 sm:px-4 shrink-0 gap-2"
             style={{
               background: 'var(--shell-bg)',
               color: 'var(--shell-text)',
               borderBottom: '1px solid var(--shell-border)',
             }}
           >
+            {/* Mobile: hamburger + brand */}
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="p-2 rounded-lg hover:bg-white/10"
+              className="md:hidden p-2 rounded-lg hover:bg-white/10"
               aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
             </button>
-            <Link to="/" className="ml-2 flex items-center gap-2">
+            <Link to="/" className="md:hidden flex items-center gap-2 min-w-0">
               <BrandLogo size="sm" />
               <span
-                className="text-sm font-semibold"
+                className="text-sm font-semibold truncate"
                 style={{ color: 'var(--shell-text-strong)' }}
               >
                 {BRANDING.shortName}
               </span>
             </Link>
+
+            {/* Right-aligned actions */}
+            <div className="ml-auto flex items-center gap-1">
+              {user && (
+                <>
+                  <div className="shell-bell">
+                    <NotificationBell buttonClassName="p-2 rounded-lg transition-colors hover:bg-white/10" />
+                  </div>
+                  <Link
+                    to="/profile"
+                    className="p-2 rounded-lg transition-colors hover:bg-white/10"
+                    style={{ color: 'var(--shell-text)' }}
+                    title="Profile"
+                    aria-label="Profile"
+                  >
+                    <UserIcon className="h-[18px] w-[18px]" />
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
 
           <main className="flex-1 min-h-0 flex flex-col overflow-hidden">

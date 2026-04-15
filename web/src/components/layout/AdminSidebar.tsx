@@ -11,6 +11,7 @@ import {
   Bot,
   Mail,
   CreditCard,
+  Zap,
   Settings,
 } from 'lucide-react';
 import { useFeatures } from '../../hooks/useFeatures';
@@ -38,6 +39,7 @@ export const AdminSidebar: React.FC = () => {
     { label: 'AI Agent', href: '/admin/agent', icon: Bot, visible: true, matchPrefix: true },
     { label: 'DrChrono CSV', href: '/admin/drchrono-csv', icon: Mail, visible: true, matchPrefix: true },
     { label: 'Subscriptions', href: '/admin/subscription-plans', icon: CreditCard, visible: true },
+    { label: 'Platform Billing', href: '/admin/platform-subscription', icon: Zap, visible: true },
     { label: 'Settings', href: '/admin/settings', icon: Settings, visible: true },
   ];
 

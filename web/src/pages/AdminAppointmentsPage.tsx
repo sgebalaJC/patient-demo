@@ -362,16 +362,14 @@ export const AdminAppointmentsPage: React.FC = () => {
               action={
                 <Button onClick={handleOpenCreate} className="flex items-center">
                   <Plus className="h-4 w-4 mr-2" />
-                  New Appointment
+                  New
                 </Button>
               }
             />
 
             <StatsGrid items={[
-              { icon: Calendar, iconColor: 'bg-primary-100 text-primary-600', label: 'Total', value: statusCounts.all },
               { icon: Clock, iconColor: 'bg-green-100 text-green-600', label: 'Today', value: statusCounts.today },
               { icon: Calendar, iconColor: 'bg-indigo-100 text-indigo-600', label: 'Upcoming', value: statusCounts.upcoming },
-              { icon: CheckCircle, iconColor: 'bg-purple-100 text-purple-600', label: 'Past', value: statusCounts.past },
             ]} />
 
             {/* Filters */}

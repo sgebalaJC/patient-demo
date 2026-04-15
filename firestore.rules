@@ -203,5 +203,30 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create, update, delete: if false; // server-only
     }
+
+    // Platform subscription — the practice pays the platform vendor for the
+    // right to run the portal. Mirror of Stripe state written only by the
+    // platformStripeWebhook Cloud Function. Admin-read, server-write-only.
+    // Docs inside `platform/`:
+    //   - `subscription` (singleton: plan, status, stripeCustomerId, period, lapsedAt)
+    //   - `config` (singleton: monthly allowance, economy model, warning threshold)
+    //   - `bonus` (singleton: remaining top-up tokens)
+    //   - `usage-{YYYY-MM}` (one per month: aggregated token counts)
+    match /platform/{docId} {
+      allow read, list: if isAdmin();
+      allow create, update, delete: if false; // server-only
+    }
+
+    // Platform top-up ledger — one doc per $25 top-up purchase.
+    match /platform-topups/{topupId} {
+      allow read, list: if isAdmin();
+      allow create, update, delete: if false; // server-only
+    }
+
+    // Platform Stripe webhook idempotency guard (one doc per processed event).
+    match /platform-stripe-events/{eventId} {
+      allow read, list: if isAdmin();
+      allow create, update, delete: if false; // server-only
+    }
   }
 }

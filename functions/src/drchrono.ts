@@ -17,11 +17,21 @@
 import * as admin from "firebase-admin";
 import {onCall, onRequest, HttpsError} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
+import {SignJWT, jwtVerify} from "jose";
 
 const DRCHRONO_AUTH_URL = "https://drchrono.com/o/authorize/";
 const DRCHRONO_TOKEN_URL = "https://drchrono.com/o/token/";
 const CONFIG_DOC = "integrations/drchrono";
 const DEFAULT_SCOPE = "user:read patients:read patients:write calendar:read clinical:read clinical:write";
+
+/** Signed-state secret for the OAuth round-trip. Reuses the same key the
+ *  Google Workspace flow uses for its state JWT — it's an HS256 signing key,
+ *  not encryption material, and rotating both flows together is the norm. */
+function stateSecret(): Uint8Array {
+  const key = process.env.GOOGLE_WORKSPACE_ENCRYPTION_KEY;
+  if (!key) throw new HttpsError("failed-precondition", "OAuth state secret not configured");
+  return new TextEncoder().encode(key);
+}
 
 function db() {
   return admin.firestore();
@@ -98,7 +108,7 @@ export const drchronoSaveCredentials = onCall({}, async (request) => {
 // ─── Authorize (return OAuth URL) ───────────────────────────────────
 
 export const drchronoAuthorize = onCall({}, async (request) => {
-  await requireAdmin(request.auth);
+  const uid = await requireAdmin(request.auth);
   const snap = await db().doc(CONFIG_DOC).get();
   if (!snap.exists) {
     throw new HttpsError("failed-precondition", "Save DrChrono credentials first");
@@ -107,11 +117,22 @@ export const drchronoAuthorize = onCall({}, async (request) => {
   if (!data.clientId) {
     throw new HttpsError("failed-precondition", "clientId missing");
   }
+
+  // Signed state JWT (10 min expiry) so the callback can prove this round-trip
+  // was initiated by an authenticated admin. Without this, an attacker can
+  // feed an attacker-controlled `?code=` to drchronoCallback directly and
+  // hijack the connected DrChrono tenant. Mirrors googleWorkspaceAuthorize.
+  const state = await new SignJWT({userId: uid})
+    .setProtectedHeader({alg: "HS256"})
+    .setExpirationTime("10m")
+    .sign(stateSecret());
+
   const params = new URLSearchParams({
     redirect_uri: data.redirectUri || getRedirectUri(),
     response_type: "code",
     client_id: data.clientId as string,
     scope: DEFAULT_SCOPE,
+    state,
   });
   return {
     url: `${DRCHRONO_AUTH_URL}?${params}`,
@@ -123,6 +144,7 @@ export const drchronoAuthorize = onCall({}, async (request) => {
 
 export const drchronoCallback = onRequest({cors: true}, async (req, res) => {
   const code = req.query.code as string | undefined;
+  const state = req.query.state as string | undefined;
   const oauthError = req.query.error as string | undefined;
   const frontend = process.env.FRONTEND_URL || "http://localhost:3001";
   const back = `${frontend}/admin/agent?tab=integrations`;
@@ -131,8 +153,20 @@ export const drchronoCallback = onRequest({cors: true}, async (req, res) => {
     res.redirect(`${back}&drchrono_error=${encodeURIComponent(oauthError)}`);
     return;
   }
-  if (!code) {
+  if (!code || !state) {
     res.redirect(`${back}&drchrono_error=missing_code`);
+    return;
+  }
+
+  // Verify the state JWT signed by drchronoAuthorize. Rejects unsolicited
+  // callbacks where an attacker supplied their own `?code=` to overwrite
+  // the stored DrChrono tokens.
+  try {
+    const {payload} = await jwtVerify(state, stateSecret());
+    if (!payload.userId) throw new Error("Missing userId");
+  } catch (err: any) {
+    logger.warn("[drchrono] rejected callback with invalid state", {message: err.message});
+    res.redirect(`${back}&drchrono_error=invalid_state`);
     return;
   }
 

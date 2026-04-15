@@ -3,53 +3,72 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if user is admin
+    // ───────────────────────── Helpers ─────────────────────────
+
+    // Admin is resolved from the users doc itself, so the users/{uid} rule
+    // MUST gate writes to `role` — see `userSelfUpdateIsSafe()`.
     function isAdmin() {
       return request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Helper function to check if user owns the resource
     function isOwner(ownerId) {
       return request.auth != null && request.auth.uid == ownerId;
     }
 
-    // Users collection.
+    // Allowlist of fields a user may mutate on their own profile.
     //
-    // Self-update is field-restricted so a patient cannot self-promote to admin:
-    // `isAdmin()` reads `role` from this very doc, so without a field gate a
-    // patient writing `{role:'admin'}` to their own doc collapses the entire
-    // RBAC model. `affectedKeys().hasOnly([...])` rejects any write that
-    // touches `role`, `isActive`, `permissions`, `stripeCustomerId`, etc.
-    //
-    // On first sign-in the auth helper creates the doc with `role:'patient'`
-    // and `isActive:false` — the `create` rule pins those values so a fresh
-    // signup cannot bootstrap itself as admin either.
-    match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
-      allow delete: if isAdmin();
-
-      allow create: if isOwner(userId)
-        && request.resource.data.role == 'patient'
-        && request.resource.data.isActive == false;
-      allow create: if isAdmin();
-
-      allow update: if isOwner(userId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'firstName', 'lastName', 'displayName', 'dateOfBirth', 'gender',
-          'phoneNumber', 'email', 'emailVerified', 'phoneVerified',
-          'address', 'emergencyContact', 'insuranceInfo',
-          'allergies', 'medicalHistory',
-          'fcmToken', 'fcmTokenUpdatedAt',
-          'lastLoginAt', 'updatedAt', 'createdAt',
-          'tutorialCompletedSections', 'tutorialSkippedSections',
-          'tutorialDismissedAt', 'intakeFormSkipped'
-        ]);
-      allow update: if isAdmin();
+    // Kept as an allowlist (not a blocklist) so a new sensitive field added
+    // later is denied by default rather than accidentally client-writable.
+    // `role`, `isActive`, `permissions`, `customClaims`, `stripeCustomerId`,
+    // etc. are deliberately absent — `isAdmin()` reads `role` from this very
+    // doc, so client-writable role would collapse RBAC.
+    function userSelfUpdateIsSafe() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'firstName', 'lastName', 'displayName', 'dateOfBirth', 'gender',
+        'phoneNumber', 'email', 'emailVerified', 'phoneVerified',
+        'address', 'emergencyContact', 'insuranceInfo',
+        'allergies', 'medicalHistory',
+        'fcmToken', 'fcmTokenUpdatedAt',
+        'lastLoginAt', 'updatedAt', 'createdAt',
+        'tutorialCompletedSections', 'tutorialSkippedSections',
+        'tutorialDismissedAt', 'intakeFormSkipped'
+      ]);
     }
 
-    // Message threads — patient owns their threads, admins access all
+    // A patient-driven update to an owned record is safe if it:
+    //  (a) does NOT reassign ownership (`patientId` pinned), and
+    //  (b) either leaves status unchanged OR moves it to an allowed value.
+    //
+    // Side-effect-bearing transitions (`confirmed` triggers SMS + Calendar,
+    // `approved` passes the intake-review gate, etc.) are admin-only — those
+    // values must not appear in the allowlist passed here.
+    function patientStatusSafe(allowedStatuses) {
+      return request.resource.data.patientId == resource.data.patientId &&
+        (request.resource.data.status == resource.data.status ||
+         request.resource.data.status in allowedStatuses);
+    }
+
+    // ───────────────────────── Users ─────────────────────────
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow list, delete: if isAdmin();
+
+      // First-sign-in self-create: must claim patient role and be inactive.
+      // Admin creates happen via the admin SDK in Cloud Functions anyway,
+      // but we keep an admin branch so emulator tests mirror prod.
+      allow create: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.role == 'patient' &&
+        request.resource.data.isActive == false
+      );
+
+      allow update: if isAdmin() || (isOwner(userId) && userSelfUpdateIsSafe());
+    }
+
+    // ───────────────────────── Messaging ─────────────────────────
+
     match /message-threads/{threadId} {
       allow read, list, write: if request.auth != null && (
         isOwner(resource.data.patientId) || isAdmin()
@@ -59,7 +78,6 @@ service cloud.firestore {
       );
     }
 
-    // Thread messages — access via parent thread ownership or admin
     match /thread-messages/{messageId} {
       function hasThreadAccess() {
         let thread = get(/databases/$(database)/documents/message-threads/$(resource.data.threadId));
@@ -72,122 +90,105 @@ service cloud.firestore {
       );
     }
 
-    // Appointments.
+    // ───────────────── Status-bearing patient records ─────────────────
     //
-    // Patients can create, read, delete, and update their own — but may only
-    // transition status to `cancelled` (or leave it unchanged, e.g. when
-    // rescheduling). Transitions to `confirmed`/`completed`/`no-show` are
-    // admin-only because `onAppointmentWrite` auto-creates a Google Calendar
-    // event and sends a confirmation SMS on `scheduled → confirmed`. Without
-    // this gate, a patient could self-approve by flipping their own status.
+    // Same shape for all four: admin full access, patient can create + read +
+    // delete + cancel their own. The `patientStatusSafe` helper pins the
+    // patientId (no ownership-flip) and caps client-writable statuses.
+
     match /appointments/{appointmentId} {
-      allow read, list: if isAdmin();
-      allow read, delete: if isOwner(resource.data.patientId) || isAdmin();
-      allow create: if isOwner(request.resource.data.patientId) || isAdmin();
-      allow update: if isAdmin();
-      allow update: if isOwner(resource.data.patientId) && (
-        request.resource.data.status == resource.data.status ||
-        request.resource.data.status == 'cancelled' ||
-        request.resource.data.status == 'scheduled'
-      );
-    }
-
-    // Specialist requests — patients may cancel, admins manage approval flow.
-    match /specialist-requests/{requestId} {
-      allow read, delete: if isOwner(resource.data.patientId) || isAdmin();
-      allow create: if isOwner(request.resource.data.patientId) || isAdmin();
-      allow update: if isAdmin();
-      allow update: if isOwner(resource.data.patientId) && (
-        request.resource.data.status == resource.data.status ||
-        request.resource.data.status == 'cancelled'
-      );
-    }
-
-    // Prescription refills — patients submit, admins approve/deny/complete.
-    // Patients must not be able to self-approve, so status transitions
-    // (other than cancel) are admin-only.
-    match /prescription-refills/{refillId} {
+      allow read, list, write: if isAdmin();
       allow read, delete: if isOwner(resource.data.patientId);
       allow create: if isOwner(request.resource.data.patientId);
-      allow update: if isOwner(resource.data.patientId) && (
-        request.resource.data.status == resource.data.status ||
-        request.resource.data.status == 'cancelled'
-      );
-      allow read, write: if isAdmin();
+      // `scheduled` is included so reschedule can re-set the status when
+      // the patient changes date/time on a previously-scheduled slot.
+      allow update: if isOwner(resource.data.patientId)
+        && patientStatusSafe(['cancelled', 'scheduled']);
     }
 
-    // Patient documents
+    match /specialist-requests/{requestId} {
+      allow read, list, write: if isAdmin();
+      allow read, delete: if isOwner(resource.data.patientId);
+      allow create: if isOwner(request.resource.data.patientId);
+      allow update: if isOwner(resource.data.patientId)
+        && patientStatusSafe(['cancelled']);
+    }
+
+    match /prescription-refills/{refillId} {
+      allow read, list, write: if isAdmin();
+      allow read, delete: if isOwner(resource.data.patientId);
+      allow create: if isOwner(request.resource.data.patientId);
+      allow update: if isOwner(resource.data.patientId)
+        && patientStatusSafe(['cancelled']);
+    }
+
+    // Intake forms — patient may drive draft → in_progress → completed but
+    // cannot flip to `approved`/`sent_back` (admin review gate) and cannot
+    // forge reviewer metadata. Admin uses `approveIntakeForm` /
+    // `sendBackIntakeForm` which run against the admin branch below.
+    match /patient-intake-forms/{formId} {
+      allow read, list, write: if isAdmin();
+      allow read, delete: if isOwner(resource.data.patientId);
+      allow create: if isOwner(request.resource.data.patientId);
+      allow update: if isOwner(resource.data.patientId)
+        && patientStatusSafe(['draft', 'in_progress', 'completed'])
+        && request.resource.data.reviewedBy == resource.data.reviewedBy
+        && request.resource.data.reviewNotes == resource.data.reviewNotes
+        && request.resource.data.approvedAt == resource.data.approvedAt;
+    }
+
+    // ───────────────────────── Patient documents ─────────────────────────
+
     match /patient-documents/{documentId} {
       allow read, write: if isOwner(resource.data.patientId) || isAdmin();
       allow create: if isOwner(request.resource.data.patientId) || isAdmin();
     }
 
-    // Patient intake forms
-    match /patient-intake-forms/{formId} {
-      allow read, write: if isOwner(resource.data.patientId) || isAdmin();
-      allow create: if isOwner(request.resource.data.patientId) || isAdmin();
-    }
-
-    // Notifications — admins full access, patients only see/update their own.
+    // ───────────────────────── Notifications ─────────────────────────
     //
-    // The list rule must reference `resource.data.recipientId` so Firestore
-    // rejects any candidate doc where the recipient doesn't match. Without
-    // that check, any signed-in patient could enumerate every notification
-    // in the system (they carry PHI: appointment times, refill meds, etc.).
-    // Clients must query with `where('recipientId','==', uid)`.
+    // List rule MUST reference `resource.data.recipientId` — Firestore
+    // otherwise returns the whole collection on an unfiltered list query,
+    // leaking PHI-bearing admin notifications to any authenticated patient.
+    // Clients must pass `where('recipientId','==', uid)` for list to match.
     match /notifications/{notificationId} {
       allow read, list, write: if isAdmin();
       allow create: if request.auth != null && (
         request.resource.data.recipientRole == 'admin' ||
         request.resource.data.recipientId == request.auth.uid
       );
-      allow get, update: if request.auth != null &&
-        resource.data.recipientId == request.auth.uid;
-      allow list: if request.auth != null &&
+      allow get, update, list: if request.auth != null &&
         resource.data.recipientId == request.auth.uid;
     }
 
-    // Agent skills — admin only
+    // ───────────────────────── Admin-only collections ─────────────────────────
+
     match /agent-skills/{skillId} {
       allow read, list, write: if isAdmin();
     }
 
-    // Agent chat messages — admin only. Any admin can hard-delete (curate).
     match /agent-chat/{messageId} {
-      allow read, list, create: if isAdmin();
-      allow delete: if isAdmin();
+      allow read, list, create, delete: if isAdmin();
     }
 
-    // Support chat messages — patients can read/create/delete their own,
-    // admins can read + delete any. Updates are still locked.
+    // ───────────────────────── Support chat ─────────────────────────
+
     match /support-chat/{messageId} {
       allow create: if request.auth != null
         && request.resource.data.patientId == request.auth.uid;
-      allow read: if request.auth != null && (
-        resource.data.patientId == request.auth.uid || isAdmin()
-      );
-      allow list: if request.auth != null && (
-        resource.data.patientId == request.auth.uid || isAdmin()
-      );
-      allow delete: if request.auth != null && (
+      allow read, list, delete: if request.auth != null && (
         resource.data.patientId == request.auth.uid || isAdmin()
       );
     }
 
-    // Phone verifications — server-side only (Cloud Functions)
-    match /phone-verifications/{docId} {
-      allow read, write: if false;
-    }
+    // ───────────────────────── Server-only collections ─────────────────────────
 
-    // Phone login codes — server-side only (Cloud Functions)
-    match /phone-login-codes/{docId} {
-      allow read, write: if false;
-    }
+    match /phone-verifications/{docId}   { allow read, write: if false; }
+    match /phone-login-codes/{docId}     { allow read, write: if false; }
+    match /rate-limits/{docId}           { allow read, write: if false; }
 
-    // System config — admin can read/write templates, rest server-only.
-    // Exception: `system/settings` is publicly readable so the unauthenticated
-    // /auth page can check `registrationEnabled` and `bootstrapped` before
-    // showing signup or the bootstrap-first-admin form. Writes still admin-only.
+    // System config — admin manages templates. `system/settings` is public
+    // so the unauthenticated /auth page can check `registrationEnabled` and
+    // `bootstrapped` before rendering signup or the bootstrap-admin form.
     match /system/settings {
       allow read: if true;
       allow write: if isAdmin();
@@ -196,23 +197,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Bootstrap-first-admin request channel.
-    //
-    // Unauthenticated clients write a request doc on fresh installs; the
-    // `onBootstrapRequestCreated` Firestore trigger (running as the function's
-    // service account) processes it and writes the custom token back.
-    //
-    // Security model:
-    //  - `create` is allowed only when `system/settings.bootstrapped` is false
-    //    or missing. Once the flag flips, no new requests are accepted.
-    //  - `get` is allowed on any doc (to read the token after the trigger
-    //    completes) but `list` is denied — the doc ID is a client-generated
-    //    UUID with 128 bits of entropy, so an attacker can't enumerate to
-    //    steal tokens.
-    //  - `update` is denied from clients. Only the trigger (via Admin SDK,
-    //    which bypasses rules) can update status/token.
-    //  - `delete` is allowed so the client can clean up its own request
-    //    after successful sign-in.
+    // Bootstrap-first-admin channel (WordPress-style): unauthenticated
+    // clients submit a request when `system/settings.bootstrapped !== true`;
+    // the `onBootstrapRequestCreated` trigger (Admin SDK) writes the custom
+    // token back. Doc IDs are 128-bit UUIDs, `list` is denied, and `update`
+    // is trigger-only so clients can't steal or forge tokens.
     match /bootstrap-requests/{requestId} {
       allow create: if
         !exists(/databases/$(database)/documents/system/settings) ||
@@ -221,55 +210,44 @@ service cloud.firestore {
       allow list, update: if false;
     }
 
-    // Integrations — admin-only read and delete. Create/update is
-    // server-only (Cloud Functions write via Admin SDK, bypasses rules).
+    // Integrations — admin read/delete; create/update go through Cloud
+    // Functions that write via Admin SDK (bypasses these rules).
     match /integrations/{integrationId} {
       allow read, delete: if isAdmin();
       allow create, update: if false;
     }
 
-    // Rate limits — server-side only (Cloud Functions)
-    match /rate-limits/{docId} {
-      allow read, write: if false;
-    }
+    // ───────────────────────── Subscriptions & billing ─────────────────────────
 
-    // Subscription plans — admins manage, all signed-in users can read
     match /subscription-plans/{priceId} {
       allow read, list: if request.auth != null;
       allow create, update, delete: if isAdmin();
     }
 
-    // Patient subscriptions — mirror of Stripe state, written only by the
-    // stripeWebhook Cloud Function. Patients read their own, admins read all.
+    // Mirrors written only by Stripe webhook Cloud Functions — all client
+    // writes denied.
     match /patient-subscriptions/{uid} {
       allow read: if isOwner(uid) || isAdmin();
       allow list: if isAdmin();
-      allow create, update, delete: if false; // server-only
+      allow create, update, delete: if false;
     }
 
-    // Platform subscription — the practice pays the platform vendor for the
-    // right to run the portal. Mirror of Stripe state written only by the
-    // platformStripeWebhook Cloud Function. Admin-read, server-write-only.
-    // Docs inside `platform/`:
-    //   - `subscription` (singleton: plan, status, stripeCustomerId, period, lapsedAt)
-    //   - `config` (singleton: monthly allowance, economy model, warning threshold)
-    //   - `bonus` (singleton: remaining top-up tokens)
-    //   - `usage-{YYYY-MM}` (one per month: aggregated token counts)
+    // Platform (practice-pays-vendor) subscription mirror. Docs:
+    //   subscription, config, bonus, usage-{YYYY-MM}
     match /platform/{docId} {
       allow read, list: if isAdmin();
-      allow create, update, delete: if false; // server-only
+      allow create, update, delete: if false;
     }
 
-    // Platform top-up ledger — one doc per $25 top-up purchase.
     match /platform-topups/{topupId} {
       allow read, list: if isAdmin();
-      allow create, update, delete: if false; // server-only
+      allow create, update, delete: if false;
     }
 
-    // Platform Stripe webhook idempotency guard (one doc per processed event).
+    // Stripe webhook idempotency guard.
     match /platform-stripe-events/{eventId} {
       allow read, list: if isAdmin();
-      allow create, update, delete: if false; // server-only
+      allow create, update, delete: if false;
     }
   }
 }

@@ -129,8 +129,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
       >
         {/* Header */}
         <div
-          className={`flex items-center gap-2 h-20 shrink-0 ${
-            collapsed ? 'px-4 md:px-0 md:justify-center' : 'px-4 justify-between'
+          className={`flex items-center gap-2 shrink-0 ${
+            collapsed
+              ? 'h-14 md:h-20 px-4 md:px-0 md:justify-center'
+              : 'h-14 px-4 justify-between'
           }`}
           style={{ borderBottom: '1px solid var(--shell-border)' }}
         >
@@ -141,7 +143,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
             }`}
             onClick={onMobileClose}
           >
-            <BrandLogo size={collapsed ? 'lg' : 'md'} />
+            <BrandLogo size={collapsed ? 'lg' : 'sm'} />
             <span
               className={`text-sm font-semibold tracking-tight truncate ${labelClass}`}
               style={{ color: 'var(--shell-text-strong)' }}

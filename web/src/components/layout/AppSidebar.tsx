@@ -129,13 +129,19 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
       >
         {/* Header */}
         <div
-          className={`flex items-center justify-between gap-2 h-16 shrink-0 ${
-            collapsed ? 'px-4 md:px-2' : 'px-4'
+          className={`flex items-center gap-2 h-20 shrink-0 ${
+            collapsed ? 'px-4 md:px-0 md:justify-center' : 'px-4 justify-between'
           }`}
           style={{ borderBottom: '1px solid var(--shell-border)' }}
         >
-          <Link to="/" className="flex items-center gap-2 min-w-0 flex-1" onClick={onMobileClose}>
-            <BrandLogo size="sm" />
+          <Link
+            to="/"
+            className={`flex items-center gap-2 min-w-0 ${
+              collapsed ? 'md:justify-center' : 'flex-1'
+            }`}
+            onClick={onMobileClose}
+          >
+            <BrandLogo size={collapsed ? 'lg' : 'md'} />
             <span
               className={`text-sm font-semibold tracking-tight truncate ${labelClass}`}
               style={{ color: 'var(--shell-text-strong)' }}
@@ -158,18 +164,39 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
           >
             <X className="h-5 w-5" />
           </button>
-          {/* Desktop collapse toggle */}
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            className="hidden md:inline-flex items-center justify-center p-1 rounded hover:bg-white/5 shrink-0"
-            style={{ color: 'var(--shell-text-muted)' }}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </button>
+          {/* Desktop collapse toggle — inline only when expanded */}
+          {!collapsed && (
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              className="hidden md:inline-flex items-center justify-center p-1 rounded hover:bg-white/5 shrink-0"
+              style={{ color: 'var(--shell-text-muted)' }}
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
         </div>
+
+        {/* Desktop expand toggle — collapsed only, own row below the logo */}
+        {collapsed && (
+          <div
+            className="hidden md:flex justify-center py-1 shrink-0"
+            style={{ borderBottom: '1px solid var(--shell-border)' }}
+          >
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              className="p-1 rounded hover:bg-white/5"
+              style={{ color: 'var(--shell-text-muted)' }}
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         {/* Nav items */}
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-0.5">

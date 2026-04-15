@@ -96,23 +96,25 @@ export const Layout: React.FC = () => {
 
       {/* Full-width footer */}
       <footer
-        className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-1 px-4 sm:px-6 py-2 text-[11px]"
+        className="shrink-0 flex flex-col items-center gap-1 px-4 sm:px-6 py-2 text-[11px]"
         style={{
           background: 'var(--shell-bg)',
           color: 'var(--shell-text-muted)',
           borderTop: '1px solid var(--shell-border)',
         }}
       >
-        <Link to="/privacy" className="hover:underline">
-          Privacy
-        </Link>
-        <Link to="/terms" className="hover:underline">
-          Terms
-        </Link>
-        <Link to="/contact" className="hover:underline">
-          Contact
-        </Link>
-        <span className="ml-auto">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+          <Link to="/privacy" className="hover:underline">
+            Privacy
+          </Link>
+          <Link to="/terms" className="hover:underline">
+            Terms
+          </Link>
+          <Link to="/contact" className="hover:underline">
+            Contact
+          </Link>
+        </div>
+        <span>
           &copy; {new Date().getFullYear()} {BRANDING.legalEntity}
         </span>
       </footer>

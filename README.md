@@ -203,7 +203,7 @@ firestore.indexes.json
 - [ ] No `.env` or `google-services.json` committed (verify `.gitignore`)
 - [ ] Firestore + Storage rules deployed (`firebase deploy --only firestore:rules,storage:rules`)
 - [ ] Secrets set via `firebase functions:secrets:set`, not inline
-- [ ] Sentry DSN configured (or explicitly left blank and disabled)
+- [ ] Client-error reporter wired (`logClientError` Cloud Function deployed; `initClientErrorReporter` called in `main.tsx`)
 - [ ] PII logging reviewed — log UIDs and roles, never emails/phones
 - [ ] Stripe webhook signature verification working (test via Stripe CLI)
 - [ ] Admin account created and tested end-to-end

@@ -13,6 +13,11 @@ interface LoggerConfig {
   includePrefix: boolean;
 }
 
+/** Optional remote sink — wired by `initClientErrorReporter()` to forward
+ *  WARN/ERROR records to the `logClientError` Cloud Function. Kept generic
+ *  so the logger itself doesn't depend on Firebase. */
+export type RemoteSink = (level: 'warn' | 'error', message: string, args: any[]) => void;
+
 class Logger {
   private config: LoggerConfig = {
     enabled: true, //import.meta.env.DEV || import.meta.env.VITE_ENABLE_LOGGING === 'true',
@@ -20,6 +25,8 @@ class Logger {
     includeTimestamp: true,
     includePrefix: true,
   };
+
+  private remoteSink: RemoteSink | null = null;
 
   constructor() {
     // Override with environment variables if available
@@ -67,12 +74,18 @@ class Logger {
     if (this.shouldLog(LogLevel.WARN)) {
       console.warn(...this.formatMessage('WARN', message, ...args));
     }
+    this.remoteSink?.('warn', message, args);
   }
 
   error(message: string, ...args: any[]): void {
     if (this.shouldLog(LogLevel.ERROR)) {
       console.error(...this.formatMessage('ERROR', message, ...args));
     }
+    this.remoteSink?.('error', message, args);
+  }
+
+  setRemoteSink(sink: RemoteSink | null): void {
+    this.remoteSink = sink;
   }
 
   // Configuration methods

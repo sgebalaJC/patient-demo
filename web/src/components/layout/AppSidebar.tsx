@@ -16,6 +16,7 @@ import {
   Search,
   Zap,
   Settings,
+  Bug,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeatures } from '../../hooks/useFeatures';
@@ -57,6 +58,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Intake Forms', href: '/admin/intake-forms', icon: FileText, featureFlag: 'patientIntake' },
   { label: 'Subscriptions', href: '/admin/subscription-plans', icon: CreditCard },
   { label: 'Platform Billing', href: '/admin/platform-subscription', icon: Zap },
+  { label: 'Client Errors', href: '/admin/client-errors', icon: Bug, roles: ['admin'] },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 

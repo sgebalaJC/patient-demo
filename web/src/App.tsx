@@ -33,6 +33,7 @@ const BillingPage = lazy(() => import('./pages/BillingPage').then(m => ({ defaul
 const AdminSubscriptionPlansPage = lazy(() => import('./pages/AdminSubscriptionPlansPage').then(m => ({ default: m.AdminSubscriptionPlansPage })));
 const AdminPlatformSubscriptionPage = lazy(() => import('./pages/AdminPlatformSubscriptionPage').then(m => ({ default: m.AdminPlatformSubscriptionPage })));
 const AdminDrChronoPage = lazy(() => import('./pages/AdminDrChronoPage').then(m => ({ default: m.AdminDrChronoPage })));
+const AdminClientErrorsPage = lazy(() => import('./pages/AdminClientErrorsPage').then(m => ({ default: m.AdminClientErrorsPage })));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-64">
@@ -123,6 +124,7 @@ function App() {
             <Route path="subscription-plans" element={<AdminSubscriptionPlansPage />} />
             <Route path="platform-subscription" element={<AdminPlatformSubscriptionPage />} />
             <Route path="drchrono" element={<AdminDrChronoPage />} />
+            <Route path="client-errors" element={<AdminClientErrorsPage />} />
           </Route>
           {/* Add more protected routes here */}
         </Route>

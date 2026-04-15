@@ -6,6 +6,9 @@
  * - Stripe subscription billing
  */
 
+// Client-side error telemetry (browser → Cloud Logging)
+export {logClientError} from "./client-errors.js";
+
 // Stripe subscription billing — patient pays practice
 export {
   createCheckoutSession,

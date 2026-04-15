@@ -1,11 +1,11 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { initSentry } from './lib/sentry'
+import { initClientErrorReporter } from './lib/client-errors'
 import App from './App'
 import './index.css'
 import { initTheme } from './components/ui/ThemeSelector'
 
-initSentry();
+initClientErrorReporter();
 initTheme();
 
 // Auto-recover from stale lazy-chunk references after a new deploy.

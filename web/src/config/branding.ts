@@ -58,11 +58,17 @@ export interface BrandingAddress {
 }
 
 export interface Branding {
+  /**
+   * Display name of the app/product, used in UI footers, browser tab title,
+   * marketing copy. Often matches `practiceName` but can be a separate
+   * product name (e.g. "Aurelia MD" while practice is "Aurelia Primary Care").
+   */
+  appName: string;
   /** Full legal/display name of the practice, e.g. "Blasko Medical Consultants Inc" */
   practiceName: string;
   /** Short marketing name used in headers, emails, SMS, e.g. "ShowMD" */
   shortName: string;
-  /** Legal entity for copyright + legal pages */
+  /** Legal entity for legal/audit pages (e.g. terms of service, privacy notice). */
   legalEntity: string;
   /** Primary customer-facing domain (without protocol), e.g. "patient.example.com" */
   domain: string;
@@ -93,6 +99,7 @@ export interface Branding {
 }
 
 export const BRANDING: Branding = {
+  appName: 'Aurelia MD',
   practiceName: 'Aurelia MD',
   shortName: 'Aurelia MD',
   legalEntity: 'Aurelia Primary Care, LLC',

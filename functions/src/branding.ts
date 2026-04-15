@@ -11,6 +11,8 @@
  * stale references in outbound messages.
  */
 export const FUNCTIONS_BRANDING = {
+  /** App/product display name (matches BRANDING.appName on the web) */
+  appName: 'Aurelia MD',
   /** Short marketing name used in SMS bodies */
   shortName: 'Aurelia',
   /** Full legal/display name */

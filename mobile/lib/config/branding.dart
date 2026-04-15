@@ -69,13 +69,16 @@ class BrandingLogos {
 }
 
 class Branding {
+  /// App/product display name (matches BRANDING.appName on the web)
+  final String appName;
+
   /// Full legal/display name of the practice
   final String practiceName;
 
   /// Short marketing name (headers, emails, SMS)
   final String shortName;
 
-  /// Legal entity for copyright
+  /// Legal entity for legal/audit pages
   final String legalEntity;
 
   /// Public customer-facing domain, without protocol
@@ -106,6 +109,7 @@ class Branding {
   final BrandingPlatformVendor platformVendor;
 
   const Branding({
+    required this.appName,
     required this.practiceName,
     required this.shortName,
     required this.legalEntity,
@@ -122,6 +126,7 @@ class Branding {
 }
 
 const branding = Branding(
+  appName: 'Aurelia MD',
   practiceName: 'Aurelia MD',
   shortName: 'Aurelia MD',
   legalEntity: 'Aurelia Primary Care, LLC',

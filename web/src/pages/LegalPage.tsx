@@ -88,7 +88,7 @@ export const LegalPage: React.FC = () => {
         </div>
 
         <div className="text-center mt-8 text-sm text-secondary-400">
-          &copy; {new Date().getFullYear()} {BRANDING.legalEntity}. All rights reserved.
+          &copy; {new Date().getFullYear()} {BRANDING.appName}. All rights reserved.
         </div>
       </div>
     </div>

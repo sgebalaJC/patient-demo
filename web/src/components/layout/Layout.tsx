@@ -117,7 +117,7 @@ export const Layout: React.FC = () => {
             </Link>
           </div>
           <span className="justify-self-end whitespace-nowrap">
-            &copy; {new Date().getFullYear()} {BRANDING.legalEntity}
+            &copy; {new Date().getFullYear()} {BRANDING.appName}
           </span>
         </footer>
       </div>

@@ -126,25 +126,24 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
           borderRight: '1px solid var(--shell-border)',
         }}
       >
-        {/* Header */}
+        {/* Header — fixed h-14 to match the top header bar */}
         <div
-          className={`flex items-center gap-2 shrink-0 ${
-            collapsed
-              ? 'h-14 md:h-20 px-4 md:px-0 md:justify-center'
-              : 'h-14 px-4 justify-between'
+          className={`flex items-center h-14 shrink-0 gap-2 ${
+            collapsed ? 'px-4 md:px-0 md:justify-center' : 'px-4 justify-between'
           }`}
           style={{ borderBottom: '1px solid var(--shell-border)' }}
         >
+          {/* Logo + name — hidden on desktop when collapsed (kitagents pattern) */}
           <Link
             to="/"
-            className={`flex items-center gap-2 min-w-0 ${
-              collapsed ? 'md:justify-center' : 'flex-1'
+            className={`flex items-center gap-2 min-w-0 flex-1 ${
+              collapsed ? 'md:hidden' : ''
             }`}
             onClick={onMobileClose}
           >
-            <BrandLogo size={collapsed ? 'lg' : 'md'} />
+            <BrandLogo size="md" />
             <span
-              className={`text-sm font-semibold tracking-tight truncate ${labelClass}`}
+              className="text-sm font-semibold tracking-tight truncate whitespace-nowrap"
               style={{ color: 'var(--shell-text-strong)' }}
             >
               {BRANDING.shortName}
@@ -165,39 +164,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
           >
             <X className="h-5 w-5" />
           </button>
-          {/* Desktop collapse toggle — inline only when expanded */}
-          {!collapsed && (
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              className="hidden md:inline-flex items-center justify-center p-2 rounded hover:bg-white/5 shrink-0"
-              style={{ color: 'var(--shell-text-muted)' }}
-              aria-label="Collapse sidebar"
-              title="Collapse sidebar"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-          )}
-        </div>
-
-        {/* Desktop expand toggle — collapsed only, own row below the logo */}
-        {collapsed && (
-          <div
-            className="hidden md:flex justify-center py-1 shrink-0"
-            style={{ borderBottom: '1px solid var(--shell-border)' }}
+          {/* Desktop collapse/expand toggle — always visible on md+ */}
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className="hidden md:inline-flex items-center justify-center p-2 rounded hover:bg-white/5 shrink-0"
+            style={{ color: 'var(--shell-text-muted)' }}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              className="p-2 rounded hover:bg-white/5"
-              style={{ color: 'var(--shell-text-muted)' }}
-              aria-label="Expand sidebar"
-              title="Expand sidebar"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-          </div>
-        )}
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
 
         {/* Nav items */}
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-0.5">

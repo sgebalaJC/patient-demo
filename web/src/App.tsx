@@ -33,7 +33,7 @@ const ContactPage = lazy(() => import('./pages/ContactPage').then(m => ({ defaul
 const BillingPage = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })));
 const AdminSubscriptionPlansPage = lazy(() => import('./pages/AdminSubscriptionPlansPage').then(m => ({ default: m.AdminSubscriptionPlansPage })));
 const AdminPlatformSubscriptionPage = lazy(() => import('./pages/AdminPlatformSubscriptionPage').then(m => ({ default: m.AdminPlatformSubscriptionPage })));
-const AdminDrChronoCsvPage = lazy(() => import('./pages/AdminDrChronoCsvPage').then(m => ({ default: m.AdminDrChronoCsvPage })));
+const AdminDrChronoPage = lazy(() => import('./pages/AdminDrChronoPage').then(m => ({ default: m.AdminDrChronoPage })));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-64">
@@ -124,8 +124,7 @@ function App() {
             <Route path="settings" element={<AdminSettingsPage />} />
             <Route path="subscription-plans" element={<AdminSubscriptionPlansPage />} />
             <Route path="platform-subscription" element={<AdminPlatformSubscriptionPage />} />
-            <Route path="drchrono-csv" element={<AdminDrChronoCsvPage />} />
-            <Route path="drchrono-csv/:jobId" element={<AdminDrChronoCsvPage />} />
+            <Route path="drchrono" element={<AdminDrChronoPage />} />
           </Route>
           {/* Add more protected routes here */}
         </Route>

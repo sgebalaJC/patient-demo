@@ -8,6 +8,19 @@ import { auth } from './firebase';
 
 const PROXY_BASE = import.meta.env.VITE_SIDECAR_PROXY_URL || '';
 
+export interface DrChronoPatient {
+  id: number;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  cell_phone?: string;
+  home_phone?: string;
+  office_phone?: string;
+  date_of_birth?: string;
+  gender?: string;
+  is_active?: boolean;
+}
+
 class SidecarClient {
   private proxyBase: string;
 
@@ -313,6 +326,33 @@ class SidecarClient {
 
   async getCronRuns(jobId: string): Promise<any[]> {
     return this.request(`/cron/${jobId}/runs`);
+  }
+
+  // ── DrChrono ──────────────────────────────────
+
+  /** Look up DrChrono patients by name. Exact-match filter is left to the
+   *  caller — the sidecar returns whatever DrChrono's `patients` endpoint
+   *  gives for the search. Requires integrations/drchrono enabled+active. */
+  async drchronoSearchPatients(args: {
+    firstName?: string;
+    lastName?: string;
+    pageSize?: number;
+  }): Promise<DrChronoPatient[]> {
+    const qs = new URLSearchParams();
+    if (args.firstName) qs.set('first_name', args.firstName);
+    if (args.lastName) qs.set('last_name', args.lastName);
+    qs.set('page_size', String(args.pageSize ?? 25));
+    const data = await this.request<
+      { results: DrChronoPatient[] } | DrChronoPatient[]
+    >(`/admin-api/drchrono/patients?${qs}`);
+    return Array.isArray(data) ? data : data.results || [];
+  }
+
+  /** Fetch a single DrChrono patient by their DrChrono patient ID. */
+  async drchronoGetPatient(id: string | number): Promise<DrChronoPatient> {
+    return this.request<DrChronoPatient>(
+      `/admin-api/drchrono/patients/${encodeURIComponent(String(id))}`,
+    );
   }
 
   // ── Health ────────────────────────────────────

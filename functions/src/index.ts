@@ -3526,9 +3526,3 @@ export {
   drchronoCallback,
   drchronoSetEnabled,
 } from "./drchrono.js";
-
-export {
-  drchronoLookupStart,
-  drchronoLookupKickoff,
-  drchronoLookupContinue,
-} from "./drchrono-lookup.js";

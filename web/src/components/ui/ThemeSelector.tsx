@@ -28,7 +28,11 @@ function applyTheme(id: ThemeId) {
 }
 
 function getSavedTheme(): ThemeId {
-  return (localStorage.getItem(STORAGE_KEY) as ThemeId) || 'classic';
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved === 'classic' || saved === 'dark') return saved;
+  // Migrate retired 'brand' (and any unknown value) to the Aurelia default.
+  if (saved) localStorage.removeItem(STORAGE_KEY);
+  return 'classic';
 }
 
 export function initTheme() {

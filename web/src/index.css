@@ -62,39 +62,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: var(--shell-text-strong);
 }
 
-/* ── Theme: Brand ── customize via web/src/config/branding.ts ── */
-:root[data-theme="brand"] {
-  --primary-50: #fdf2f4;
-  --primary-100: #fce7ea;
-  --primary-200: #f9d0d7;
-  --primary-300: #f4a9b6;
-  --primary-400: #ec7a90;
-  --primary-500: #de4b6b;
-  --primary-600: #8B1A2B;
-  --primary-700: #7a1726;
-  --primary-800: #661421;
-  --primary-900: #57131f;
-  --primary-950: #30070e;
-
-  --secondary-50: #faf8f3;
-  --secondary-100: #f3efe3;
-  --secondary-200: #e6ddc5;
-  --secondary-300: #d5c69f;
-  --secondary-400: #C5993E;
-  --secondary-500: #b58a35;
-  --secondary-600: #9a702c;
-  --secondary-700: #7d5826;
-  --secondary-800: #694a24;
-  --secondary-900: #5a3f23;
-  --secondary-950: #332112;
-
-  --surface-card: #ffffff;
-  --surface-elevated: #ffffff;
-  --glow-color: 139, 26, 43;
-  --gradient-start: #faf8f3;
-  --gradient-end: #fdf2f4;
-}
-
 /* ── Theme: Dark ── Aurelia dark (gold accent + ink surfaces) ── */
 :root[data-theme="dark"] {
   /* Primary = gold (same brand accent as light) */

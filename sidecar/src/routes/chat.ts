@@ -243,9 +243,13 @@ export async function handleChat(request: Request, user?: UserContext): Promise<
     ? (isPatientSupport ? `[Patient: ${user.name}]\n` : `[${user.role}: ${user.name}]\n`)
     : "";
 
+  // OpenClaw routes via `agent:<id>:...` session prefix. Names must match the
+  // entries in openclaw.json on the host:
+  //   - admin chat → `aurelia` agent (admin-style, full data access)
+  //   - patient support → `sunny` agent (no PHI access)
   const sessionId = isPatientSupport
-    ? `agent:patient-support:patient:${user?.uid ?? "anonymous"}`
-    : (user ? `admin:${user.uid}` : "admin-chat");
+    ? `agent:sunny:patient:${user?.uid ?? "anonymous"}`
+    : (user ? `agent:aurelia:admin:${user.uid}` : "agent:aurelia:admin-chat");
 
   // Enqueue — serializes per session so the gateway handles one message at a time
   return enqueue(sessionId, () =>

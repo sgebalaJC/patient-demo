@@ -1,20 +1,61 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deploy patient-sidecar to the GCE VM.
+# Deploy patient-sidecar to the host that runs it.
 #
-# ★ Per-fork: update GCE_VM, GCE_ZONE, GCE_PROJECT for your instance.
+# Supports two transports:
+#   1. Plain SSH/SCP (default — Vultr/Hetzner/any generic Linux host)
+#      Set SIDECAR_HOST to an IP/hostname; optionally SIDECAR_SSH_USER
+#      (default: root) and SIDECAR_SSH_KEY (default: ~/.ssh/id_ed25519).
+#   2. gcloud compute (GCE VMs)
+#      Set GCE_VM / GCE_ZONE / GCE_PROJECT to enable this path.
+#
+# ★ Per-fork: edit the constants below OR export them before running.
 #
 # Usage:
 #   ./deploy.sh
+#   SIDECAR_HOST=1.2.3.4 SIDECAR_SSH_KEY=~/.ssh/my-key ./deploy.sh
 
 REMOTE_BIN="/root/patient-sidecar"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-GCE_VM="openclaw"                    # ★ your GCE VM name
-GCE_ZONE="us-central1-a"            # ★ your GCE zone
-GCE_PROJECT="patient-demo-project"   # ★ your GCP project
-SSH="gcloud compute ssh $GCE_VM --zone=$GCE_ZONE --project=$GCE_PROJECT --command"
+# ── Per-fork configuration ──────────────────────────────────────────────
+# The demo host runs on Vultr at 5.78.123.70. For GCE VMs, blank SIDECAR_HOST
+# and set the three GCE_* vars below.
+SIDECAR_HOST="${SIDECAR_HOST:-5.78.123.70}"        # ★ hostname or IP (empty → use gcloud)
+SIDECAR_SSH_USER="${SIDECAR_SSH_USER:-root}"
+SIDECAR_SSH_KEY="${SIDECAR_SSH_KEY:-$HOME/.ssh/kitt-hetzner}"
+
+GCE_VM="${GCE_VM:-openclaw}"                       # ★ GCE VM name (used when SIDECAR_HOST is empty)
+GCE_ZONE="${GCE_ZONE:-us-central1-a}"              # ★ GCE zone
+GCE_PROJECT="${GCE_PROJECT:-patient-demo-project}" # ★ GCP project
+# ────────────────────────────────────────────────────────────────────────
+
+if [[ -n "$SIDECAR_HOST" ]]; then
+  TRANSPORT="ssh"
+  SSH_TARGET="${SIDECAR_SSH_USER}@${SIDECAR_HOST}"
+  SSH_OPTS=(-i "$SIDECAR_SSH_KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+  echo "==> Transport: plain SSH → $SSH_TARGET (key: $SIDECAR_SSH_KEY)"
+
+  run_remote() {
+    ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "$@"
+  }
+  copy_to_remote() {
+    local src="$1" dst="$2"
+    scp "${SSH_OPTS[@]}" "$src" "${SSH_TARGET}:${dst}"
+  }
+else
+  TRANSPORT="gcloud"
+  echo "==> Transport: gcloud → $GCE_VM ($GCE_ZONE, $GCE_PROJECT)"
+
+  run_remote() {
+    gcloud compute ssh "$GCE_VM" --zone="$GCE_ZONE" --project="$GCE_PROJECT" --command="$*"
+  }
+  copy_to_remote() {
+    local src="$1" dst="$2"
+    gcloud compute scp "$src" "${GCE_VM}:${dst}" --zone="$GCE_ZONE" --project="$GCE_PROJECT"
+  }
+fi
 
 echo "==> Building sidecar binary..."
 cd "$SCRIPT_DIR"
@@ -24,23 +65,21 @@ bun run build
 # poppler-utils (PDF→JPG), `convert` from imagemagick (PNG/WEBP/GIF→JPG),
 # `file` detects real MIME type regardless of extension.
 echo "==> Ensuring system deps on VM (poppler-utils, imagemagick, file)..."
-$SSH "command -v pdftoppm >/dev/null && command -v convert >/dev/null && command -v file >/dev/null \
+run_remote "command -v pdftoppm >/dev/null && command -v convert >/dev/null && command -v file >/dev/null \
   || (sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq poppler-utils imagemagick file)"
 
-echo "==> Uploading binary to GCE..."
-gcloud compute scp "$SCRIPT_DIR/patient-sidecar" \
-  "$GCE_VM:/tmp/patient-sidecar.new" \
-  --zone="$GCE_ZONE" --project="$GCE_PROJECT"
+echo "==> Uploading binary..."
+copy_to_remote "$SCRIPT_DIR/patient-sidecar" "/tmp/patient-sidecar.new"
 
 echo "==> Stopping remote sidecar..."
-$SSH "sudo systemctl stop patient-sidecar"
+run_remote "sudo systemctl stop patient-sidecar"
 
 echo "==> Moving binary into place..."
-$SSH "sudo mv /tmp/patient-sidecar.new $REMOTE_BIN && sudo chmod +x $REMOTE_BIN"
+run_remote "sudo mv /tmp/patient-sidecar.new $REMOTE_BIN && sudo chmod +x $REMOTE_BIN"
 
 # Ensure SIDECAR_API_KEY is in the OpenClaw gateway environment so the CLI inherits it
 echo "==> Provisioning CLI environment..."
-$SSH "sudo bash -c '
+run_remote "sudo bash -c '
   KEY=\$(grep SIDECAR_API_KEY /root/sidecar.env 2>/dev/null | cut -d= -f2)
   if [ -n \"\$KEY\" ]; then
     grep -q SIDECAR_API_KEY /root/.bashrc 2>/dev/null || echo \"export SIDECAR_API_KEY=\$KEY\" >> /root/.bashrc
@@ -54,10 +93,8 @@ $SSH "sudo bash -c '
 CLI_SCRIPT="$SCRIPT_DIR/../openclaw/scripts/admin-api"
 if [ -f "$CLI_SCRIPT" ]; then
   echo "==> Deploying admin-api CLI..."
-  gcloud compute scp "$CLI_SCRIPT" \
-    "$GCE_VM:/tmp/admin-api-cli" \
-    --zone="$GCE_ZONE" --project="$GCE_PROJECT"
-  $SSH "sudo mv /tmp/admin-api-cli /usr/local/bin/admin-api && sudo chmod +x /usr/local/bin/admin-api"
+  copy_to_remote "$CLI_SCRIPT" "/tmp/admin-api-cli"
+  run_remote "sudo mv /tmp/admin-api-cli /usr/local/bin/admin-api && sudo chmod +x /usr/local/bin/admin-api"
 fi
 
 SKILLS_DIR="$SCRIPT_DIR/../openclaw/workspace/skills"
@@ -65,20 +102,20 @@ if [ -d "$SKILLS_DIR" ]; then
   echo "==> Deploying skills..."
   for skill_dir in "$SKILLS_DIR"/*/; do
     skill_name=$(basename "$skill_dir")
-    $SSH "sudo mkdir -p /root/.openclaw/workspace/skills/$skill_name"
-    gcloud compute scp "$skill_dir"SKILL.md \
-      "$GCE_VM:/tmp/skill-${skill_name}.md" \
-      --zone="$GCE_ZONE" --project="$GCE_PROJECT" 2>/dev/null || true
-    $SSH "sudo mv /tmp/skill-${skill_name}.md /root/.openclaw/workspace/skills/$skill_name/SKILL.md"
+    run_remote "sudo mkdir -p /root/.openclaw/workspace/skills/$skill_name"
+    if [ -f "${skill_dir}SKILL.md" ]; then
+      copy_to_remote "${skill_dir}SKILL.md" "/tmp/skill-${skill_name}.md"
+      run_remote "sudo mv /tmp/skill-${skill_name}.md /root/.openclaw/workspace/skills/$skill_name/SKILL.md"
+    fi
   done
 fi
 
 echo "==> Starting remote sidecar..."
-$SSH "sudo systemctl start patient-sidecar"
+run_remote "sudo systemctl start patient-sidecar"
 
 echo "==> Verifying health..."
 sleep 2
-HEALTH=$($SSH "curl -sf http://localhost:8081/healthz")
+HEALTH=$(run_remote "curl -sf http://localhost:8081/healthz")
 
 echo "$HEALTH"
 

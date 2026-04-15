@@ -56,7 +56,7 @@ function parseInline(text: string): React.ReactNode[] {
               src={url}
               alt={alt}
               loading="lazy"
-              className="max-h-64 border border-secondary-200 bg-white"
+              className="max-h-64 rounded-md border border-secondary-200 bg-white"
             />
           </a>,
         );
@@ -74,7 +74,7 @@ function parseInline(text: string): React.ReactNode[] {
       nodes.push(<em key={match.index}>{match[5]}</em>);
     } else if (match[6]) {
       nodes.push(
-        <code key={match.index} className="bg-secondary-200/60 px-1 py-0.5 text-xs font-mono">
+        <code key={match.index} className="bg-secondary-200/60 rounded px-1 py-0.5 text-xs font-mono">
           {match[6]}
         </code>,
       );

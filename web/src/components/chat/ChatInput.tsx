@@ -69,7 +69,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             ) : (
               <div
                 key={i}
-                className="flex items-center gap-1.5 bg-secondary-100 px-2 py-1 text-xs text-secondary-700"
+                className="flex items-center gap-1.5 bg-secondary-100 rounded-lg px-2 py-1 text-xs text-secondary-700"
               >
                 <FileText className="h-3 w-3 text-secondary-500" />
                 <span className="truncate max-w-[120px]">{file.name}</span>
@@ -87,7 +87,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={sending}
-          className="flex-shrink-0 p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 transition-colors disabled:opacity-50"
+          className="flex-shrink-0 p-2 rounded-lg text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 transition-colors disabled:opacity-50"
           title="Attach file"
         >
           <Paperclip className="h-4 w-4" />
@@ -108,13 +108,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           rows={1}
-          className="flex-1 resize-none border border-secondary-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="flex-1 resize-none rounded-lg border border-secondary-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
 
         <button
           onClick={handleSend}
           disabled={(!value.trim() && pendingFiles.length === 0) || sending}
-          className="flex-shrink-0 p-2 bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-shrink-0 p-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Send className="h-4 w-4" />
         </button>
@@ -138,7 +138,7 @@ const PendingImageThumb: React.FC<{ file: File; onRemove: () => void }> = ({ fil
         <img
           src={url}
           alt={file.name}
-          className="h-16 w-16 object-cover border border-secondary-200"
+          className="h-16 w-16 object-cover rounded-md border border-secondary-200"
         />
       )}
       <button

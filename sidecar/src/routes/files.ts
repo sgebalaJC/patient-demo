@@ -1,9 +1,17 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from "fs";
 import { resolve, dirname } from "path";
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 import { WORKSPACE } from "../lib/paths.js";
 
+// Whitelist to keep shell metacharacters (`;`, backticks, `$()`, `|`, `&`,
+// newlines, spaces) out of any path we pass to a child process or resolve
+// against WORKSPACE. `safePath` previously let these through because
+// `path.resolve` preserves them — a /files?pattern=";cmd;#" would pass the
+// prefix check and then be parsed by the shell.
+const SAFE_PATH = /^[A-Za-z0-9._/\-]*$/;
+
 function safePath(path: string): string | null {
+  if (!SAFE_PATH.test(path)) return null;
   if (path.includes("..")) return null;
   const resolved = resolve(WORKSPACE, path);
   if (!resolved.startsWith(WORKSPACE)) return null;
@@ -64,18 +72,21 @@ export function listFiles(pattern: string): Response {
   const searchDir = pattern ? safePath(pattern) : WORKSPACE;
   if (!searchDir) return Response.json({ error: "Invalid pattern" }, { status: 400 });
 
-  try {
-    const result = execSync(`find ${searchDir} -type f 2>/dev/null | sort`, {
-      timeout: 10000,
-      encoding: "utf-8",
-    });
-    const files = result
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map((f) => f.replace(WORKSPACE + "/", ""));
-    return Response.json({ files });
-  } catch {
+  // Pass args as argv (shell:false) so metacharacters in `searchDir` are never
+  // interpreted. The path-resolve + whitelist above already rules them out,
+  // but this is defence in depth — no shell, no injection surface.
+  const result = spawnSync("find", [searchDir, "-type", "f"], {
+    timeout: 10000,
+    encoding: "utf-8",
+  });
+  if (result.status !== 0 || !result.stdout) {
     return Response.json({ files: [] });
   }
+  const files = result.stdout
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((f) => f.replace(WORKSPACE + "/", ""))
+    .sort();
+  return Response.json({ files });
 }

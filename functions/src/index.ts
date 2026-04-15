@@ -1954,12 +1954,24 @@ export const verifyPhoneLogin = onCall({
         return { success: false, error: 'Your account is inactive. Please contact the office.' };
       }
 
+      // Phone OTP is the weakest auth path we offer (SIM swap, SS7 intercept).
+      // Don't mint admin/assistant tokens from it — those roles must re-auth
+      // via Google OAuth or email link. Without this gate, an attacker who
+      // ports an admin's phone number can inherit full admin access.
+      if (userData.role !== 'patient') {
+        logger.warn('Phone login refused for non-patient role', { uid: userDoc.id, role: userData.role });
+        return {
+          success: false,
+          error: 'Staff accounts must sign in with email or Google.',
+        };
+      }
+
       // Update last login
       await userDoc.ref.update({
         lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      const token = await admin.auth().createCustomToken(userDoc.id, { role: userData.role });
+      const token = await admin.auth().createCustomToken(userDoc.id, { role: 'patient' });
 
       logger.info('Phone login successful (existing user)', { uid: userDoc.id });
       return { success: true, token, isNewUser: false };
@@ -2395,10 +2407,13 @@ export const sidecarProxy = onRequest({
       return;
     }
 
-    // Patients can only access /chat and /healthz
+    // Non-admins (patients + assistants) can only access /chat and /healthz.
+    // Admin-scoped paths must require role === 'admin' — previously only the
+    // `patient` role was rejected, which let assistants reach /admin-api/*,
+    // /files, /config, /backup, bypassing the intended privilege boundary.
     const sidecarPath = (req.query.path as string) || '/healthz';
-    const patientAllowed = ['/chat', '/healthz'];
-    if (userRole === 'patient' && !patientAllowed.includes(sidecarPath)) {
+    const nonAdminAllowed = ['/chat', '/healthz'];
+    if (userRole !== 'admin' && !nonAdminAllowed.includes(sidecarPath)) {
       res.status(403).json({ error: 'Access denied' });
       return;
     }

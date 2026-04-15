@@ -112,9 +112,18 @@ const server = Bun.serve({
       return respond(Response.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
-    // Enforce admin-only routes
+    // Enforce admin-only routes.
+    //
+    // When the caller comes via the CF proxy (user-context), require
+    // role === 'admin'. Previously we only rejected `patient`, which let
+    // the `assistant` role reach /admin-api/*, /files, /config, /backup —
+    // an out-of-band escalation because Firestore rules never grant
+    // assistants admin privileges.
+    //
+    // Direct api-key calls (no user context) are allowed — those are
+    // internal/backup/scheduled callers that already hold SIDECAR_API_KEY.
     if (isAdminOnlyRoute(path)) {
-      if (authResult.mode === "user-context" && authResult.user?.role === "patient") {
+      if (authResult.mode === "user-context" && authResult.user?.role !== "admin") {
         return respond(Response.json({ error: "Admin access required" }, { status: 403 }));
       }
     }

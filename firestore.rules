@@ -14,11 +14,39 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == ownerId;
     }
 
-    // Users collection
+    // Users collection.
+    //
+    // Self-update is field-restricted so a patient cannot self-promote to admin:
+    // `isAdmin()` reads `role` from this very doc, so without a field gate a
+    // patient writing `{role:'admin'}` to their own doc collapses the entire
+    // RBAC model. `affectedKeys().hasOnly([...])` rejects any write that
+    // touches `role`, `isActive`, `permissions`, `stripeCustomerId`, etc.
+    //
+    // On first sign-in the auth helper creates the doc with `role:'patient'`
+    // and `isActive:false` — the `create` rule pins those values so a fresh
+    // signup cannot bootstrap itself as admin either.
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow write: if isOwner(userId) || isAdmin();
-      allow list, create: if isAdmin();
+      allow list: if isAdmin();
+      allow delete: if isAdmin();
+
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'patient'
+        && request.resource.data.isActive == false;
+      allow create: if isAdmin();
+
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'firstName', 'lastName', 'displayName', 'dateOfBirth', 'gender',
+          'phoneNumber', 'email', 'emailVerified', 'phoneVerified',
+          'address', 'emergencyContact', 'insuranceInfo',
+          'allergies', 'medicalHistory',
+          'fcmToken', 'fcmTokenUpdatedAt',
+          'lastLoginAt', 'updatedAt', 'createdAt',
+          'tutorialCompletedSections', 'tutorialSkippedSections',
+          'tutorialDismissedAt', 'intakeFormSkipped'
+        ]);
+      allow update: if isAdmin();
     }
 
     // Message threads — patient owns their threads, admins access all
@@ -44,23 +72,47 @@ service cloud.firestore {
       );
     }
 
-    // Appointments
+    // Appointments.
+    //
+    // Patients can create, read, delete, and update their own — but may only
+    // transition status to `cancelled` (or leave it unchanged, e.g. when
+    // rescheduling). Transitions to `confirmed`/`completed`/`no-show` are
+    // admin-only because `onAppointmentWrite` auto-creates a Google Calendar
+    // event and sends a confirmation SMS on `scheduled → confirmed`. Without
+    // this gate, a patient could self-approve by flipping their own status.
     match /appointments/{appointmentId} {
       allow read, list: if isAdmin();
-      allow read, write: if isOwner(resource.data.patientId) || isAdmin();
+      allow read, delete: if isOwner(resource.data.patientId) || isAdmin();
       allow create: if isOwner(request.resource.data.patientId) || isAdmin();
+      allow update: if isAdmin();
+      allow update: if isOwner(resource.data.patientId) && (
+        request.resource.data.status == resource.data.status ||
+        request.resource.data.status == 'cancelled' ||
+        request.resource.data.status == 'scheduled'
+      );
     }
 
-    // Specialist requests
+    // Specialist requests — patients may cancel, admins manage approval flow.
     match /specialist-requests/{requestId} {
-      allow read, write: if isOwner(resource.data.patientId) || isAdmin();
+      allow read, delete: if isOwner(resource.data.patientId) || isAdmin();
       allow create: if isOwner(request.resource.data.patientId) || isAdmin();
+      allow update: if isAdmin();
+      allow update: if isOwner(resource.data.patientId) && (
+        request.resource.data.status == resource.data.status ||
+        request.resource.data.status == 'cancelled'
+      );
     }
 
-    // Prescription refills
+    // Prescription refills — patients submit, admins approve/deny/complete.
+    // Patients must not be able to self-approve, so status transitions
+    // (other than cancel) are admin-only.
     match /prescription-refills/{refillId} {
-      allow read, update, delete: if isOwner(resource.data.patientId);
+      allow read, delete: if isOwner(resource.data.patientId);
       allow create: if isOwner(request.resource.data.patientId);
+      allow update: if isOwner(resource.data.patientId) && (
+        request.resource.data.status == resource.data.status ||
+        request.resource.data.status == 'cancelled'
+      );
       allow read, write: if isAdmin();
     }
 
@@ -76,16 +128,22 @@ service cloud.firestore {
       allow create: if isOwner(request.resource.data.patientId) || isAdmin();
     }
 
-    // Notifications — admins full access, patients can only see and update their own
+    // Notifications — admins full access, patients only see/update their own.
+    //
+    // The list rule must reference `resource.data.recipientId` so Firestore
+    // rejects any candidate doc where the recipient doesn't match. Without
+    // that check, any signed-in patient could enumerate every notification
+    // in the system (they carry PHI: appointment times, refill meds, etc.).
+    // Clients must query with `where('recipientId','==', uid)`.
     match /notifications/{notificationId} {
       allow read, list, write: if isAdmin();
       allow create: if request.auth != null && (
         request.resource.data.recipientRole == 'admin' ||
         request.resource.data.recipientId == request.auth.uid
       );
-      allow list: if request.auth != null &&
-        request.auth.uid != null;
       allow get, update: if request.auth != null &&
+        resource.data.recipientId == request.auth.uid;
+      allow list: if request.auth != null &&
         resource.data.recipientId == request.auth.uid;
     }
 

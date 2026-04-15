@@ -57,7 +57,7 @@ export const SupportChatPage: React.FC = () => {
   const firstName = userProfile?.firstName || 'there';
 
   return (
-    <div className="w-full flex flex-col flex-1 min-h-0 border border-secondary-200 overflow-hidden bg-surface-card">
+    <div className="w-full flex flex-col flex-1 min-h-0 overflow-hidden bg-surface-card">
       <div className="flex items-center gap-3 px-4 py-3 border-b border-secondary-200">
         <Link to="/dashboard" className="text-secondary-500 hover:text-secondary-700 transition-colors">
           <ArrowLeft className="h-5 w-5" />

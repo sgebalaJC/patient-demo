@@ -17,9 +17,7 @@ import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { XCircle } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { AccessDenied } from '../components/ui/AccessDenied';
-import { useAuth } from '../hooks/useAuth';
-import { isAdminRole } from '../lib/roles';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { usePlatformSubscription } from '../hooks/usePlatformSubscription';
 import { platformStripe } from '../lib/platformStripe';
 import {
@@ -76,7 +74,6 @@ function progressBarColor(pct: number): string {
 }
 
 export const AdminPlatformSubscriptionPage: React.FC = () => {
-  const { userProfile, loading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
   const status = searchParams.get('status');
 
@@ -110,11 +107,6 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
     const unsub = platformOperations.watchRecentTopups(setTopups);
     return () => unsub();
   }, []);
-
-  if (authLoading) return <LoadingSpinner />;
-  if (!isAdminRole(userProfile?.role)) {
-    return <AccessDenied message="Admin access required." />;
-  }
 
   const statusBadge = STATUS_BADGE[subscription.status] ?? STATUS_BADGE.none;
   const planLabel = subscription.plan ? PLAN_LABELS[subscription.plan] : null;
@@ -197,6 +189,7 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
   const cancelDate = formatDate(subscription.cancelAt ?? null);
 
   return (
+    <AdminGuard>
     <div className="space-y-6">
       <PageHeader
         backTo="/admin"
@@ -558,5 +551,6 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
         </div>
       </Modal>
     </div>
+    </AdminGuard>
   );
 };

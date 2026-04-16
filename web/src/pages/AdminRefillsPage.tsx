@@ -16,7 +16,7 @@ import {
     Calendar
 } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { AccessDenied } from '../components/ui/AccessDenied';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { PageHeader } from '../components/ui/PageHeader';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -141,17 +141,14 @@ export const AdminRefillsPage: React.FC = () => {
 
     const getUrgencyColor = getUrgencyColorHelper;
 
-    if (userProfile && !isAdminRole(userProfile.role)) {
-        return <AccessDenied message="You don't have permission to manage prescription refills." />;
-    }
-
-    if (loading && allRefills.length === 0) {
-        return <LoadingSpinner />;
-    }
-
     const counts = statusCounts;
 
+    if (loading && allRefills.length === 0) {
+        return <AdminGuard><LoadingSpinner /></AdminGuard>;
+    }
+
     return (
+        <AdminGuard>
         <div className="space-y-6">
             <PageHeader
               backTo="/admin"
@@ -338,5 +335,6 @@ export const AdminRefillsPage: React.FC = () => {
                 inputPlaceholder="Please provide a reason..."
             />
         </div>
+        </AdminGuard>
     );
 };

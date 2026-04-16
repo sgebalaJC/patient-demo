@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { isAdminRole } from '../lib/roles';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { AccessDenied } from '../components/ui/AccessDenied';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { AgentChat } from '../components/agent/AgentChat';
 import { AgentSkills } from '../components/agent/AgentSkills';
 import { AgentIntegrations } from '../components/agent/AgentIntegrations';
@@ -38,7 +35,6 @@ const DASHBOARD_URL = import.meta.env.VITE_AGENT_DASHBOARD_URL || '';
 const GATEWAY_TOKEN = import.meta.env.VITE_AGENT_GATEWAY_TOKEN || '';
 
 export const AgentPage: React.FC = () => {
-  const { userProfile, loading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as Tab) || 'chat';
   const [activeTab, setActiveTab] = useState<Tab>(
@@ -66,9 +62,6 @@ export const AgentPage: React.FC = () => {
       clearInterval(interval);
     };
   }, []);
-
-  if (authLoading) return <LoadingSpinner />;
-  if (!isAdminRole(userProfile?.role)) return <AccessDenied />;
 
   const sidecarConfigured = sidecar.isConfigured;
 
@@ -130,6 +123,7 @@ export const AgentPage: React.FC = () => {
   };
 
   return (
+    <AdminGuard>
     <div className="flex flex-1 min-h-0 border border-secondary-200 rounded-xl overflow-hidden bg-surface-card">
       {/* Sidebar — desktop */}
       <nav className="w-48 shrink-0 border-r border-secondary-200 bg-surface-card py-4 hidden md:flex md:flex-col">
@@ -223,5 +217,6 @@ export const AgentPage: React.FC = () => {
         {renderContent()}
       </main>
     </div>
+    </AdminGuard>
   );
 };

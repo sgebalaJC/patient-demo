@@ -3,6 +3,7 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // Sync: web/src/lib/roles.ts, functions/src/superAdmins.ts, firestore.rules
     function isSuperAdmin() {
       return request.auth != null &&
         request.auth.token.email == 'stanislaw.gebala@gmail.com';

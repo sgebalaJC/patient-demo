@@ -62,7 +62,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <PendingApproval />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <ImpersonationBanner />
+      {children}
+    </>
+  );
 };
 
 // Role-based redirect component
@@ -87,7 +92,6 @@ function App() {
     <AppSettingsProvider>
     <AuthProvider>
       <Router>
-        <ImpersonationBanner />
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />

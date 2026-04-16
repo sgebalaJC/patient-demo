@@ -3,7 +3,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { AccessDenied } from '../components/ui/AccessDenied';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Modal } from '../components/ui/Modal';
 import { FilterTabs } from '../components/ui/FilterTabs';
@@ -31,7 +31,7 @@ const emptyPlan = (): PlanDraft => ({
 type PlanFilter = 'active' | 'inactive';
 
 export const AdminSubscriptionPlansPage: React.FC = () => {
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile } = useAuth();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<PlanDraft>(emptyPlan());
@@ -127,10 +127,10 @@ export const AdminSubscriptionPlansPage: React.FC = () => {
     setDraft({ ...draft, features });
   };
 
-  if (authLoading || loading) return <LoadingSpinner />;
-  if (!isAdminRole(userProfile?.role)) return <AccessDenied />;
+  if (loading) return <AdminGuard><LoadingSpinner /></AdminGuard>;
 
   return (
+    <AdminGuard>
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
       <PageHeader
         backTo="/admin"
@@ -326,5 +326,6 @@ export const AdminSubscriptionPlansPage: React.FC = () => {
         </div>
       </Modal>
     </div>
+    </AdminGuard>
   );
 };

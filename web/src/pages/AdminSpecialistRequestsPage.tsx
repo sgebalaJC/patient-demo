@@ -22,8 +22,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { SearchInput } from '../components/ui/SearchInput';
-import { AccessDenied } from '../components/ui/AccessDenied';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatsGrid } from '../components/ui/StatsGrid';
 import { PaginationBar } from '../components/ui/PaginationBar';
@@ -41,7 +41,7 @@ import { Loader as MapsLoader } from '@googlemaps/js-api-loader';
 type RequestWithPatient = SpecialistRequest & { patientName: string };
 
 export const AdminSpecialistRequestsPage: React.FC = () => {
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile } = useAuth();
   const [allRequests, setAllRequests] = useState<RequestWithPatient[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('pending');
@@ -286,10 +286,10 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
     }
   };
 
-  if (authLoading || (loading && allRequests.length === 0)) return <LoadingSpinner />;
-  if (!isAdminRole(userProfile?.role)) return <AccessDenied message="You don't have permission to manage specialist requests." />;
+  if (loading && allRequests.length === 0) return <AdminGuard><LoadingSpinner /></AdminGuard>;
 
   return (
+    <AdminGuard>
     <div className="space-y-6">
       <PageHeader
         backTo="/admin"
@@ -612,5 +612,6 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
         variant="danger"
       />
     </div>
+    </AdminGuard>
   );
 };

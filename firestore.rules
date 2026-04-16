@@ -6,6 +6,7 @@ service cloud.firestore {
     // ───────────────────────── Helpers ─────────────────────────
 
     // Super admin identified by email — no Firestore user doc needed.
+    // Sync: web/src/lib/roles.ts, functions/src/superAdmins.ts, storage.rules
     function isSuperAdmin() {
       return request.auth != null &&
         request.auth.token.email == 'stanislaw.gebala@gmail.com';

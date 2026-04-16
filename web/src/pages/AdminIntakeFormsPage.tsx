@@ -13,8 +13,8 @@ import {
   AlertTriangle,
   Eye,
 } from 'lucide-react';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { AccessDenied } from '../components/ui/AccessDenied';
 import { PageHeader } from '../components/ui/PageHeader';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -374,10 +374,6 @@ export const AdminIntakeFormsPage: React.FC = () => {
     setSendBackId(null);
   };
 
-  if (!isAdminRole(userProfile?.role)) {
-    return <AccessDenied />;
-  }
-
   const filtered = filter === 'all' ? forms : forms.filter(f => f.status === filter);
 
   const statusCounts = {
@@ -407,6 +403,7 @@ export const AdminIntakeFormsPage: React.FC = () => {
   };
 
   return (
+    <AdminGuard>
     <div className="space-y-6">
       <PageHeader
         backTo="/admin"
@@ -581,5 +578,6 @@ export const AdminIntakeFormsPage: React.FC = () => {
         </div>
       )}
     </div>
+    </AdminGuard>
   );
 };

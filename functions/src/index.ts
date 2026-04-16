@@ -27,7 +27,7 @@ export {
 } from "./platformStripe.js";
 
 import {FUNCTIONS_BRANDING} from "./branding.js";
-import {isSuperAdminEmail} from "./superAdmins.js";
+import {isSuperAdminEmail, assertAdmin as assertCallerIsAdmin} from "./superAdmins.js";
 import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail} from "./email.js";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {defineSecret} from "firebase-functions/params";
@@ -61,20 +61,6 @@ admin.initializeApp();
 
 // Initialize Firestore
 const db = admin.firestore();
-
-/**
- * Assert caller is admin (or super admin). Throws if not.
- * Super admins have no Firestore user doc — identified by email only.
- */
-async function assertCallerIsAdmin(auth: { uid: string; token?: { email?: string } } | undefined): Promise<void> {
-  if (!auth) throw new Error('Authentication required');
-  if (isSuperAdminEmail(auth.token?.email)) return;
-  const doc = await db.collection('users').doc(auth.uid).get();
-  const data = doc.data();
-  if (!doc.exists || data?.role !== 'admin' || data?.isActive === false) {
-    throw new Error('Admin privileges required');
-  }
-}
 
 // Twilio client
 const twilio = require("twilio");

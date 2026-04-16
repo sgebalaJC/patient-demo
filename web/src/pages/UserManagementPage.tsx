@@ -35,7 +35,7 @@ import { useAppSettings } from '../contexts/AppSettingsContext';
 import { UserForm } from '../components/admin/UserForm';
 import { PatientDocumentManagement } from '../components/admin/PatientDocumentManagement';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { AccessDenied } from '../components/ui/AccessDenied';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { PageHeader } from '../components/ui/PageHeader';
 
 import { PaginationBar } from '../components/ui/PaginationBar';
@@ -47,7 +47,7 @@ import { formatDate } from '../lib/date-helpers';
 import { DocumentSnapshot } from 'firebase/firestore';
 import logger from '../lib/logger';
 export const UserManagementPage: React.FC = () => {
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile } = useAuth();
   const { settings: appSettings } = useAppSettings();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -170,13 +170,15 @@ export const UserManagementPage: React.FC = () => {
         functionsCentral, 'impersonateUser'
       );
       const res = await impersonateUser({ targetUid: targetUser.id });
+      await signInWithCustomToken(auth, res.data.token);
+      // Only set after successful sign-in so we don't get stuck
       sessionStorage.setItem('impersonation', JSON.stringify({
         realEmail: userProfile?.email,
         targetName: `${targetUser.firstName} ${targetUser.lastName}`,
       }));
-      await signInWithCustomToken(auth, res.data.token);
     } catch (err: any) {
       logger.error('Impersonation failed:', err);
+      alert('Impersonation failed: ' + (err.message || 'Unknown error'));
     }
   };
 
@@ -311,15 +313,12 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
-  if (authLoading || loading) {
-    return <LoadingSpinner />;
-  }
-
-  if (!isAdminRole(userProfile?.role)) {
-    return <AccessDenied message="You don't have permission to manage users." />;
+  if (loading) {
+    return <AdminGuard><LoadingSpinner /></AdminGuard>;
   }
 
   return (
+    <AdminGuard>
     <div className="space-y-6">
       <PageHeader
         backTo="/admin"
@@ -748,5 +747,6 @@ export const UserManagementPage: React.FC = () => {
         </div>
       </Modal>
     </div>
+    </AdminGuard>
   );
 };

@@ -13,16 +13,15 @@ import {
     Clock,
     User
 } from 'lucide-react';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { EmptyState } from '../components/ui/EmptyState';
-import { AccessDenied } from '../components/ui/AccessDenied';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { getRefillStatusColor, getThreadStatusColor, getPriorityBadgeColor } from '../lib/status-helpers';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { formatRelative } from '../lib/date-helpers';
 import logger from "../lib/logger";
 
 export const AdminDashboardPage: React.FC = () => {
-    const { user, userProfile, loading: authLoading } = useAuth();
+    const { user, userProfile } = useAuth();
     const { features } = useFeatures();
     const [recentMessages, setRecentMessages] = useState<MessageThread[]>([]);
     const [recentRefills, setRecentRefills] = useState<PrescriptionRefillRequest[]>([]);
@@ -92,17 +91,10 @@ export const AdminDashboardPage: React.FC = () => {
         }
     }, [user, userProfile, features.messages, features.prescriptions]);
 
-    if (authLoading) {
-        return <LoadingSpinner />;
-    }
-
-    if (!isAdminRole(userProfile?.role)) {
-        return <AccessDenied message="You don't have permission to access the admin dashboard." />;
-    }
-
     const getStatusColor = getRefillStatusColor;
 
     return (
+        <AdminGuard>
         <div className="space-y-6">
             <div>
                 <h1 className="text-3xl font-bold text-secondary-900 flex items-center">
@@ -254,5 +246,6 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
 
         </div>
+        </AdminGuard>
     );
 };

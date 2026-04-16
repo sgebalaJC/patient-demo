@@ -20,11 +20,11 @@ import {
 } from 'lucide-react';
 import { BRANDING } from '../config/branding';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { AccessDenied } from '../components/ui/AccessDenied';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { PageHeader } from '../components/ui/PageHeader';
 
 export const AdminSettingsPage: React.FC = () => {
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile } = useAuth();
   const { settings: liveAppSettings } = useAppSettings();
   const [templates, setTemplates] = useState<SmsTemplates | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,10 +128,10 @@ export const AdminSettingsPage: React.FC = () => {
     }
   };
 
-  if (authLoading || loading) return <LoadingSpinner />;
-  if (!isAdminRole(userProfile?.role)) return <AccessDenied message="Admin access required." />;
+  if (loading) return <AdminGuard><LoadingSpinner /></AdminGuard>;
 
   return (
+    <AdminGuard>
     <div className="space-y-6">
       <PageHeader
         backTo="/admin"
@@ -386,5 +386,6 @@ export const AdminSettingsPage: React.FC = () => {
         )}
       </Card>
     </div>
+    </AdminGuard>
   );
 };

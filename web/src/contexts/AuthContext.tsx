@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User as FirebaseUser } from 'firebase/auth';
+import { User as FirebaseUser, signInWithPopup } from 'firebase/auth';
 import { onAuthChange, signOut as firebaseSignOut, googleProvider, auth } from '../lib/firebase';
-import { signInWithCustomToken, signInWithPopup } from 'firebase/auth';
 import { userOperations } from '../lib/firestore';
 import { User as AppUser } from '../types';
 import logger from '../lib/logger';
@@ -25,31 +24,32 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [authState, setAuthState] = useState<Omit<AuthState, 'signOut'>>({
-    user: null,
-    userProfile: null,
-    loading: true,
-    error: null,
-  });
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [userProfile, setUserProfile] = useState<AppUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error] = useState<string | null>(null);
+  const [impersonating, setImpersonating] = useState(
+    () => !!sessionStorage.getItem('impersonation'),
+  );
 
   const handleSignOut = async () => {
     try {
       sessionStorage.removeItem('impersonation');
+      setImpersonating(false);
       audit({ action: 'auth.logout' });
       await firebaseSignOut();
-    } catch (error: any) {
-      logger.error('Error signing out:', error);
+    } catch (err: any) {
+      logger.error('Error signing out:', err);
     }
   };
 
   const handleExitImpersonation = async () => {
     try {
       sessionStorage.removeItem('impersonation');
-      // Re-auth as super admin via Google OAuth
+      setImpersonating(false);
       await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      logger.error('Error exiting impersonation:', error);
-      // Fallback: full sign-out
+    } catch (err: any) {
+      logger.error('Error exiting impersonation:', err);
       await firebaseSignOut();
     }
   };
@@ -57,85 +57,72 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;
 
-    const unsubscribeAuth = onAuthChange(async (user) => {
-      // Clean up previous profile listener
+    const unsubscribeAuth = onAuthChange(async (fbUser) => {
       if (unsubscribeProfile) {
         unsubscribeProfile();
         unsubscribeProfile = null;
       }
 
       try {
-        if (user) {
-          // Super admin: synthesize profile in memory, never touch Firestore
-          if (isSuperAdminEmail(user.email) && !sessionStorage.getItem('impersonation')) {
-            setAuthState({
-              user,
-              userProfile: {
-                id: user.uid,
-                email: user.email || '',
-                firstName: 'Super',
-                lastName: 'Admin',
-                role: 'super_admin',
-                isActive: true,
-                createdAt: null as any,
-              },
-              loading: false,
-              error: null,
+        if (fbUser) {
+          setUser(fbUser);
+          const isImpersonating = !!sessionStorage.getItem('impersonation');
+          setImpersonating(isImpersonating);
+
+          // Super admin (not impersonating): synthesize profile, skip Firestore
+          if (isSuperAdminEmail(fbUser.email) && !isImpersonating) {
+            setUserProfile({
+              id: fbUser.uid,
+              email: fbUser.email || '',
+              firstName: 'Super',
+              lastName: 'Admin',
+              role: 'super_admin',
+              isActive: true,
+              createdAt: null as any,
             });
+            setLoading(false);
             return;
           }
 
-          // Add a small delay to let createUserDocument finish during login flow
+          // Normal user or impersonating: load from Firestore
           await new Promise(resolve => setTimeout(resolve, 100));
 
-          // Initial fetch to check document completeness
-          const profileResponse = await userOperations.getUser(user.uid);
-
+          const profileResponse = await userOperations.getUser(fbUser.uid);
           if (profileResponse.success && profileResponse.data && !profileResponse.data.role) {
             logger.warn('User document missing role, retrying...');
             await new Promise(resolve => setTimeout(resolve, 200));
           }
 
-          // Set up real-time listener for user profile changes
-          unsubscribeProfile = userOperations.onUserChange(user.uid, (userProfile) => {
-            setAuthState({
-              user,
-              userProfile,
-              loading: false,
-              error: null,
-            });
+          unsubscribeProfile = userOperations.onUserChange(fbUser.uid, (profile) => {
+            setUserProfile(profile);
+            setLoading(false);
           });
         } else {
-          setAuthState({
-            user: null,
-            userProfile: null,
-            loading: false,
-            error: null,
-          });
+          setUser(null);
+          setUserProfile(null);
+          setLoading(false);
         }
-      } catch (error: any) {
-        logger.error('Error fetching user profile:', error);
-        setAuthState({
-          user,
-          userProfile: null,
-          loading: false,
-          error: null,
-        });
+      } catch (err: any) {
+        logger.error('Error fetching user profile:', err);
+        setUser(fbUser);
+        setUserProfile(null);
+        setLoading(false);
       }
     });
 
     return () => {
       unsubscribeAuth();
-      if (unsubscribeProfile) {
-        unsubscribeProfile();
-      }
+      if (unsubscribeProfile) unsubscribeProfile();
     };
   }, []);
 
   const value: AuthState = {
-    ...authState,
+    user,
+    userProfile,
+    loading,
+    error,
+    impersonating,
     signOut: handleSignOut,
-    impersonating: !!sessionStorage.getItem('impersonation'),
     exitImpersonation: handleExitImpersonation,
   };
 

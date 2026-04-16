@@ -22,8 +22,8 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { SearchInput } from '../components/ui/SearchInput';
-import { AccessDenied } from '../components/ui/AccessDenied';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatsGrid } from '../components/ui/StatsGrid';
 import { PaginationBar } from '../components/ui/PaginationBar';
@@ -40,7 +40,7 @@ import { collections } from '../lib/firestore/base';
 type AppointmentWithPatient = Appointment & { patientName: string };
 
 export const AdminAppointmentsPage: React.FC = () => {
-    const { user, userProfile, loading: authLoading } = useAuth();
+    const { user, userProfile } = useAuth();
     const [allAppointments, setAllAppointments] = useState<AppointmentWithPatient[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'today'>('upcoming');
@@ -344,15 +344,12 @@ export const AdminAppointmentsPage: React.FC = () => {
     };
 
 
-    if (authLoading || (loading && allAppointments.length === 0)) {
-        return <LoadingSpinner />;
-    }
-
-    if (!isAdminRole(userProfile?.role)) {
-        return <AccessDenied message="You don't have permission to access appointment management." />;
+    if (loading && allAppointments.length === 0) {
+        return <AdminGuard><LoadingSpinner /></AdminGuard>;
     }
 
     return (
+        <AdminGuard>
         <div className="space-y-6">
             <PageHeader
               backTo="/admin"
@@ -800,5 +797,6 @@ export const AdminAppointmentsPage: React.FC = () => {
                 inputPlaceholder="e.g., No availability at that time..."
             />
         </div>
+        </AdminGuard>
     );
 };

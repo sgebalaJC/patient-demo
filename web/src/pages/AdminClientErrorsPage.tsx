@@ -13,7 +13,7 @@ import {
 import { AlertTriangle, Bug, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
-import { AccessDenied } from '../components/ui/AccessDenied';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { Card } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { FilterTabs } from '../components/ui/FilterTabs';
@@ -84,11 +84,8 @@ export const AdminClientErrorsPage: React.FC = () => {
     return { errors, warns };
   }, [rows]);
 
-  if (userProfile && userProfile.role !== 'super_admin') {
-    return <AccessDenied message="Client error logs are admin-only." />;
-  }
-
   return (
+    <AdminGuard superOnly>
     <div className="space-y-6">
       <PageHeader
         backTo="/admin"
@@ -201,5 +198,6 @@ export const AdminClientErrorsPage: React.FC = () => {
         </div>
       )}
     </div>
+    </AdminGuard>
   );
 };

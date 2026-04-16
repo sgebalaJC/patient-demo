@@ -124,7 +124,7 @@ export const AgentPage: React.FC = () => {
 
   return (
     <AdminGuard>
-    <div className="flex flex-1 min-h-0 border border-secondary-200 rounded-xl overflow-hidden bg-surface-card">
+    <div className="flex flex-1 min-h-0 overflow-hidden bg-surface-card">
       {/* Sidebar — desktop */}
       <nav className="w-48 shrink-0 border-r border-secondary-200 bg-surface-card py-4 hidden md:flex md:flex-col">
         {/* Back link */}

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Search, AlertCircle, UserRound } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Card } from '../components/ui/Card';
+import { AdminGuard } from '../components/ui/AdminGuard';
 import { sidecar, type DrChronoPatient } from '../lib/sidecar';
 
 type Mode = 'name' | 'id';
@@ -43,103 +46,107 @@ export const AdminDrChronoPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-secondary-900">Dr Chrono</h1>
-        <p className="text-sm text-secondary-500 mt-1">
-          Look up a patient in DrChrono by name or patient ID.
-        </p>
-      </div>
+    <AdminGuard>
+      <div className="space-y-6">
+        <PageHeader
+          backTo="/admin"
+          icon={Search}
+          title="Dr Chrono"
+          subtitle="Look up a patient in DrChrono by name or patient ID."
+        />
 
-      <div className="bg-surface-card border border-secondary-200 p-4">
-        <div className="flex gap-1 mb-4">
-          <button
-            type="button"
-            onClick={() => setMode('name')}
-            className={`px-3 py-1.5 text-sm font-medium ${
-              mode === 'name'
-                ? 'bg-primary-600 text-white'
-                : 'bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
-            }`}
-          >
-            By name
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('id')}
-            className={`px-3 py-1.5 text-sm font-medium ${
-              mode === 'id'
-                ? 'bg-primary-600 text-white'
-                : 'bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
-            }`}
-          >
-            By patient ID
-          </button>
-        </div>
+        <Card className="p-4 sm:p-6">
+          <div className="flex gap-1 mb-4">
+            <button
+              type="button"
+              onClick={() => setMode('name')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg ${
+                mode === 'name'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
+              }`}
+            >
+              By name
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('id')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg ${
+                mode === 'id'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
+              }`}
+            >
+              By patient ID
+            </button>
+          </div>
 
-        <form onSubmit={handleSearch} className="flex flex-wrap gap-2 items-end">
-          {mode === 'name' ? (
-            <>
+          <form onSubmit={handleSearch} className="flex flex-wrap gap-2 items-end">
+            {mode === 'name' ? (
+              <>
+                <LabeledInput
+                  label="First name"
+                  value={firstName}
+                  onChange={setFirstName}
+                  placeholder="John"
+                />
+                <LabeledInput
+                  label="Last name"
+                  value={lastName}
+                  onChange={setLastName}
+                  placeholder="Smith"
+                />
+              </>
+            ) : (
               <LabeledInput
-                label="First name"
-                value={firstName}
-                onChange={setFirstName}
-                placeholder="John"
+                label="Patient ID"
+                value={patientId}
+                onChange={setPatientId}
+                placeholder="123456"
+                inputMode="numeric"
               />
-              <LabeledInput
-                label="Last name"
-                value={lastName}
-                onChange={setLastName}
-                placeholder="Smith"
-              />
-            </>
-          ) : (
-            <LabeledInput
-              label="Patient ID"
-              value={patientId}
-              onChange={setPatientId}
-              placeholder="123456"
-              inputMode="numeric"
-            />
-          )}
-          <button
-            type="submit"
-            disabled={!canSearch || loading}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Search className="h-4 w-4" />
-            {loading ? 'Searching…' : 'Search'}
-          </button>
-        </form>
+            )}
+            <button
+              type="submit"
+              disabled={!canSearch || loading}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Search className="h-4 w-4" />
+              {loading ? 'Searching…' : 'Search'}
+            </button>
+          </form>
+        </Card>
+
+        {error && (
+          <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg text-sm">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {loading && (
+          <div className="flex justify-center py-8">
+            <LoadingSpinner />
+          </div>
+        )}
+
+        {!loading && results && results.length === 0 && (
+          <Card className="p-8 text-center text-sm text-secondary-500">
+            No matches in DrChrono.
+          </Card>
+        )}
+
+        {!loading && results && results.length > 0 && (
+          <Card>
+            <div className="divide-y divide-secondary-200">
+              {results.map((p) => (
+                <PatientRow key={p.id} patient={p} />
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
-
-      {error && (
-        <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-800 p-3 text-sm">
-          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {loading && (
-        <div className="flex justify-center py-8">
-          <LoadingSpinner />
-        </div>
-      )}
-
-      {!loading && results && results.length === 0 && (
-        <div className="text-center text-sm text-secondary-500 py-8">
-          No matches in DrChrono.
-        </div>
-      )}
-
-      {!loading && results && results.length > 0 && (
-        <div className="bg-surface-card border border-secondary-200 divide-y divide-secondary-200">
-          {results.map((p) => (
-            <PatientRow key={p.id} patient={p} />
-          ))}
-        </div>
-      )}
-    </div>
+    </AdminGuard>
   );
 };
 
@@ -158,7 +165,7 @@ const LabeledInput: React.FC<{
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="border border-secondary-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+      className="border border-secondary-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
     />
   </label>
 );

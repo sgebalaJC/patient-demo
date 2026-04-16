@@ -18,6 +18,7 @@ import * as admin from "firebase-admin";
 import {onCall, onRequest, HttpsError} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {SignJWT, jwtVerify} from "jose";
+import {assertAdmin} from "./superAdmins.js";
 
 const DRCHRONO_AUTH_URL = "https://drchrono.com/o/authorize/";
 const DRCHRONO_TOKEN_URL = "https://drchrono.com/o/token/";
@@ -48,13 +49,9 @@ function getRedirectUri(): string {
   return `https://${FUNCTIONS_REGION}-${projectId}.cloudfunctions.net/drchronoCallback`;
 }
 
-async function requireAdmin(auth: { uid: string } | undefined): Promise<string> {
-  if (!auth) throw new HttpsError("unauthenticated", "Authentication required");
-  const snap = await db().collection("users").doc(auth.uid).get();
-  if (!snap.exists || snap.data()?.role !== "admin") {
-    throw new HttpsError("permission-denied", "Admin access required");
-  }
-  return auth.uid;
+async function requireAdmin(auth: { uid: string; token?: { email?: string } } | undefined): Promise<string> {
+  await assertAdmin(auth);
+  return auth!.uid;
 }
 
 // ─── Save credentials (admin-entered client id/secret) ──────────────

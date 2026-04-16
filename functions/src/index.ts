@@ -2377,20 +2377,25 @@ export const sidecarProxy = onRequest({
       return;
     }
 
-    // Look up user — allow admin and active patients
-    const userDoc = await db.collection('users').doc(decodedToken.uid).get();
-    if (!userDoc.exists) {
-      res.status(403).json({ error: 'User not found' });
-      return;
-    }
-
-    const userData = userDoc.data()!;
-    const userRole = userData.role as string;
-    const isActive = userData.isActive !== false;
-
-    if (!isActive) {
-      res.status(403).json({ error: 'Account is inactive' });
-      return;
+    // Super admin: identified by email, no Firestore doc — treat as admin.
+    let userRole: string;
+    let userData: admin.firestore.DocumentData;
+    if (isSuperAdminEmail(decodedToken.email)) {
+      userRole = 'admin';
+      userData = {role: 'admin', firstName: 'Super', lastName: 'Admin', email: decodedToken.email};
+    } else {
+      const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+      if (!userDoc.exists) {
+        res.status(403).json({error: 'User not found'});
+        return;
+      }
+      userData = userDoc.data()!;
+      userRole = userData.role as string;
+      const isActive = userData.isActive !== false;
+      if (!isActive) {
+        res.status(403).json({error: 'Account is inactive'});
+        return;
+      }
     }
 
     // Non-admins (patients) can only access /chat and /healthz.

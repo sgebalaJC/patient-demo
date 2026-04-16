@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum UserRole { patient, admin, assistant }
+// Mobile is patient-only — admin is parsed but blocked at the auth gate.
+// `super_admin` from web is mapped to `admin` here for safety.
+enum UserRole { patient, admin }
 
 class AppUser {
   final String id;
@@ -52,7 +54,6 @@ class AppUser {
 
   bool get isPatient => role == UserRole.patient;
   bool get isAdmin => role == UserRole.admin;
-  bool get isAssistant => role == UserRole.assistant;
 
   factory AppUser.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -98,9 +99,8 @@ class AppUser {
   static UserRole _parseRole(String? role) {
     switch (role) {
       case 'admin':
+      case 'super_admin':
         return UserRole.admin;
-      case 'assistant':
-        return UserRole.assistant;
       default:
         return UserRole.patient;
     }

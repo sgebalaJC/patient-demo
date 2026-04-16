@@ -82,8 +82,7 @@ class AuthProvider extends ChangeNotifier {
   void _resolveStatus(AppUser? profile) {
     if (profile == null) {
       _status = AuthStatus.unauthenticated;
-    } else if (profile.role == UserRole.admin ||
-        profile.role == UserRole.assistant) {
+    } else if (profile.role == UserRole.admin) {
       _status = AuthStatus.adminBlocked;
     } else if (!profile.isActive) {
       _status = AuthStatus.inactive;

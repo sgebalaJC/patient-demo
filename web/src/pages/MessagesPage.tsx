@@ -5,6 +5,7 @@ import { MessageThreadView } from '../components/messages/MessageThreadView';
 import { NewMessageModal } from '../components/messages/NewMessageModal';
 import { AdminNewMessageModal } from '../components/messages/AdminNewMessageModal';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { messageThreadOperations } from '../lib/firestore';
 import { MessageThread } from '../types';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -33,7 +34,7 @@ export const MessagesPage: React.FC = () => {
     const pageSize = 10;
     const pendingThreadId = searchParams.get('thread');
 
-    const isAdmin = userProfile?.role === 'admin';
+    const isAdmin = isAdminRole(userProfile?.role);
 
     // Real-time thread list listener
     useEffect(() => {
@@ -139,7 +140,7 @@ export const MessagesPage: React.FC = () => {
               title="Messages"
               subtitle="Communicate with your healthcare team"
               action={
-                (userProfile?.role === 'patient' || userProfile?.role === 'admin') ? (
+                (userProfile?.role === 'patient' || isAdminRole(userProfile?.role)) ? (
                     <Button
                       onClick={() => setShowNewMessage(true)}
                       size="lg"
@@ -319,7 +320,7 @@ export const MessagesPage: React.FC = () => {
             )}
 
             {/* New Message Modal - Admin */}
-            {showNewMessage && userProfile?.role === 'admin' && (
+            {showNewMessage && isAdminRole(userProfile?.role) && (
                 <AdminNewMessageModal
                     isOpen={showNewMessage}
                     onClose={() => setShowNewMessage(false)}

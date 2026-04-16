@@ -7,6 +7,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 
 const SERVICES = [
   {
@@ -46,7 +47,7 @@ export const WorkspacePage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const isAdmin = userProfile?.role === 'admin';
+  const isAdmin = isAdminRole(userProfile?.role);
 
   // Handle callback query params
   useEffect(() => {

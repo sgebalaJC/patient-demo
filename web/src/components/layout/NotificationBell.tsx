@@ -5,6 +5,7 @@ import { Notification, NotificationType } from '../../types';
 import { notificationOperations } from '../../lib/firestore';
 import { getNotificationLink } from '../../lib/notification-links';
 import { useAuth } from '../../hooks/useAuth';
+import { isAdminRole } from '../../lib/roles';
 
 const typeConfig: Record<NotificationType, { icon: React.ElementType; color: string; bgColor: string }> = {
   appointment_booked: { icon: Calendar, color: 'text-primary-600', bgColor: 'bg-primary-50' },
@@ -48,7 +49,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ buttonClassN
   useEffect(() => {
     if (!userId || !role) return;
 
-    const unsubscribe = role === 'admin'
+    const unsubscribe = isAdminRole(role)
       ? notificationOperations.onAdminNotifications((notifs) => setNotifications(notifs))
       : notificationOperations.onPatientNotifications(userId, (notifs) => setNotifications(notifs));
 
@@ -75,7 +76,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ buttonClassN
     }
 
     // Navigate to deep link
-    const link = getNotificationLink(notification.type, notification.meta || {}, role as 'admin' | 'patient');
+    const link = getNotificationLink(notification.type, notification.meta || {}, role!);
     if (link) {
       setIsOpen(false);
       navigate(link);
@@ -83,7 +84,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ buttonClassN
   };
 
   const handleMarkAllRead = async () => {
-    await notificationOperations.markAllAsRead(userId, role as 'admin' | 'patient');
+    await notificationOperations.markAllAsRead(userId, role!);
   };
 
   return (

@@ -19,6 +19,7 @@ import { XCircle } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { usePlatformSubscription } from '../hooks/usePlatformSubscription';
 import { platformStripe } from '../lib/platformStripe';
 import {
@@ -111,7 +112,7 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
   }, []);
 
   if (authLoading) return <LoadingSpinner />;
-  if (userProfile?.role !== 'admin') {
+  if (!isAdminRole(userProfile?.role)) {
     return <AccessDenied message="Admin access required." />;
   }
 

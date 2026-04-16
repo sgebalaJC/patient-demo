@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { intakeFormOperations, userOperations } from '../lib/firestore';
 import { PatientIntakeForm, PatientInfoForm, MedicalHistoryForm, ConsentForm, ConciergeAgreement } from '../types';
 import {
@@ -311,7 +312,7 @@ export const AdminIntakeFormsPage: React.FC = () => {
   const [sendBackNotes, setSendBackNotes] = useState('');
 
   useEffect(() => {
-    if (user && userProfile?.role === 'admin') {
+    if (user && isAdminRole(userProfile?.role)) {
       loadForms();
     }
   }, [user, userProfile]);
@@ -373,7 +374,7 @@ export const AdminIntakeFormsPage: React.FC = () => {
     setSendBackId(null);
   };
 
-  if (userProfile?.role !== 'admin') {
+  if (!isAdminRole(userProfile?.role)) {
     return <AccessDenied />;
   }
 

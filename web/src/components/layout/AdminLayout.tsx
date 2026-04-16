@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AlertTriangle, Lock } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { isAdminRole } from '../../lib/roles';
 import { AccessDenied } from '../ui/AccessDenied';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { usePlatformSubscription } from '../../hooks/usePlatformSubscription';
@@ -20,7 +21,7 @@ export const AdminLayout: React.FC = () => {
   if (loading) return <LoadingSpinner />;
 
   const role = userProfile?.role;
-  if (role !== 'admin' && role !== 'assistant') {
+  if (!isAdminRole(role) && role !== 'assistant') {
     return (
       <div className="p-8">
         <AccessDenied message="You don't have permission to access the admin area." />

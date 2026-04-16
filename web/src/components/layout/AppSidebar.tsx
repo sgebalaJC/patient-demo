@@ -20,12 +20,13 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeatures } from '../../hooks/useFeatures';
+import { isAdminRole } from '../../lib/roles';
 import { signOut } from '../../lib/firebase';
 import { BRANDING } from '../../config/branding';
 import { BrandLogo } from '../ui/BrandLogo';
 import logger from '../../lib/logger';
 
-type Role = 'admin' | 'assistant' | 'patient';
+type Role = 'admin' | 'super_admin' | 'assistant' | 'patient';
 
 interface NavItem {
   label: string;
@@ -58,7 +59,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Intake Forms', href: '/admin/intake-forms', icon: FileText, featureFlag: 'patientIntake' },
   { label: 'Subscriptions', href: '/admin/subscription-plans', icon: CreditCard },
   { label: 'Platform Billing', href: '/admin/platform-subscription', icon: Zap },
-  { label: 'Client Errors', href: '/admin/client-errors', icon: Bug, roles: ['admin'] },
+  { label: 'Client Errors', href: '/admin/client-errors', icon: Bug, roles: ['admin', 'super_admin'] },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
@@ -100,7 +101,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
     }
   };
 
-  const isAdminRole = role === 'admin' || role === 'assistant';
+  const isAdminOrAssistant = isAdminRole(role) || role === 'assistant';
 
   const isActive = (item: NavItem) => {
     // Admin "Dashboard" (/admin) is an exact match so the prefix /admin/users
@@ -110,7 +111,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
     return location.pathname === item.href;
   };
 
-  const sourceItems = isAdminRole ? ADMIN_NAV_ITEMS : PATIENT_NAV_ITEMS;
+  const sourceItems = isAdminOrAssistant ? ADMIN_NAV_ITEMS : PATIENT_NAV_ITEMS;
   const visibleItems = sourceItems.filter((item) => {
     if (item.roles && !item.roles.includes(role)) return false;
     if (item.featureFlag && !features[item.featureFlag]) return false;

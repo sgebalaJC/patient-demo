@@ -9,6 +9,7 @@ import { Modal } from '../components/ui/Modal';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { subscriptionOperations } from '../lib/firestore/subscriptions';
 import type { SubscriptionPlan } from '../types';
 import { CreditCard, Plus, Trash2, Save } from 'lucide-react';
@@ -40,7 +41,7 @@ export const AdminSubscriptionPlansPage: React.FC = () => {
   const [filter, setFilter] = useState<PlanFilter>('active');
 
   useEffect(() => {
-    if (userProfile?.role === 'admin') loadPlans();
+    if (isAdminRole(userProfile?.role)) loadPlans();
   }, [userProfile]);
 
   const loadPlans = async () => {
@@ -127,7 +128,7 @@ export const AdminSubscriptionPlansPage: React.FC = () => {
   };
 
   if (authLoading || loading) return <LoadingSpinner />;
-  if (userProfile?.role !== 'admin') return <AccessDenied />;
+  if (!isAdminRole(userProfile?.role)) return <AccessDenied />;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">

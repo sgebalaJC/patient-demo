@@ -5,11 +5,17 @@ service cloud.firestore {
 
     // ───────────────────────── Helpers ─────────────────────────
 
+    // Super admin identified by email — no Firestore user doc needed.
+    function isSuperAdmin() {
+      return request.auth != null &&
+        request.auth.token.email == 'stanislaw.gebala@gmail.com';
+    }
+
     // Admin is resolved from the users doc itself, so the users/{uid} rule
     // MUST gate writes to `role` — see `userSelfUpdateIsSafe()`.
     function isAdmin() {
-      return request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isSuperAdmin() || (request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
 
     function isOwner(ownerId) {

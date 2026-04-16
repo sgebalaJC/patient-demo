@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { useAuth } from '../../hooks/useAuth';
+import { isAdminRole } from '../../lib/roles';
 import { messageThreadOperations, notificationOperations } from '../../lib/firestore';
 import { MessageThread, ThreadMessage } from '../../types';
 import {
@@ -55,7 +56,7 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
 
             // Mark as read only once when opening the thread
             if (user?.uid && !hasMarkedAsRead.current) {
-                const isAdmin = userProfile?.role === 'admin';
+                const isAdmin = isAdminRole(userProfile?.role);
                 const isUnread = isAdmin ? thread.unreadForAdmin : thread.unreadForPatient;
 
                 if (isUnread) {
@@ -142,7 +143,7 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
                 // Send notification to the other party
                 const senderName = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 'Someone';
                 const preview = (newMessage.trim() || '[Attachment]').slice(0, 80);
-                if (userProfile.role === 'admin') {
+                if (isAdminRole(userProfile.role)) {
                     // Admin replied → notify the patient
                     await notificationOperations.createNotification({
                         recipientRole: 'patient',
@@ -306,7 +307,7 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
                         </div>
                     </div>
 
-                    {userProfile?.role === 'admin' && (
+                    {isAdminRole(userProfile?.role) && (
                         <div className="flex items-center space-x-2">
                             <select
                                 value={thread.status}

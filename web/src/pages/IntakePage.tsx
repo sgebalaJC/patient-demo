@@ -7,6 +7,7 @@ import { FamilyHistorySection } from '../components/intake/FamilyHistorySection'
 import { ConsentFormSection } from '../components/intake/ConsentFormSection';
 
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { intakeFormOperations } from '../lib/firestore';
 import { PatientIntakeForm } from '../types';
 import {
@@ -58,7 +59,7 @@ export const IntakePage: React.FC = () => {
   const [savingSection, setSavingSection] = useState(false);
 
   useEffect(() => {
-    if (user && (userProfile?.role === 'patient' || userProfile?.role === 'admin')) {
+    if (user && (userProfile?.role === 'patient' || isAdminRole(userProfile?.role))) {
       fetchOrCreateIntakeForm();
     }
   }, [user, userProfile]);
@@ -182,7 +183,7 @@ export const IntakePage: React.FC = () => {
     return Math.min(100, Math.round((completedCount / formSections.length) * 100));
   };
 
-  if (userProfile?.role !== 'patient' && userProfile?.role !== 'admin') {
+  if (userProfile?.role !== 'patient' && !isAdminRole(userProfile?.role)) {
     return (
       <div className="text-center py-12">
         <FileText className="h-16 w-16 text-secondary-400 mx-auto mb-4" />

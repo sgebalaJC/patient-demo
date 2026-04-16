@@ -3,6 +3,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { prescriptionRefillOperations } from '../lib/firestore';
 import { PrescriptionRefillRequest } from '../types';
 import {
@@ -53,7 +54,7 @@ export const AdminRefillsPage: React.FC = () => {
 
     // Load all data once on mount
     useEffect(() => {
-        if (user && userProfile?.role === 'admin') {
+        if (user && isAdminRole(userProfile?.role)) {
             loadAllRefills();
         }
     }, [user, userProfile]);
@@ -140,7 +141,7 @@ export const AdminRefillsPage: React.FC = () => {
 
     const getUrgencyColor = getUrgencyColorHelper;
 
-    if (userProfile && userProfile.role !== 'admin') {
+    if (userProfile && !isAdminRole(userProfile.role)) {
         return <AccessDenied message="You don't have permission to manage prescription refills." />;
     }
 

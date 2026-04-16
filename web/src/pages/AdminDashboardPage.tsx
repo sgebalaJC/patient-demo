@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useFeatures } from '../hooks/useFeatures';
+import { isAdminRole } from '../lib/roles';
 import { Card } from '../components/ui/Card';
 import { messageThreadOperations, prescriptionRefillOperations } from '../lib/firestore';
 import { MessageThread, PrescriptionRefillRequest } from '../types';
@@ -81,7 +82,7 @@ export const AdminDashboardPage: React.FC = () => {
     };
 
     useEffect(() => {
-        if (user && userProfile?.role === 'admin') {
+        if (user && isAdminRole(userProfile?.role)) {
             if (features.messages) {
                 fetchRecentMessages();
             }
@@ -95,7 +96,7 @@ export const AdminDashboardPage: React.FC = () => {
         return <LoadingSpinner />;
     }
 
-    if (userProfile?.role !== 'admin') {
+    if (!isAdminRole(userProfile?.role)) {
         return <AccessDenied message="You don't have permission to access the admin dashboard." />;
     }
 

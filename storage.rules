@@ -3,31 +3,35 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    function isSuperAdmin() {
+      return request.auth != null &&
+        request.auth.token.email == 'stanislaw.gebala@gmail.com';
+    }
+
+    function isAdmin() {
+      return isSuperAdmin() || (request.auth != null &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
     // Patient documents — owner can read/write, admins can read
     match /patients/{patientId}/documents/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == patientId;
-      allow read: if request.auth != null &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow read: if isAdmin();
     }
 
     // Message attachments — only thread participants (patient or admin) can access
     match /messages/{threadId}/attachments/{allPaths=**} {
-      // Read: must be the thread's patient or an admin
       allow read: if request.auth != null && (
         firestore.get(/databases/(default)/documents/message-threads/$(threadId)).data.patientId == request.auth.uid ||
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        isAdmin()
       );
-      // Create: authenticated, max 25MB, must be thread participant
       allow create: if request.auth != null
         && request.resource.size < 25 * 1024 * 1024
         && (
           firestore.get(/databases/(default)/documents/message-threads/$(threadId)).data.patientId == request.auth.uid ||
-          firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+          isAdmin()
         );
-      // Delete: only the uploader (sender) — stored in path or admin
-      allow delete: if request.auth != null && (
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
-      );
+      allow delete: if isAdmin();
     }
 
     // Chat attachments (admin agent + patient support). Path:
@@ -36,15 +40,13 @@ service firebase.storage {
     // troubleshooting). Hard delete by owner or admin.
     match /chat-attachments/{senderId}/{allPaths=**} {
       allow read: if request.auth != null && (
-        request.auth.uid == senderId ||
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        request.auth.uid == senderId || isAdmin()
       );
       allow create: if request.auth != null
         && request.auth.uid == senderId
         && request.resource.size < 25 * 1024 * 1024;
       allow delete: if request.auth != null && (
-        request.auth.uid == senderId ||
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        request.auth.uid == senderId || isAdmin()
       );
     }
 

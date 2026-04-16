@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
-import { onAuthChange, signOut } from '../lib/firebase';
+import { onAuthChange, signOut as firebaseSignOut, googleProvider, auth } from '../lib/firebase';
+import { signInWithCustomToken, signInWithPopup } from 'firebase/auth';
 import { userOperations } from '../lib/firestore';
 import { User as AppUser } from '../types';
 import logger from '../lib/logger';
 import { audit } from '../lib/audit';
+import { isSuperAdminEmail } from '../lib/roles';
 
 export interface AuthState {
   user: FirebaseUser | null;
@@ -12,6 +14,8 @@ export interface AuthState {
   loading: boolean;
   signOut: () => Promise<void>;
   error: string | null;
+  impersonating: boolean;
+  exitImpersonation: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -30,10 +34,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const handleSignOut = async () => {
     try {
+      sessionStorage.removeItem('impersonation');
       audit({ action: 'auth.logout' });
-      await signOut();
+      await firebaseSignOut();
     } catch (error: any) {
       logger.error('Error signing out:', error);
+    }
+  };
+
+  const handleExitImpersonation = async () => {
+    try {
+      sessionStorage.removeItem('impersonation');
+      // Re-auth as super admin via Google OAuth
+      await signInWithPopup(auth, googleProvider);
+    } catch (error: any) {
+      logger.error('Error exiting impersonation:', error);
+      // Fallback: full sign-out
+      await firebaseSignOut();
     }
   };
 
@@ -49,6 +66,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       try {
         if (user) {
+          // Super admin: synthesize profile in memory, never touch Firestore
+          if (isSuperAdminEmail(user.email) && !sessionStorage.getItem('impersonation')) {
+            setAuthState({
+              user,
+              userProfile: {
+                id: user.uid,
+                email: user.email || '',
+                firstName: 'Super',
+                lastName: 'Admin',
+                role: 'super_admin',
+                isActive: true,
+                createdAt: null as any,
+              },
+              loading: false,
+              error: null,
+            });
+            return;
+          }
+
           // Add a small delay to let createUserDocument finish during login flow
           await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -99,6 +135,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const value: AuthState = {
     ...authState,
     signOut: handleSignOut,
+    impersonating: !!sessionStorage.getItem('impersonation'),
+    exitImpersonation: handleExitImpersonation,
   };
 
   return (

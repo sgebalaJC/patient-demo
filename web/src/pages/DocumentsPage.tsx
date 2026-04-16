@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { DocumentUpload } from '../components/documents/DocumentUpload';
 import logger from '../lib/logger';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { PageHeader } from '../components/ui/PageHeader';
 import { documentOperations } from '../lib/firestore';
@@ -139,7 +140,7 @@ export const DocumentsPage: React.FC = () => {
         icon={FileText}
         title="My Documents"
         subtitle="Upload and manage your medical documents"
-        action={(userProfile?.role === 'patient' || userProfile?.role === 'admin') ? (
+        action={(userProfile?.role === 'patient' || isAdminRole(userProfile?.role)) ? (
           <Button onClick={() => setShowUpload(true)} className="flex items-center justify-center w-full sm:w-auto" size="lg">
             <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
             Upload
@@ -216,7 +217,7 @@ export const DocumentsPage: React.FC = () => {
                         >
                           <Download className="h-4 w-4" />
                         </Button>
-                        {(userProfile?.role === 'patient' || userProfile?.role === 'admin') && (
+                        {(userProfile?.role === 'patient' || isAdminRole(userProfile?.role)) && (
                           <Button
                             variant="ghost"
                             size="sm"

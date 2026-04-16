@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { AgentChat } from '../components/agent/AgentChat';
@@ -67,7 +68,7 @@ export const AgentPage: React.FC = () => {
   }, []);
 
   if (authLoading) return <LoadingSpinner />;
-  if (userProfile?.role !== 'admin') return <AccessDenied />;
+  if (!isAdminRole(userProfile?.role)) return <AccessDenied />;
 
   const sidecarConfigured = sidecar.isConfigured;
 

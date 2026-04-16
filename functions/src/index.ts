@@ -27,6 +27,7 @@ export {
 } from "./platformStripe.js";
 
 import {FUNCTIONS_BRANDING} from "./branding.js";
+import {isSuperAdminEmail} from "./superAdmins.js";
 import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail} from "./email.js";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {defineSecret} from "firebase-functions/params";
@@ -60,6 +61,20 @@ admin.initializeApp();
 
 // Initialize Firestore
 const db = admin.firestore();
+
+/**
+ * Assert caller is admin (or super admin). Throws if not.
+ * Super admins have no Firestore user doc — identified by email only.
+ */
+async function assertCallerIsAdmin(auth: { uid: string; token?: { email?: string } } | undefined): Promise<void> {
+  if (!auth) throw new Error('Authentication required');
+  if (isSuperAdminEmail(auth.token?.email)) return;
+  const doc = await db.collection('users').doc(auth.uid).get();
+  const data = doc.data();
+  if (!doc.exists || data?.role !== 'admin' || data?.isActive === false) {
+    throw new Error('Admin privileges required');
+  }
+}
 
 // Twilio client
 const twilio = require("twilio");
@@ -186,12 +201,7 @@ export const updateUserAuth = onCall({
     // Rate limit: 20 updates per 10 minutes per admin
     await checkRateLimit(context.uid, 'updateUser', 20, 10);
 
-    // Verify admin role
-    const callerDoc = await db.collection('users').doc(context.uid).get();
-    const callerData = callerDoc.data();
-    if (!callerDoc.exists || callerData?.role !== 'admin' || callerData?.isActive === false) {
-      throw new Error('Admin privileges required');
-    }
+    await assertCallerIsAdmin(context);
 
     const { uid } = request.data;
     if (!uid || typeof uid !== 'string') {
@@ -287,12 +297,7 @@ export const setUserPassword = onCall({
     if (!context) throw new Error('Authentication required');
 
     await checkRateLimit(context.uid, 'setUserPassword', 20, 10);
-
-    const callerDoc = await db.collection('users').doc(context.uid).get();
-    const callerData = callerDoc.data();
-    if (!callerDoc.exists || callerData?.role !== 'admin' || callerData?.isActive === false) {
-      throw new Error('Admin privileges required');
-    }
+    await assertCallerIsAdmin(context);
 
     const { uid, password } = request.data ?? {};
     if (!uid || typeof uid !== 'string') {
@@ -414,12 +419,7 @@ export const createUserWithAuth = onCall({
     // Rate limit: 10 creates per 10 minutes per admin
     await checkRateLimit(context.uid, 'createUser', 10, 10);
 
-    // Verify admin role
-    const callerDoc = await db.collection('users').doc(context.uid).get();
-    const callerData = callerDoc.data();
-    if (!callerDoc.exists || callerData?.role !== 'admin' || callerData?.isActive === false) {
-      throw new Error('Admin privileges required');
-    }
+    await assertCallerIsAdmin(context);
 
     // Validate and sanitize input
     const email = validateStringField(request.data.email, 'email', { max: FIELD_LIMITS.email.max });
@@ -863,10 +863,7 @@ export const deleteAccount = onCall({
 
     // Only allow self-deletion or admin-initiated deletion
     if (uidToDelete !== context.uid) {
-      const callerDoc = await db.collection('users').doc(context.uid).get();
-      if (!callerDoc.exists || callerDoc.data()?.role !== 'admin') {
-        throw new Error('You can only delete your own account');
-      }
+      await assertCallerIsAdmin(context);
     }
 
     // Rate limit: 1 deletion per 10 minutes
@@ -2955,10 +2952,7 @@ import {
 export const googleWorkspaceAuthorize = onCall({}, async (request) => {
   // Admin-only
   if (!request.auth) throw new Error('Authentication required');
-  const userDoc = await db.collection('users').doc(request.auth.uid).get();
-  if (!userDoc.exists || userDoc.data()?.role !== 'admin') {
-    throw new Error('Admin access required');
-  }
+  await assertCallerIsAdmin(request.auth);
 
   const services = ((request.data?.services as string) || 'gmail')
     .split(',').filter(Boolean) as GoogleService[];
@@ -3317,3 +3311,26 @@ export {
   drchronoCallback,
   drchronoSetEnabled,
 } from "./drchrono.js";
+
+// ─── Super-admin impersonation ───────────────────────────────────────
+/**
+ * impersonateUser — super-admin-only callable.
+ * Returns a Firebase custom token for the target UID so the super admin
+ * can sign in as that user in the browser.
+ */
+export const impersonateUser = onCall(async (request) => {
+  if (!request.auth) throw new Error('Authentication required');
+  if (!isSuperAdminEmail(request.auth.token?.email)) {
+    throw new Error('Super admin access required');
+  }
+  const {targetUid} = request.data as {targetUid?: string};
+  if (!targetUid || typeof targetUid !== 'string') {
+    throw new Error('targetUid is required');
+  }
+  const token = await admin.auth().createCustomToken(targetUid);
+  logger.info('super admin impersonation', {
+    superAdminUid: request.auth.uid,
+    targetUid,
+  });
+  return {token};
+});

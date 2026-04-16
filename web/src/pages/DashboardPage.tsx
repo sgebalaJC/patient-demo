@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { useAuth } from '../hooks/useAuth';
 import { useFeatures } from '../hooks/useFeatures';
+import { isAdminRole } from '../lib/roles';
 import { messageThreadOperations, appointmentOperations } from '../lib/firestore';
 import { MessageThread, Appointment } from '../types';
 import { EmailVerificationBanner } from '../components/EmailVerificationBanner';
@@ -98,7 +99,7 @@ export const DashboardPage: React.FC = () => {
     }, [user, userProfile, features.messages, features.appointments]);
 
     // Redirect admin users to admin dashboard (AFTER all hooks are called)
-    if (userProfile?.role === 'admin') {
+    if (isAdminRole(userProfile?.role)) {
         return <Navigate to="/admin" replace />;
     }
 

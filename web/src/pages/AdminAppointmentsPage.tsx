@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { appointmentOperations, notificationOperations, userOperations } from '../lib/firestore';
 import { Appointment, User as UserType } from '../types';
 import { Timestamp } from 'firebase/firestore';
@@ -73,7 +74,7 @@ export const AdminAppointmentsPage: React.FC = () => {
 
     // Load all data once
     useEffect(() => {
-        if (user && userProfile?.role === 'admin') {
+        if (user && isAdminRole(userProfile?.role)) {
             fetchAppointments();
         }
     }, [user, userProfile]);
@@ -347,7 +348,7 @@ export const AdminAppointmentsPage: React.FC = () => {
         return <LoadingSpinner />;
     }
 
-    if (userProfile?.role !== 'admin') {
+    if (!isAdminRole(userProfile?.role)) {
         return <AccessDenied message="You don't have permission to access appointment management." />;
     }
 

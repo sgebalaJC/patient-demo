@@ -6,6 +6,8 @@ import { useAuth } from './hooks/useAuth';
 import { AuthProvider } from './contexts/AuthContext';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { PendingApproval } from './components/ui/PendingApproval';
+import { ImpersonationBanner } from './components/layout/ImpersonationBanner';
+import { isAdminRole } from './lib/roles';
 
 // Eager-loaded (needed immediately)
 const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));
@@ -55,8 +57,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  // Inactive patients see the pending screen. Admins always pass through.
-  if (userProfile && !userProfile.isActive && userProfile.role !== 'admin') {
+  // Inactive patients see the pending screen. Admins/super admins always pass through.
+  if (userProfile && !userProfile.isActive && !isAdminRole(userProfile.role)) {
     return <PendingApproval />;
   }
 
@@ -76,7 +78,7 @@ const RoleBasedRedirect: React.FC = () => {
   }
 
   const role = userProfile?.role;
-  const home = role === 'admin' || role === 'assistant' ? '/admin' : '/dashboard';
+  const home = isAdminRole(role) || role === 'assistant' ? '/admin' : '/dashboard';
   return <Navigate to={home} replace />;
 };
 
@@ -85,6 +87,7 @@ function App() {
     <AppSettingsProvider>
     <AuthProvider>
       <Router>
+        <ImpersonationBanner />
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />

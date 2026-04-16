@@ -43,7 +43,7 @@ export const AdminClientErrorsPage: React.FC = () => {
   const [level, setLevel] = useState<LevelFilter>('all');
 
   useEffect(() => {
-    if (userProfile?.role !== 'admin') return;
+    if (userProfile?.role !== 'super_admin') return;
 
     const base = collection(db, 'client-errors');
     const q = level === 'all'
@@ -84,7 +84,7 @@ export const AdminClientErrorsPage: React.FC = () => {
     return { errors, warns };
   }, [rows]);
 
-  if (userProfile && userProfile.role !== 'admin') {
+  if (userProfile && userProfile.role !== 'super_admin') {
     return <AccessDenied message="Client error logs are admin-only." />;
   }
 

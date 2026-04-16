@@ -5,6 +5,7 @@ import { Input } from '../components/ui/Input';
 import { userOperations, UserSortField, SortDirection } from '../lib/firestore';
 import { User } from '../types';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import {
     Users,
     Plus,
@@ -22,9 +23,14 @@ import {
     ChevronDown,
     Send,
     CheckCircle2,
-    KeyRound
+    KeyRound,
+    Eye,
 } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { signInWithCustomToken } from 'firebase/auth';
+import { functionsCentral, auth } from '../lib/firebase';
 import { sendInviteLink } from '../lib/firebase';
+import { isSuperAdminRole } from '../lib/roles';
 import { useAppSettings } from '../contexts/AppSettingsContext';
 import { UserForm } from '../components/admin/UserForm';
 import { PatientDocumentManagement } from '../components/admin/PatientDocumentManagement';
@@ -88,14 +94,14 @@ export const UserManagementPage: React.FC = () => {
 
   // Fetch stats once on mount
   useEffect(() => {
-    if (userProfile?.role === 'admin') {
+    if (isAdminRole(userProfile?.role)) {
 
     }
   }, [userProfile]);
 
   // Fetch users when search, sort, page size, or page 1 reset
   useEffect(() => {
-    if (userProfile?.role === 'admin') {
+    if (isAdminRole(userProfile?.role)) {
       fetchUsers('first');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,6 +162,22 @@ export const UserManagementPage: React.FC = () => {
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     setIsFormOpen(true);
+  };
+
+  const handleImpersonate = async (targetUser: User) => {
+    try {
+      const impersonateUser = httpsCallable<{ targetUid: string }, { token: string }>(
+        functionsCentral, 'impersonateUser'
+      );
+      const res = await impersonateUser({ targetUid: targetUser.id });
+      sessionStorage.setItem('impersonation', JSON.stringify({
+        realEmail: userProfile?.email,
+        targetName: `${targetUser.firstName} ${targetUser.lastName}`,
+      }));
+      await signInWithCustomToken(auth, res.data.token);
+    } catch (err: any) {
+      logger.error('Impersonation failed:', err);
+    }
   };
 
   const handleManageDocuments = (user: User) => {
@@ -293,7 +315,7 @@ export const UserManagementPage: React.FC = () => {
     return <LoadingSpinner />;
   }
 
-  if (userProfile?.role !== 'admin') {
+  if (!isAdminRole(userProfile?.role)) {
     return <AccessDenied message="You don't have permission to manage users." />;
   }
 
@@ -409,7 +431,7 @@ export const UserManagementPage: React.FC = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-start space-x-4">
                       <div className="p-3 rounded-lg bg-primary-50">
-                        {user.role === 'admin' ? (
+                        {isAdminRole(user.role) ? (
                           <Shield className="h-8 w-8 text-primary-600" />
                         ) : (
                           <UserIcon className="h-8 w-8 text-primary-600" />
@@ -470,6 +492,18 @@ export const UserManagementPage: React.FC = () => {
                           ) : (
                             <Send className="h-4 w-4" />
                           )}
+                        </Button>
+                      )}
+                      {isSuperAdminRole(userProfile?.role) && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleImpersonate(user)}
+                          className="!px-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                          title="Impersonate user"
+                          aria-label="Impersonate user"
+                        >
+                          <Eye className="h-4 w-4" />
                         </Button>
                       )}
                       <Button

@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import { collections } from './base';
 import { User, ApiResponse } from '../../types';
+import { isAdminRole } from '../roles';
 import logger from "../logger";
 
 export type UserSortField = 'lastName' | 'createdAt';
@@ -180,7 +181,7 @@ export const userOperations = {
         const data = doc.data();
         if (data.isActive) active++;
         if (data.role === 'patient') patients++;
-        if (data.role === 'admin' || data.role === 'assistant') staff++;
+        if (isAdminRole(data.role) || data.role === 'assistant') staff++;
       });
       return { active, patients, staff, total: snapshot.size };
     } catch (error) {

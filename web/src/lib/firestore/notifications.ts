@@ -13,8 +13,9 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { isAdminRole } from '../roles';
 import { collections } from './base';
-import { Notification, NotificationType, ApiResponse } from '../../types';
+import { Notification, NotificationType, ApiResponse, UserRole } from '../../types';
 import logger from '../logger';
 
 export const notificationOperations = {
@@ -134,10 +135,10 @@ export const notificationOperations = {
   },
 
   // Mark all notifications as read for a specific user (role-aware)
-  async markAllAsRead(userId: string, role: 'admin' | 'patient'): Promise<ApiResponse<void>> {
+  async markAllAsRead(userId: string, role: UserRole): Promise<ApiResponse<void>> {
     try {
       let q;
-      if (role === 'admin') {
+      if (isAdminRole(role)) {
         q = query(
           collections.notifications,
           where('recipientRole', '==', 'admin')

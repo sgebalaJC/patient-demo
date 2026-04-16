@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import {
   specialistRequestOperations,
   appointmentOperations,
@@ -67,7 +68,7 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
   const [useBusinessAddress, setUseBusinessAddress] = useState(false);
 
   useEffect(() => {
-    if (user && userProfile?.role === 'admin') fetchRequests();
+    if (user && isAdminRole(userProfile?.role)) fetchRequests();
   }, [user, userProfile]);
 
   useEffect(() => { setCurrentPage(1); }, [filter]);
@@ -286,7 +287,7 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
   };
 
   if (authLoading || (loading && allRequests.length === 0)) return <LoadingSpinner />;
-  if (userProfile?.role !== 'admin') return <AccessDenied message="You don't have permission to manage specialist requests." />;
+  if (!isAdminRole(userProfile?.role)) return <AccessDenied message="You don't have permission to manage specialist requests." />;
 
   return (
     <div className="space-y-6">

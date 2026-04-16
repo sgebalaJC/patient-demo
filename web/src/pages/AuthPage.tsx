@@ -11,6 +11,7 @@ import { ForgotPasswordForm } from '../components/auth/ForgotPasswordForm';
 import { PhoneLoginForm } from '../components/auth/PhoneLoginForm';
 import { LegalModal } from '../components/ui/LegalModal';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { completeEmailLinkSignIn, isValidEmailLink } from '../lib/firebase';
 import { PasswordResetForm } from '../components/auth/PasswordResetForm';
@@ -177,7 +178,7 @@ export const AuthPage: React.FC = () => {
   }
 
   if (user && userProfile) {
-      if(userProfile.role === 'admin')
+      if(isAdminRole(userProfile.role))
         return <Navigate to="/admin" replace />;
       return <Navigate to="/dashboard" replace />;
   }

@@ -3,6 +3,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { useAppSettings } from '../contexts/AppSettingsContext';
 import { smsTemplateOperations, SmsTemplates } from '../lib/firestore/sms-templates';
 import { appSettingsOperations } from '../lib/firestore/app-settings';
@@ -78,7 +79,7 @@ export const AdminSettingsPage: React.FC = () => {
     appSettingsDraft.supportEmail !== (liveAppSettings.supportEmail || '');
 
   useEffect(() => {
-    if (userProfile?.role === 'admin') loadTemplates();
+    if (isAdminRole(userProfile?.role)) loadTemplates();
   }, [userProfile]);
 
   const loadTemplates = async () => {
@@ -128,7 +129,7 @@ export const AdminSettingsPage: React.FC = () => {
   };
 
   if (authLoading || loading) return <LoadingSpinner />;
-  if (userProfile?.role !== 'admin') return <AccessDenied message="Admin access required." />;
+  if (!isAdminRole(userProfile?.role)) return <AccessDenied message="Admin access required." />;
 
   return (
     <div className="space-y-6">

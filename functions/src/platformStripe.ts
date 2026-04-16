@@ -43,6 +43,7 @@ import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
 import Stripe from "stripe";
 import {FUNCTIONS_BRANDING} from "./branding.js";
+import {isSuperAdminEmail} from "./superAdmins.js";
 
 const PLATFORM_STRIPE_SECRET_KEY = defineSecret("PLATFORM_STRIPE_SECRET_KEY");
 const PLATFORM_STRIPE_WEBHOOK_SECRET = defineSecret("PLATFORM_STRIPE_WEBHOOK_SECRET");
@@ -73,14 +74,14 @@ function getStripe(): Stripe {
   return new Stripe(key, {apiVersion: "2024-12-18.acacia" as any});
 }
 
-async function assertAdmin(uid: string): Promise<admin.firestore.DocumentData> {
+async function assertAdmin(auth: { uid: string; token?: { email?: string } }): Promise<void> {
+  if (isSuperAdminEmail(auth.token?.email)) return;
   const db = admin.firestore();
-  const userSnap = await db.collection("users").doc(uid).get();
+  const userSnap = await db.collection("users").doc(auth.uid).get();
   const data = userSnap.data();
   if (!data || data.role !== "admin") {
     throw new HttpsError("permission-denied", "Admin access required.");
   }
-  return data;
 }
 
 const SUB_DOC = () => admin.firestore().doc("platform/subscription");
@@ -133,7 +134,7 @@ function resolvePriceId(plan: "monthly" | "annual"): string {
 /** Admin-only: start hosted Stripe Checkout for the platform subscription. */
 export const createPlatformCheckoutSession = onCall({secrets: ALL_PLATFORM_SECRETS}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  await assertAdmin(request.auth.uid);
+  await assertAdmin(request.auth);
   const {plan, successUrl, cancelUrl} = request.data as {
     plan?: "monthly" | "annual";
     successUrl?: string;
@@ -173,7 +174,7 @@ export const createPlatformCheckoutSession = onCall({secrets: ALL_PLATFORM_SECRE
 /** Admin-only: start Checkout for a one-time $25 token top-up. */
 export const createPlatformTopupSession = onCall({secrets: ALL_PLATFORM_SECRETS}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  await assertAdmin(request.auth.uid);
+  await assertAdmin(request.auth);
   const {successUrl, cancelUrl} = request.data as {
     successUrl?: string;
     cancelUrl?: string;
@@ -224,7 +225,7 @@ export const createPlatformTopupSession = onCall({secrets: ALL_PLATFORM_SECRETS}
 /** Admin-only: redirect to Stripe's hosted Billing Portal. */
 export const createPlatformBillingPortalSession = onCall({secrets: ALL_PLATFORM_SECRETS}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  await assertAdmin(request.auth.uid);
+  await assertAdmin(request.auth);
   const {returnUrl} = request.data as {returnUrl?: string};
   if (!returnUrl) {
     throw new HttpsError("invalid-argument", "returnUrl is required.");
@@ -250,7 +251,7 @@ export const createPlatformBillingPortalSession = onCall({secrets: ALL_PLATFORM_
 /** Admin-only: schedule cancellation at the current period end. */
 export const cancelPlatformSubscription = onCall({secrets: ALL_PLATFORM_SECRETS}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  await assertAdmin(request.auth.uid);
+  await assertAdmin(request.auth);
 
   const subSnap = await SUB_DOC().get();
   const stripeSubscriptionId = subSnap.data()?.stripeSubscriptionId as string | undefined;
@@ -280,7 +281,7 @@ export const cancelPlatformSubscription = onCall({secrets: ALL_PLATFORM_SECRETS}
 /** Admin-only: undo a scheduled cancellation. */
 export const resumePlatformSubscription = onCall({secrets: ALL_PLATFORM_SECRETS}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  await assertAdmin(request.auth.uid);
+  await assertAdmin(request.auth);
 
   const subSnap = await SUB_DOC().get();
   const stripeSubscriptionId = subSnap.data()?.stripeSubscriptionId as string | undefined;

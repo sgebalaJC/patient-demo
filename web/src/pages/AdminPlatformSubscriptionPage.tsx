@@ -13,6 +13,9 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
+import { Modal } from '../components/ui/Modal';
+import { Input } from '../components/ui/Input';
+import { XCircle } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { useAuth } from '../hooks/useAuth';
@@ -97,6 +100,8 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [enforcementDraft, setEnforcementDraft] = useState(enforcementOn);
   const [enforcementSaving, setEnforcementSaving] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelConfirmText, setCancelConfirmText] = useState('');
 
   useEffect(() => setEnforcementDraft(enforcementOn), [enforcementOn]);
 
@@ -149,8 +154,13 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
     }
   };
 
+  const closeCancelModal = () => {
+    setCancelConfirmOpen(false);
+    setCancelConfirmText('');
+  };
+
   const handleCancel = async () => {
-    if (!window.confirm('Cancel at end of current billing period?')) return;
+    closeCancelModal();
     setAction('cancel');
     setError(null);
     try {
@@ -319,6 +329,7 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
                   onClick={handlePortal}
                   loading={action === 'portal'}
                   disabled={!!action}
+                  className="border-green-700 text-green-700 hover:bg-green-50"
                 >
                   Manage billing
                 </Button>
@@ -334,9 +345,10 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
                 ) : (
                   <Button
                     variant="secondary"
-                    onClick={handleCancel}
+                    onClick={() => setCancelConfirmOpen(true)}
                     loading={action === 'cancel'}
                     disabled={!!action}
+                    className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
                   >
                     Cancel at period end
                   </Button>
@@ -364,9 +376,11 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
             </div>
           </div>
           <Button
+            variant="secondary"
             onClick={handleTopup}
             loading={action === 'topup'}
             disabled={!!action || subscription.status !== 'active'}
+            className="border-green-700 text-green-700 hover:bg-green-50"
           >
             Buy $25 top-up
           </Button>
@@ -493,6 +507,55 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
           </div>
         )}
       </Card>
+
+      <Modal
+        isOpen={cancelConfirmOpen}
+        onClose={closeCancelModal}
+        title="Cancel platform subscription"
+        icon={<div className="bg-red-100 p-2 rounded-lg"><AlertTriangle className="h-6 w-6 text-red-600" /></div>}
+        maxWidth="max-w-md"
+      >
+        <div className="p-6 space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-sm text-red-800">
+              The subscription will end at the end of the current billing period. The platform will
+              stop serving AI requests once the allowance runs out after that date.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">
+              Type <span className="font-bold">CANCEL</span> to confirm
+            </label>
+            <Input
+              value={cancelConfirmText}
+              onChange={(e) => setCancelConfirmText(e.target.value)}
+              placeholder="Type CANCEL"
+            />
+          </div>
+
+          <div className="flex items-center justify-end space-x-3 pt-2">
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={closeCancelModal}
+              disabled={action === 'cancel'}
+            >
+              Keep subscription
+            </Button>
+            <Button
+              size="md"
+              onClick={handleCancel}
+              disabled={cancelConfirmText !== 'CANCEL' || action === 'cancel'}
+              loading={action === 'cancel'}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Cancel at period end
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

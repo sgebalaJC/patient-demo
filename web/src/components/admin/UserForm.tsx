@@ -24,7 +24,7 @@ const userSchema = z.object({
             (val) => val === '' || /^\+?[\d\s\-\(\)]{10,}$/.test(val.replace(/\s/g, '')),
             'Please enter a valid phone number'
         ),
-    role: z.enum(['patient', 'assistant', 'admin'] as const, {
+    role: z.enum(['patient', 'admin'] as const, {
         errorMap: () => ({message: 'Please select a valid role'}),
     }),
     dateOfBirth: z.string().optional(),
@@ -349,7 +349,6 @@ export const UserForm: React.FC<UserFormProps> = ({
                                     </label>
                                     <select {...register('role')} className="input w-full">
                                         <option value="patient">Patient</option>
-                                        <option value="assistant">Assistant</option>
                                         <option value="admin">Admin</option>
                                     </select>
                                     {errors.role && (

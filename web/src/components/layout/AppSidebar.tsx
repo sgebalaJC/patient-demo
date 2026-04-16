@@ -26,7 +26,7 @@ import { BRANDING } from '../../config/branding';
 import { BrandLogo } from '../ui/BrandLogo';
 import logger from '../../lib/logger';
 
-type Role = 'admin' | 'super_admin' | 'assistant' | 'patient';
+type Role = 'admin' | 'super_admin' | 'patient';
 
 interface NavItem {
   label: string;
@@ -101,7 +101,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
     }
   };
 
-  const isAdminOrAssistant = isAdminRole(role) || role === 'assistant';
+  const showAdminNav = isAdminRole(role);
 
   const isActive = (item: NavItem) => {
     // Admin "Dashboard" (/admin) is an exact match so the prefix /admin/users
@@ -111,7 +111,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
     return location.pathname === item.href;
   };
 
-  const sourceItems = isAdminOrAssistant ? ADMIN_NAV_ITEMS : PATIENT_NAV_ITEMS;
+  const sourceItems = showAdminNav ? ADMIN_NAV_ITEMS : PATIENT_NAV_ITEMS;
   const visibleItems = sourceItems.filter((item) => {
     if (item.roles && !item.roles.includes(role)) return false;
     if (item.featureFlag && !features[item.featureFlag]) return false;

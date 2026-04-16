@@ -1,6 +1,6 @@
 import { Timestamp } from 'firebase/firestore';
 
-export type UserRole = 'patient' | 'assistant' | 'admin' | 'super_admin';
+export type UserRole = 'patient' | 'admin' | 'super_admin';
 
 export interface User {
   id: string;
@@ -37,22 +37,7 @@ export interface Admin extends User {
   languages?: string[];
 }
 
-export interface Assistant extends User {
-  role: 'assistant';
-  department: string;
-  supervisorId?: string;
-  permissions: string[];
-  workingHours: {
-    [key: string]: {
-      start: string;
-      end: string;
-      isAvailable: boolean;
-    };
-  };
-  languages: string[];
-}
-
-export type Staff = Admin | Assistant;
+export type Staff = Admin;
 
 export interface Patient extends User {
   role: 'patient';

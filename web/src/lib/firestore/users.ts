@@ -181,7 +181,7 @@ export const userOperations = {
         const data = doc.data();
         if (data.isActive) active++;
         if (data.role === 'patient') patients++;
-        if (isAdminRole(data.role) || data.role === 'assistant') staff++;
+        if (isAdminRole(data.role)) staff++;
       });
       return { active, patients, staff, total: snapshot.size };
     } catch (error) {

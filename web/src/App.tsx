@@ -83,7 +83,7 @@ const RoleBasedRedirect: React.FC = () => {
   }
 
   const role = userProfile?.role;
-  const home = isAdminRole(role) || role === 'assistant' ? '/admin' : '/dashboard';
+  const home = isAdminRole(role) ? '/admin' : '/dashboard';
   return <Navigate to={home} replace />;
 };
 

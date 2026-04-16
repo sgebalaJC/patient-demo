@@ -102,7 +102,7 @@ const FIELD_LIMITS = {
   role: { max: 20 },
 } as const;
 
-const VALID_ROLES = ['patient', 'assistant', 'admin'] as const;
+const VALID_ROLES = ['patient', 'admin'] as const;
 
 function validateStringField(value: unknown, fieldName: string, limits: { min?: number; max?: number }): string {
   if (typeof value !== 'string') throw new Error(`${fieldName} must be a string`);
@@ -1941,7 +1941,7 @@ export const verifyPhoneLogin = onCall({
       }
 
       // Phone OTP is the weakest auth path we offer (SIM swap, SS7 intercept).
-      // Don't mint admin/assistant tokens from it — those roles must re-auth
+      // Don't mint admin tokens from it — those roles must re-auth
       // via Google OAuth or email link. Without this gate, an attacker who
       // ports an admin's phone number can inherit full admin access.
       if (userData.role !== 'patient') {
@@ -2377,7 +2377,7 @@ export const sidecarProxy = onRequest({
       return;
     }
 
-    // Look up user — allow admin, assistant, and active patients
+    // Look up user — allow admin and active patients
     const userDoc = await db.collection('users').doc(decodedToken.uid).get();
     if (!userDoc.exists) {
       res.status(403).json({ error: 'User not found' });
@@ -2393,10 +2393,8 @@ export const sidecarProxy = onRequest({
       return;
     }
 
-    // Non-admins (patients + assistants) can only access /chat and /healthz.
-    // Admin-scoped paths must require role === 'admin' — previously only the
-    // `patient` role was rejected, which let assistants reach /admin-api/*,
-    // /files, /config, /backup, bypassing the intended privilege boundary.
+    // Non-admins (patients) can only access /chat and /healthz.
+    // Admin-scoped paths require role === 'admin'.
     const sidecarPath = (req.query.path as string) || '/healthz';
     const nonAdminAllowed = ['/chat', '/healthz'];
     if (userRole !== 'admin' && !nonAdminAllowed.includes(sidecarPath)) {

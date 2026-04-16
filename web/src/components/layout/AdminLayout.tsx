@@ -21,7 +21,7 @@ export const AdminLayout: React.FC = () => {
   if (loading) return <LoadingSpinner />;
 
   const role = userProfile?.role;
-  if (!isAdminRole(role) && role !== 'assistant') {
+  if (!isAdminRole(role)) {
     return (
       <div className="p-8">
         <AccessDenied message="You don't have permission to access the admin area." />

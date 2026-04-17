@@ -148,6 +148,21 @@ async function checkRateLimit(uid: string, action: string, maxCalls: number, win
 }
 
 /**
+ * Best-effort client IP from an onCall v2 request. Trusts the first
+ * x-forwarded-for entry (Cloud Run sets this from the load balancer), and
+ * falls back to the socket's remoteAddress. Returns 'unknown' if neither is
+ * present so we still bucket abuse attempts from unidentifiable callers.
+ */
+function clientIp(req: { rawRequest?: { headers?: any; ip?: string; socket?: any } } | undefined): string {
+  const raw = req?.rawRequest;
+  const xff = raw?.headers?.['x-forwarded-for'];
+  if (typeof xff === 'string' && xff.length > 0) {
+    return xff.split(',')[0].trim();
+  }
+  return raw?.ip || raw?.socket?.remoteAddress || 'unknown';
+}
+
+/**
  * Format phone number for SMS (ensure +1 prefix for US numbers)
  */
 function formatPhoneNumber(phoneNumber: string): string {
@@ -1833,8 +1848,11 @@ export const sendPhoneLoginCode = onCall({
       throw new Error('Please enter a valid US phone number');
     }
 
-    // Rate limit by phone number (5 per 10 min)
+    // Rate limit by phone number (protects the victim from SMS bombing) AND
+    // by client IP (protects our Twilio budget from an attacker cycling
+    // through many different phone numbers). Both must pass.
     await checkRateLimit(formatted, 'phoneLogin', 5, 10);
+    await checkRateLimit(clientIp(request), 'phoneLoginIp', 10, 10);
 
     // Generate 6-digit code
     const code = crypto.randomInt(100000, 999999).toString();

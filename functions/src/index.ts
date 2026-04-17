@@ -2742,9 +2742,9 @@ async function sendReminderSMS(phoneNumber: string, body: string): Promise<void>
   try {
     const client = twilio(accountSid, authToken);
     await client.messages.create({ body, from: fromNumber, to: phoneNumber });
-    logger.info(`Reminder SMS sent to ${phoneNumber}`);
+    logger.info('Reminder SMS sent', { phoneSuffix: phoneNumber.slice(-4) });
   } catch (error: any) {
-    logger.error(`Error sending reminder SMS to ${phoneNumber}:`, error.message);
+    logger.error('Error sending reminder SMS', { phoneSuffix: phoneNumber.slice(-4), message: error.message });
   }
 }
 

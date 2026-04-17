@@ -234,6 +234,14 @@ service cloud.firestore {
       allow create, update: if false;
     }
 
+    // Simulation mirror — written exclusively by the `seedSimulationData` and
+    // `integrationCall` Cloud Functions (Admin SDK bypasses these rules). No
+    // client access: all reads flow through `integrationCall`, which handles
+    // auth + role gating before returning simulated data.
+    match /simulation/{document=**} {
+      allow read, write: if false;
+    }
+
     // ───────────────────────── Subscriptions & billing ─────────────────────────
 
     match /subscription-plans/{priceId} {

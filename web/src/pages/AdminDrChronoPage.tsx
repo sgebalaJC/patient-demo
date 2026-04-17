@@ -5,10 +5,13 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { sidecar, type DrChronoPatient } from '../lib/sidecar';
+import { integrationCall } from '../lib/integration-call';
+import { useSimulationMode } from '../hooks/useSimulationMode';
 
 type Mode = 'name' | 'id';
 
 export const AdminDrChronoPage: React.FC = () => {
+  const { enabled: simulated } = useSimulationMode();
   const [mode, setMode] = useState<Mode>('name');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -16,6 +19,7 @@ export const AdminDrChronoPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<DrChronoPatient[] | null>(null);
+  const [source, setSource] = useState<'real' | 'simulated' | null>(null);
 
   const canSearchName = firstName.trim().length > 0 || lastName.trim().length > 0;
   const canSearchId = patientId.trim().length > 0;
@@ -27,16 +31,41 @@ export const AdminDrChronoPage: React.FC = () => {
     setLoading(true);
     setError(null);
     setResults(null);
+    setSource(null);
     try {
-      if (mode === 'name') {
+      if (simulated) {
+        if (mode === 'name') {
+          const res = await integrationCall<{ results: DrChronoPatient[] }>({
+            integration: 'drchrono',
+            operation: 'list_patients',
+            simulated: true,
+            params: {
+              first_name: firstName.trim() || undefined,
+              last_name: lastName.trim() || undefined,
+            },
+          });
+          setResults(res.data.results);
+        } else {
+          const res = await integrationCall<DrChronoPatient>({
+            integration: 'drchrono',
+            operation: 'get_patient',
+            simulated: true,
+            params: { id: patientId.trim() },
+          });
+          setResults([res.data]);
+        }
+        setSource('simulated');
+      } else if (mode === 'name') {
         const list = await sidecar.drchronoSearchPatients({
           firstName: firstName.trim() || undefined,
           lastName: lastName.trim() || undefined,
         });
         setResults(list);
+        setSource('real');
       } else {
         const patient = await sidecar.drchronoGetPatient(patientId.trim());
         setResults([patient]);
+        setSource('real');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Lookup failed');
@@ -138,6 +167,11 @@ export const AdminDrChronoPage: React.FC = () => {
 
         {!loading && results && results.length > 0 && (
           <Card>
+            {source === 'simulated' && (
+              <div className="px-4 py-2 text-xs font-medium text-amber-800 bg-amber-50 border-b border-amber-200">
+                Simulated results — not from DrChrono
+              </div>
+            )}
             <div className="divide-y divide-secondary-200">
               {results.map((p) => (
                 <PatientRow key={p.id} patient={p} />

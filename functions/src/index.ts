@@ -9,6 +9,10 @@
 // Client-side error telemetry (browser → Cloud Logging)
 export {logClientError} from "./client-errors.js";
 
+// Simulation layer — single entry point for all external integrations with
+// per-session real-vs-simulated routing. See functions/src/simulation/index.ts.
+export {integrationCall, seedSimulationData, clearSimulationData} from "./simulation/index.js";
+
 // Stripe subscription billing — patient pays practice
 export {
   createCheckoutSession,

@@ -6,6 +6,7 @@ import { BrandLogo } from '../ui/BrandLogo';
 import { BRANDING } from '../../config/branding';
 import { NotificationBell } from './NotificationBell';
 import { ThemeToggle } from '../ui/ThemeSelector';
+import { SimulationToggle } from '../ui/SimulationToggle';
 import { useAuth } from '../../hooks/useAuth';
 
 const FULL_HEIGHT_ROUTES = ['/support', '/admin/agent'];
@@ -59,6 +60,7 @@ export const Layout: React.FC = () => {
           <div className="ml-auto flex items-center gap-1">
             {user && (
               <>
+                <SimulationToggle className="mr-1" />
                 <div className="shell-bell">
                   <NotificationBell buttonClassName="p-2 rounded-lg transition-colors hover:bg-white/10" />
                 </div>

@@ -37,6 +37,13 @@ export interface AppSettings {
    * falls back to BRANDING.supportEmail from config/branding.ts.
    */
   supportEmail?: string;
+  /**
+   * Demo-mode: when true, users may flip a per-session "Demo data" switch that
+   * routes integration calls (EHR reads/writes, inbox, etc.) to the simulation
+   * backend instead of real services. Off by default — customer forks keep it
+   * off so the toggle never ships to end users.
+   */
+  simulationMode: boolean;
   updatedAt?: any;
 }
 
@@ -46,6 +53,7 @@ export const APP_SETTINGS_DEFAULTS: AppSettings = {
   bootstrapped: false,
   practiceSubscriptionEnforced: false,
   supportEmail: '',
+  simulationMode: false,
 };
 
 const DOC_REF = doc(db, 'system', 'settings');
@@ -72,6 +80,10 @@ function normalize(data: Partial<AppSettings> | undefined): AppSettings {
       typeof data?.supportEmail === 'string'
         ? data.supportEmail.trim()
         : APP_SETTINGS_DEFAULTS.supportEmail,
+    simulationMode:
+      typeof data?.simulationMode === 'boolean'
+        ? data.simulationMode
+        : APP_SETTINGS_DEFAULTS.simulationMode,
   };
 }
 
@@ -119,6 +131,7 @@ export const appSettingsOperations = {
         | 'paginationSize'
         | 'practiceSubscriptionEnforced'
         | 'supportEmail'
+        | 'simulationMode'
       >
     >,
   ): Promise<ApiResponse<void>> {
@@ -137,6 +150,9 @@ export const appSettingsOperations = {
       }
       if (settings.supportEmail !== undefined) {
         payload.supportEmail = String(settings.supportEmail).trim().slice(0, 254);
+      }
+      if (settings.simulationMode !== undefined) {
+        payload.simulationMode = !!settings.simulationMode;
       }
       await setDoc(DOC_REF, payload, { merge: true });
       return { success: true };

@@ -3,7 +3,9 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../hooks/useAuth';
-import { isAdminRole } from '../lib/roles';
+import { isAdminRole, isSuperAdminEmail } from '../lib/roles';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../lib/firebase';
 import { useAppSettings } from '../contexts/AppSettingsContext';
 import { smsTemplateOperations, SmsTemplates } from '../lib/firestore/sms-templates';
 import { appSettingsOperations } from '../lib/firestore/app-settings';
@@ -17,6 +19,9 @@ import {
   Sliders,
   UserPlus,
   Mail,
+  FlaskConical,
+  Database,
+  Trash2,
 } from 'lucide-react';
 import { BRANDING } from '../config/branding';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -24,8 +29,14 @@ import { AdminGuard } from '../components/ui/AdminGuard';
 import { PageHeader } from '../components/ui/PageHeader';
 
 export const AdminSettingsPage: React.FC = () => {
-  const { userProfile } = useAuth();
+  const { userProfile, user } = useAuth();
   const { settings: liveAppSettings } = useAppSettings();
+  const isSuperAdmin = isSuperAdminEmail(user?.email);
+  const [seedState, setSeedState] = useState<{
+    busy: 'seed' | 'clear' | null;
+    message: string;
+    error: string;
+  }>({ busy: null, message: '', error: '' });
   const [templates, setTemplates] = useState<SmsTemplates | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,10 +48,12 @@ export const AdminSettingsPage: React.FC = () => {
     registrationEnabled: boolean;
     paginationSize: number;
     supportEmail: string;
+    simulationMode: boolean;
   }>({
     registrationEnabled: liveAppSettings.registrationEnabled,
     paginationSize: liveAppSettings.paginationSize,
     supportEmail: liveAppSettings.supportEmail || '',
+    simulationMode: liveAppSettings.simulationMode,
   });
   const [appSettingsSaving, setAppSettingsSaving] = useState(false);
   const [appSettingsSaved, setAppSettingsSaved] = useState(false);
@@ -52,11 +65,13 @@ export const AdminSettingsPage: React.FC = () => {
       registrationEnabled: liveAppSettings.registrationEnabled,
       paginationSize: liveAppSettings.paginationSize,
       supportEmail: liveAppSettings.supportEmail || '',
+      simulationMode: liveAppSettings.simulationMode,
     });
   }, [
     liveAppSettings.registrationEnabled,
     liveAppSettings.paginationSize,
     liveAppSettings.supportEmail,
+    liveAppSettings.simulationMode,
   ]);
 
   const handleSaveAppSettings = async () => {
@@ -73,10 +88,32 @@ export const AdminSettingsPage: React.FC = () => {
     setAppSettingsSaving(false);
   };
 
+  const runSeed = async (kind: 'seed' | 'clear') => {
+    setSeedState({ busy: kind, message: '', error: '' });
+    try {
+      const name = kind === 'seed' ? 'seedSimulationData' : 'clearSimulationData';
+      const res = (await httpsCallable(functions, name)({})) as {
+        data: { ok: boolean; seeded?: Record<string, number>; cleared?: Record<string, number> };
+      };
+      const counts = res.data.seeded || res.data.cleared || {};
+      const summary = Object.entries(counts)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ');
+      setSeedState({
+        busy: null,
+        message: `${kind === 'seed' ? 'Seeded' : 'Cleared'} — ${summary}`,
+        error: '',
+      });
+    } catch (err: any) {
+      setSeedState({ busy: null, message: '', error: err?.message || 'Failed' });
+    }
+  };
+
   const appSettingsDirty =
     appSettingsDraft.registrationEnabled !== liveAppSettings.registrationEnabled ||
     appSettingsDraft.paginationSize !== liveAppSettings.paginationSize ||
-    appSettingsDraft.supportEmail !== (liveAppSettings.supportEmail || '');
+    appSettingsDraft.supportEmail !== (liveAppSettings.supportEmail || '') ||
+    appSettingsDraft.simulationMode !== liveAppSettings.simulationMode;
 
   useEffect(() => {
     if (isAdminRole(userProfile?.role)) loadTemplates();
@@ -234,6 +271,76 @@ export const AdminSettingsPage: React.FC = () => {
                 className="w-32"
               />
             </label>
+          </div>
+
+          {/* Simulation mode (demo-only feature) */}
+          <div className="p-4 border border-secondary-200 rounded-lg">
+            <div className="flex items-start justify-between space-x-4">
+              <div className="flex items-start space-x-3 flex-1">
+                <div className="bg-secondary-100 p-2 rounded-lg mt-0.5">
+                  <FlaskConical className="h-4 w-4 text-secondary-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-secondary-900">Simulation mode</p>
+                  <p className="text-xs text-secondary-500 mt-0.5">
+                    When on, a per-session "Demo data" switch appears in the header.
+                    Users can flip it to route integration calls (DrChrono, inbox, etc.)
+                    to a seeded sandbox instead of real services. Leave off on real
+                    customer forks.
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={appSettingsDraft.simulationMode}
+                  onChange={(e) =>
+                    setAppSettingsDraft((d) => ({ ...d, simulationMode: e.target.checked }))
+                  }
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-secondary-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600" />
+              </label>
+            </div>
+
+            {isSuperAdmin && (
+              <div className="mt-3 pt-3 border-t border-secondary-200">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-xs text-secondary-500">
+                    Super-admin: seed the demo sandbox (50 patients, 50 appointments,
+                    50 refills) or wipe it clean.
+                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => runSeed('seed')}
+                      loading={seedState.busy === 'seed'}
+                      disabled={seedState.busy !== null}
+                    >
+                      <Database className="h-3.5 w-3.5 mr-1" />
+                      Seed demo data
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => runSeed('clear')}
+                      loading={seedState.busy === 'clear'}
+                      disabled={seedState.busy !== null}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+                {seedState.message && (
+                  <p className="mt-2 text-xs text-green-700">{seedState.message}</p>
+                )}
+                {seedState.error && (
+                  <p className="mt-2 text-xs text-red-700">{seedState.error}</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Support email */}

@@ -112,7 +112,6 @@ function applyTemplate(template: string, content: string, time: string): string 
 }
 
 export const calendarReminderScheduler = onSchedule({
-  region: "us-west1",
   schedule: "*/5 * * * *",
   timeZone: "America/Los_Angeles",
 }, async () => {
@@ -181,7 +180,6 @@ export const calendarReminderScheduler = onSchedule({
 });
 
 export const morningReminderScheduler = onSchedule({
-  region: "us-west1",
   schedule: "0 8 * * *",
   timeZone: "America/Los_Angeles",
 }, async () => {

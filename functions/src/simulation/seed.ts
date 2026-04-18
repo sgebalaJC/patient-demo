@@ -123,7 +123,7 @@ async function seedDrChronoRefills(
   return count;
 }
 
-export const seedSimulationData = onCall({region: "us-west1", timeoutSeconds: 120}, async (req) => {
+export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
   assertSuperAdmin(req.auth);
   const db = admin.firestore();
   const patientIds = await seedDrChronoPatients(db);
@@ -139,7 +139,7 @@ export const seedSimulationData = onCall({region: "us-west1", timeoutSeconds: 12
   };
 });
 
-export const clearSimulationData = onCall({region: "us-west1", timeoutSeconds: 120}, async (req) => {
+export const clearSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
   assertSuperAdmin(req.auth);
   const db = admin.firestore();
   const paths = [

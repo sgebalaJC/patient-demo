@@ -34,10 +34,7 @@ function scrub(s: unknown, max: number): string {
     .replace(SSN_RE, "[ssn]");
 }
 
-// Region pinned to match `setGlobalOptions({region: 'us-west1'})` in index.ts
-// — this file is re-exported before that call runs, so it wouldn't pick the
-// global default up otherwise.
-export const logClientError = onCall({region: "us-west1", cors: true}, async (request) => {
+export const logClientError = onCall({cors: true}, async (request) => {
   const data = (request.data ?? {}) as {
     level?: string;
     message?: unknown;

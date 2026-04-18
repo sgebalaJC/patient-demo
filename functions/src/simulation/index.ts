@@ -65,7 +65,7 @@ async function isSimulationAllowed(): Promise<boolean> {
   return snap.exists && snap.data()?.simulationMode === true;
 }
 
-export const integrationCall = onCall({region: "us-west1", cors: true, timeoutSeconds: 60}, async (req) => {
+export const integrationCall = onCall({cors: true, timeoutSeconds: 60}, async (req) => {
   const {integration, operation, params, simulated} = (req.data || {}) as {
     integration?: string;
     operation?: string;

@@ -6,6 +6,30 @@
  * - Stripe subscription billing
  */
 
+import {FUNCTIONS_BRANDING} from "./branding.js";
+import {isSuperAdminEmail, assertAdmin as assertCallerIsAdmin} from "./superAdmins.js";
+import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail} from "./email.js";
+import {setGlobalOptions} from "firebase-functions/v2";
+import {defineSecret} from "firebase-functions/params";
+import {onSchedule} from "firebase-functions/v2/scheduler";
+import {onCall, onRequest} from "firebase-functions/v2/https";
+
+// Sidecar binding secrets — bound to functions that need to call the sidecar
+// running on the customer-owned VPS.
+const SIDECAR_URL_SECRET = defineSecret("SIDECAR_URL");
+const SIDECAR_API_KEY_SECRET = defineSecret("SIDECAR_API_KEY");
+import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
+import {logger} from "firebase-functions";
+import * as admin from "firebase-admin";
+import * as crypto from "crypto";
+
+// Pin all functions to us-west1. This MUST run before any re-export below,
+// because `onCall`/`onRequest`/`onSchedule` snapshot the current default at
+// import time — re-exports above this line would silently deploy to the
+// library default (us-central1). Change this per-customer if using a
+// different region.
+setGlobalOptions({region: "us-west1"});
+
 // Client-side error telemetry (browser → Cloud Logging)
 export {logClientError} from "./client-errors.js";
 
@@ -32,27 +56,6 @@ export {
   resumePlatformSubscription,
   platformStripeWebhook,
 } from "./platformStripe.js";
-
-import {FUNCTIONS_BRANDING} from "./branding.js";
-import {isSuperAdminEmail, assertAdmin as assertCallerIsAdmin} from "./superAdmins.js";
-import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail} from "./email.js";
-import {setGlobalOptions} from "firebase-functions/v2";
-import {defineSecret} from "firebase-functions/params";
-import {onSchedule} from "firebase-functions/v2/scheduler";
-import {onCall, onRequest} from "firebase-functions/v2/https";
-
-// Sidecar binding secrets — bound to functions that need to call the sidecar
-// running on the customer-owned VPS.
-const SIDECAR_URL_SECRET = defineSecret("SIDECAR_URL");
-const SIDECAR_API_KEY_SECRET = defineSecret("SIDECAR_API_KEY");
-import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
-import {logger} from "firebase-functions";
-import * as admin from "firebase-admin";
-import * as crypto from "crypto";
-
-// Pin all functions to us-west1 to match Firestore + Storage regions.
-// Change this per-customer if using a different region.
-setGlobalOptions({region: "us-west1"});
 
 // Google Workspace service account JSON is passed via the GOOGLE_SA_KEY
 // environment variable (set in functions/.env for local emulator or via
@@ -662,7 +665,6 @@ export const createUserWithAuth = onCall({
  */
 export const onBootstrapRequestCreated = onDocumentCreated({
   document: 'bootstrap-requests/{requestId}',
-  region: 'us-central1',
 }, async (event) => {
   const requestId = event.params.requestId;
   const data = event.data?.data();

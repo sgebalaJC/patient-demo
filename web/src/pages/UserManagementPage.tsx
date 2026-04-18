@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithCustomToken } from 'firebase/auth';
-import { functionsCentral, auth } from '../lib/firebase';
+import { functions, auth } from '../lib/firebase';
 import { sendInviteLink } from '../lib/firebase';
 import { isSuperAdminRole } from '../lib/roles';
 import { useAppSettings } from '../contexts/AppSettingsContext';
@@ -167,7 +167,7 @@ export const UserManagementPage: React.FC = () => {
   const handleImpersonate = async (targetUser: User) => {
     try {
       const impersonateUser = httpsCallable<{ targetUid: string }, { token: string }>(
-        functionsCentral, 'impersonateUser'
+        functions, 'impersonateUser'
       );
       const res = await impersonateUser({ targetUid: targetUser.id });
       await signInWithCustomToken(auth, res.data.token);

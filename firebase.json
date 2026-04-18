@@ -70,7 +70,7 @@
     "redirects": [
       {
         "source": "**",
-        "destination": "https://web-patient-demo--patient-demo-project.us-central1.hosted.app",
+        "destination": "https://web-patient-demo--patient-demo-project.us-west1.hosted.app",
         "type": 302
       }
     ]

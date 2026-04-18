@@ -4,7 +4,7 @@
  */
 
 import { httpsCallable } from 'firebase/functions';
-import { functionsCentral } from './firebase';
+import { functions } from './firebase';
 
 interface UrlResult {
   url: string;
@@ -27,7 +27,7 @@ export const platformStripe = {
     const fn = httpsCallable<
       { plan: 'monthly' | 'annual'; successUrl: string; cancelUrl: string },
       UrlResult
-    >(functionsCentral, 'createPlatformCheckoutSession');
+    >(functions, 'createPlatformCheckoutSession');
     const res = await fn({ plan, ...returnUrls('subscribed') });
     if (!res.data?.url) throw new Error('Checkout URL missing from response.');
     return res.data.url;
@@ -37,7 +37,7 @@ export const platformStripe = {
     const fn = httpsCallable<
       { successUrl: string; cancelUrl: string },
       UrlResult
-    >(functionsCentral, 'createPlatformTopupSession');
+    >(functions, 'createPlatformTopupSession');
     const res = await fn(returnUrls('topup-success'));
     if (!res.data?.url) throw new Error('Checkout URL missing from response.');
     return res.data.url;
@@ -45,7 +45,7 @@ export const platformStripe = {
 
   async openBillingPortal(): Promise<string> {
     const fn = httpsCallable<{ returnUrl: string }, UrlResult>(
-      functionsCentral,
+      functions,
       'createPlatformBillingPortalSession',
     );
     const res = await fn({
@@ -56,12 +56,12 @@ export const platformStripe = {
   },
 
   async cancelSubscription(): Promise<void> {
-    const fn = httpsCallable(functionsCentral, 'cancelPlatformSubscription');
+    const fn = httpsCallable(functions, 'cancelPlatformSubscription');
     await fn({});
   },
 
   async resumeSubscription(): Promise<void> {
-    const fn = httpsCallable(functionsCentral, 'resumePlatformSubscription');
+    const fn = httpsCallable(functions, 'resumePlatformSubscription');
     await fn({});
   },
 };

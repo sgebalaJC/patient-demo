@@ -170,12 +170,20 @@ export const UserManagementPage: React.FC = () => {
         functions, 'impersonateUser'
       );
       const res = await impersonateUser({ targetUid: targetUser.id });
-      await signInWithCustomToken(auth, res.data.token);
-      // Only set after successful sign-in so we don't get stuck
+      // Set the flag BEFORE sign-in: signInWithCustomToken synchronously
+      // triggers AuthContext's onAuthStateChanged, which reads this flag to
+      // decide whether to show the impersonation banner. Setting it after
+      // causes the banner to stay hidden until the next reload.
       sessionStorage.setItem('impersonation', JSON.stringify({
         realEmail: userProfile?.email,
         targetName: `${targetUser.firstName} ${targetUser.lastName}`,
       }));
+      try {
+        await signInWithCustomToken(auth, res.data.token);
+      } catch (signInErr) {
+        sessionStorage.removeItem('impersonation');
+        throw signInErr;
+      }
     } catch (err: any) {
       logger.error('Impersonation failed:', err);
       alert('Impersonation failed: ' + (err.message || 'Unknown error'));

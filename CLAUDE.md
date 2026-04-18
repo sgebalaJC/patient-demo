@@ -98,7 +98,7 @@ Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000
 
 ## Deployment
 
-- **Frontend:** Firebase App Hosting (Cloud Run) — one backend per customer. Auto-deploys on push to `main` once the GitHub repo is linked to the backend. The demo fork uses backend `web-patient-demo` on project `patient-demo-project` in `us-west1`.
+- **Frontend:** Firebase App Hosting (Cloud Run) — one backend per customer. Auto-deploys on push to `main` once the GitHub repo is linked to the backend. The demo fork uses backend `web-patient-demo` on project `patient-demo-project` in `us-central1` (App Hosting doesn't offer us-west1 yet; Functions/Firestore/Storage are all us-west1).
 - **Functions:** `firebase deploy --only functions`
 - **Firestore rules + indexes:** `firebase deploy --only firestore:rules,firestore:indexes`
 - **Sidecar:** `cd sidecar && ./deploy.sh` (GCE default, edit constants for host)

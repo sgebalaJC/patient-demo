@@ -29,7 +29,7 @@ export const FUNCTIONS_BRANDING = {
    * plus any staging or preview URLs.
    */
   additionalOrigins: [
-    'https://web-patient-demo--patient-demo-project.us-west1.hosted.app',
+    'https://web-patient-demo--patient-demo-project.us-central1.hosted.app',
     'https://patient-demo-project.web.app',
     'https://patient-demo-project.firebaseapp.com',
   ] as string[],

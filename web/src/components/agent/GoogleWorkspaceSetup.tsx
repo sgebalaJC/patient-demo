@@ -7,6 +7,7 @@ import {
   disconnectGoogleWorkspace,
   type GoogleWorkspaceIntegration,
 } from '../../lib/google-workspace';
+import { ConfirmModal } from '../ui/ConfirmModal';
 
 const SERVICE_IDS = ['gmail', 'calendar', 'drive'] as const;
 
@@ -38,6 +39,7 @@ export const GoogleWorkspaceSetup: React.FC<GoogleWorkspaceSetupProps> = ({ onSt
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [selectedServices, setSelectedServices] = useState<string[]>(['gmail', 'calendar', 'drive']);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   // Handle OAuth callback params
   useEffect(() => {
@@ -93,8 +95,8 @@ export const GoogleWorkspaceSetup: React.FC<GoogleWorkspaceSetupProps> = ({ onSt
     }
   }
 
-  async function handleDisconnect() {
-    if (!window.confirm('Disconnect Google Workspace? The agent will lose access to Gmail, Calendar, and Drive.')) return;
+  async function performDisconnect() {
+    setConfirmDisconnect(false);
     setDisconnecting(true);
     setError('');
     try {
@@ -160,7 +162,7 @@ export const GoogleWorkspaceSetup: React.FC<GoogleWorkspaceSetupProps> = ({ onSt
         <div className="shrink-0">
           {isActive ? (
             <button
-              onClick={handleDisconnect}
+              onClick={() => setConfirmDisconnect(true)}
               disabled={disconnecting}
               className="text-xs px-3 py-1.5 rounded-md border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
             >
@@ -256,6 +258,15 @@ export const GoogleWorkspaceSetup: React.FC<GoogleWorkspaceSetupProps> = ({ onSt
           </p>
         </div>
       )}
+      <ConfirmModal
+        isOpen={confirmDisconnect}
+        onClose={() => setConfirmDisconnect(false)}
+        onConfirm={performDisconnect}
+        title="Disconnect Google Workspace"
+        message="Disconnect Google Workspace? The agent will lose access to Gmail, Calendar, and Drive."
+        confirmLabel="Disconnect"
+        variant="danger"
+      />
     </div>
   );
 };

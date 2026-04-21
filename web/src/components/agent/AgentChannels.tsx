@@ -79,33 +79,8 @@ export const AgentChannels: React.FC = () => {
             initialWorkspaceName={slack.workspace?.name}
             onStateChange={loadStatus}
           />
-
-          {/* Coming soon placeholders */}
-          <div className="text-xs text-secondary-400 uppercase tracking-wider pt-4 pb-1">
-            Coming soon
-          </div>
-          <ComingSoonCard name="Telegram" description="Telegram bot for on-the-go access" />
-          <ComingSoonCard name="Discord" description="Discord bot for team notifications" />
-          <ComingSoonCard name="WhatsApp" description="WhatsApp via phone pairing" />
         </div>
       )}
     </div>
   );
 };
-
-const ComingSoonCard: React.FC<{ name: string; description: string }> = ({ name, description }) => (
-  <div className="card p-4 flex items-center gap-4 opacity-60">
-    <div className="shrink-0 bg-secondary-100 rounded-lg p-2 w-10 h-10 flex items-center justify-center">
-      <span className="text-secondary-500 font-semibold text-xs">{name.slice(0, 2).toUpperCase()}</span>
-    </div>
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2">
-        <h3 className="text-sm font-semibold text-secondary-900">{name}</h3>
-        <span className="text-xs px-2 py-0.5 rounded-full bg-secondary-100 text-secondary-500">
-          Not setup
-        </span>
-      </div>
-      <p className="text-xs text-secondary-500 mt-0.5">{description}</p>
-    </div>
-  </div>
-);

@@ -3,7 +3,6 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { AgentChat } from '../components/agent/AgentChat';
 import { AgentSkills } from '../components/agent/AgentSkills';
-import { AgentIntegrations } from '../components/agent/AgentIntegrations';
 import { AgentChannels } from '../components/agent/AgentChannels';
 import { AgentBackups } from '../components/agent/AgentBackups';
 import { AgentHealth } from '../components/agent/AgentHealth';
@@ -12,27 +11,21 @@ import {
   ArrowLeft,
   MessageSquare,
   Star,
-  Link2,
   Archive,
   Activity,
-  ExternalLink,
   Radio,
   Bot,
 } from 'lucide-react';
 
-type Tab = 'chat' | 'skills' | 'channels' | 'integrations' | 'backups' | 'health';
+type Tab = 'chat' | 'skills' | 'channels' | 'backups' | 'health';
 
 const NAV_ITEMS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'chat', label: 'Chat', icon: MessageSquare },
   { key: 'skills', label: 'Skills', icon: Star },
   { key: 'channels', label: 'Channels', icon: Radio },
-  { key: 'integrations', label: 'Integrations', icon: Link2 },
   { key: 'backups', label: 'Backups', icon: Archive },
   { key: 'health', label: 'Health', icon: Activity },
 ];
-
-const DASHBOARD_URL = import.meta.env.VITE_AGENT_DASHBOARD_URL || '';
-const GATEWAY_TOKEN = import.meta.env.VITE_AGENT_GATEWAY_TOKEN || '';
 
 export const AgentPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -64,12 +57,6 @@ export const AgentPage: React.FC = () => {
   }, []);
 
   const sidecarConfigured = sidecar.isConfigured;
-
-  const openDashboard = () => {
-    if (DASHBOARD_URL) {
-      window.open(`${DASHBOARD_URL}/#token=${GATEWAY_TOKEN}`, '_blank');
-    }
-  };
 
   const renderContent = () => {
     if (!sidecarConfigured) {
@@ -113,8 +100,6 @@ export const AgentPage: React.FC = () => {
         return <AgentSkills />;
       case 'channels':
         return <AgentChannels />;
-      case 'integrations':
-        return <AgentIntegrations />;
       case 'backups':
         return <AgentBackups />;
       case 'health':
@@ -160,19 +145,6 @@ export const AgentPage: React.FC = () => {
             );
           })}
 
-          {/* Divider */}
-          <div className="mx-4 my-3 border-t border-secondary-200" />
-
-          {/* Dashboard link */}
-          {DASHBOARD_URL && (
-            <button
-              onClick={openDashboard}
-              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-secondary-600 hover:text-primary-600 hover:bg-secondary-50 transition-colors border-l-2 border-transparent"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Dashboard
-            </button>
-          )}
         </div>
 
         {/* Status indicator */}

@@ -6,6 +6,7 @@ import {
   buildSlackManifest,
   type SlackWorkspace,
 } from '../../lib/slack';
+import { ConfirmModal } from '../ui/ConfirmModal';
 
 type Status = 'idle' | 'saving' | 'connected' | 'disconnecting';
 
@@ -41,6 +42,7 @@ export const SlackSetup: React.FC<SlackSetupProps> = ({
   const [appToken, setAppToken] = useState('');
   const [error, setError] = useState('');
   const [manifestCopied, setManifestCopied] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,8 +62,8 @@ export const SlackSetup: React.FC<SlackSetupProps> = ({
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!window.confirm(`Disconnect Slack from ${agentName}? Tokens will be cleared.`)) return;
+  const performDisconnect = async () => {
+    setConfirmDisconnect(false);
     setStatus('disconnecting');
     setError('');
     try {
@@ -114,7 +116,7 @@ export const SlackSetup: React.FC<SlackSetupProps> = ({
         <div className="shrink-0">
           {status === 'connected' ? (
             <button
-              onClick={handleDisconnect}
+              onClick={() => setConfirmDisconnect(true)}
               disabled={(status as Status) === 'disconnecting'}
               className="text-xs px-3 py-1.5 rounded-md border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
             >
@@ -238,6 +240,16 @@ export const SlackSetup: React.FC<SlackSetupProps> = ({
           {error}
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={confirmDisconnect}
+        onClose={() => setConfirmDisconnect(false)}
+        onConfirm={performDisconnect}
+        title="Disconnect Slack"
+        message={`Disconnect Slack from ${agentName}? Tokens will be cleared.`}
+        confirmLabel="Disconnect"
+        variant="danger"
+      />
     </div>
   );
 };

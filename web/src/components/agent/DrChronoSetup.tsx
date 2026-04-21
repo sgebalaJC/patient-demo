@@ -9,6 +9,7 @@ import {
   disconnectDrChrono,
   type DrChronoIntegration,
 } from '../../lib/drchrono';
+import { ConfirmModal } from '../ui/ConfirmModal';
 
 interface Props {
   onStateChange?: () => void;
@@ -27,6 +28,7 @@ export const DrChronoSetup: React.FC<Props> = ({ onStateChange }) => {
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [showEdit, setShowEdit] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   useEffect(() => {
     const errParam = searchParams.get('drchrono_error');
@@ -104,8 +106,8 @@ export const DrChronoSetup: React.FC<Props> = ({ onStateChange }) => {
     }
   }
 
-  async function handleDisconnect() {
-    if (!window.confirm('Disconnect DrChrono? Stored credentials and tokens will be deleted.')) return;
+  async function performDisconnect() {
+    setConfirmDisconnect(false);
     setDisconnecting(true);
     setError('');
     try {
@@ -192,7 +194,7 @@ export const DrChronoSetup: React.FC<Props> = ({ onStateChange }) => {
           )}
           {hasCreds && (
             <button
-              onClick={handleDisconnect}
+              onClick={() => setConfirmDisconnect(true)}
               disabled={disconnecting}
               className="text-xs px-3 py-1.5 rounded-md border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
@@ -309,6 +311,15 @@ export const DrChronoSetup: React.FC<Props> = ({ onStateChange }) => {
           )}
         </div>
       )}
+      <ConfirmModal
+        isOpen={confirmDisconnect}
+        onClose={() => setConfirmDisconnect(false)}
+        onConfirm={performDisconnect}
+        title="Disconnect DrChrono"
+        message="Disconnect DrChrono? Stored credentials and tokens will be deleted."
+        confirmLabel="Disconnect"
+        variant="danger"
+      />
     </div>
   );
 };

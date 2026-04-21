@@ -34,7 +34,7 @@ const ContactPage = lazy(() => import('./pages/ContactPage').then(m => ({ defaul
 const BillingPage = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })));
 const AdminSubscriptionPlansPage = lazy(() => import('./pages/AdminSubscriptionPlansPage').then(m => ({ default: m.AdminSubscriptionPlansPage })));
 const AdminPlatformSubscriptionPage = lazy(() => import('./pages/AdminPlatformSubscriptionPage').then(m => ({ default: m.AdminPlatformSubscriptionPage })));
-const AdminDrChronoPage = lazy(() => import('./pages/AdminDrChronoPage').then(m => ({ default: m.AdminDrChronoPage })));
+const AdminDrChronoHubPage = lazy(() => import('./pages/AdminDrChronoHubPage').then(m => ({ default: m.AdminDrChronoHubPage })));
 const AdminClientErrorsPage = lazy(() => import('./pages/AdminClientErrorsPage').then(m => ({ default: m.AdminClientErrorsPage })));
 const AdminPriorAuthPage = lazy(() => import('./pages/AdminPriorAuthPage').then(m => ({ default: m.AdminPriorAuthPage })));
 const AdminPriorAuthNewPage = lazy(() => import('./pages/AdminPriorAuthNewPage').then(m => ({ default: m.AdminPriorAuthNewPage })));
@@ -136,7 +136,7 @@ function App() {
             <Route path="settings" element={<AdminSettingsPage />} />
             <Route path="subscription-plans" element={<AdminSubscriptionPlansPage />} />
             <Route path="platform-subscription" element={<AdminPlatformSubscriptionPage />} />
-            <Route path="drchrono" element={<AdminDrChronoPage />} />
+            <Route path="drchrono" element={<AdminDrChronoHubPage />} />
             <Route path="client-errors" element={<AdminClientErrorsPage />} />
             <Route path="prior-auth" element={<AdminPriorAuthPage />} />
             <Route path="prior-auth/new" element={<AdminPriorAuthNewPage />} />

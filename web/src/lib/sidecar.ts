@@ -21,6 +21,63 @@ export interface DrChronoPatient {
   is_active?: boolean;
 }
 
+// ── Unified DrChrono patient lookup types (mirror sidecar/src/lib/drchrono.ts) ──
+
+export interface DrChronoLookupQuery {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  drchronoId?: string | number;
+}
+
+export interface UnifiedDrChronoPatient {
+  drchronoId: number;
+  firstName: string;
+  lastName: string;
+  middleName: string | null;
+  dateOfBirth: string | null;
+  gender: string | null;
+  patientStatus: string | null;
+  email: string | null;
+  cellPhone: string | null;
+  homePhone: string | null;
+  officePhone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  insurance: {
+    carrier: string | null;
+    policyNumber: string | null;
+    groupNumber: string | null;
+    planName: string | null;
+  };
+}
+
+export interface DrChronoLookupResult {
+  status: 'matched' | 'no-match' | 'skipped-multi' | 'error';
+  matched: boolean;
+  candidatesCount: number;
+  exactMatchesCount: number;
+  patient: UnifiedDrChronoPatient | null;
+  candidates: UnifiedDrChronoPatient[] | null;
+  errorMessage: string | null;
+}
+
+export interface DrChronoPatientDetails {
+  allergies: { name: string; reaction: string | null; status: string | null }[];
+  problems: { name: string; status: string | null; dateDiagnosed: string | null }[];
+  appointments: {
+    id: number;
+    date: string | null;
+    reason: string | null;
+    status: string | null;
+    duration: number | null;
+    notesLocked: boolean;
+  }[];
+}
+
 class SidecarClient {
   private proxyBase: string;
 
@@ -353,6 +410,35 @@ class SidecarClient {
     return this.request<DrChronoPatient>(
       `/admin-api/drchrono/patients/${encodeURIComponent(String(id))}`,
     );
+  }
+
+  /** Unified patient lookup — aggregates name/email/phone/id into a single
+   *  result shape ready for the admin UI. Requires integrations/drchrono
+   *  enabled and the sidecar /admin-api/drchrono-patient-lookup endpoint. */
+  async lookupDrChronoPatient(query: DrChronoLookupQuery): Promise<DrChronoLookupResult> {
+    const qs = new URLSearchParams();
+    if (query.firstName) qs.set('firstName', query.firstName);
+    if (query.lastName) qs.set('lastName', query.lastName);
+    if (query.email) qs.set('email', query.email);
+    if (query.phone) qs.set('phone', query.phone);
+    if (query.drchronoId !== undefined && query.drchronoId !== null && query.drchronoId !== '') {
+      qs.set('drchronoId', String(query.drchronoId));
+    }
+    return this.request(`/admin-api/drchrono-patient-lookup?${qs}`);
+  }
+
+  async getDrChronoPatientDetails(drchronoId: number): Promise<DrChronoPatientDetails> {
+    const qs = new URLSearchParams({ drchronoId: String(drchronoId) });
+    return this.request(`/admin-api/drchrono-patient-details?${qs}`);
+  }
+
+  async lookupDrChronoPatientsBatch(items: { id: string; query: DrChronoLookupQuery }[]): Promise<{
+    results: { id: string; query: DrChronoLookupQuery; result: DrChronoLookupResult }[];
+  }> {
+    return this.request('/admin-api/drchrono-patient-batch', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
   }
 
   // ── Health ────────────────────────────────────

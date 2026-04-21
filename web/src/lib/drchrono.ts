@@ -17,12 +17,23 @@ export interface DrChronoIntegration {
   clientId?: string;
   redirectUri?: string;
   scope?: string;
+  /** Practice subdomain for chart URLs, e.g. "acme" → acme.drchrono.com/chart/<id>/summary.
+   *  `app.drchrono.com` 404s on per-practice chart links, so admins set this
+   *  once in the integration UI. */
+  practiceSubdomain?: string;
   tokenExpiresAt?: { seconds: number; nanoseconds: number } | null;
   connectedAt?: unknown;
   updatedAt?: unknown;
   connectedBy?: string;
   // clientSecret / accessToken / refreshToken are present on the doc but
   // intentionally not exposed in the TS type — UI should never display them.
+}
+
+/** Build a browsable chart URL for a DrChrono patient id. Falls back to
+ *  app.drchrono.com — which 404s for many practices — if no subdomain is set. */
+export function drchronoChartUrl(patientId: number, subdomain?: string): string {
+  if (subdomain) return `https://${subdomain}.drchrono.com/chart/${patientId}/summary`;
+  return `https://app.drchrono.com/patient/chart/${patientId}/`;
 }
 
 export async function getDrChronoStatus(): Promise<DrChronoIntegration | null> {

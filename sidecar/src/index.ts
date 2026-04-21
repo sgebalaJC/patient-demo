@@ -17,6 +17,8 @@ import { readConfig, patchConfig } from "./routes/config.js";
 import { handleCreate, handleList, handleRestore, handleDelete, handleDownload } from "./routes/backup.js";
 import { handleListSkills, handleInstallSkill, handleUninstallSkill } from "./routes/skills.js";
 import { handleAdminApi } from "./routes/admin-api.js";
+import { handleSnapshot } from "./routes/snapshot.js";
+import { startHealthMonitor } from "./lib/health-monitor.js";
 
 const PORT = parseInt(process.env.PORT || "8081");
 
@@ -63,7 +65,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
 }
 
 /** Admin-only routes — patients can only access /chat */
-const ADMIN_ONLY_PREFIXES = ["/files", "/status", "/restart", "/stats", "/config", "/backup", "/cron", "/admin-api"];
+const ADMIN_ONLY_PREFIXES = ["/files", "/status", "/restart", "/stats", "/config", "/backup", "/cron", "/admin-api", "/snapshot"];
 
 function isAdminOnlyRoute(path: string): boolean {
   return ADMIN_ONLY_PREFIXES.some(prefix => path.startsWith(prefix));
@@ -312,6 +314,11 @@ const server = Bun.serve({
         }
       }
 
+      // ── Snapshot ──────────────────────────────
+      if (path === "/snapshot/openclaw" && method === "GET") {
+        return respond(await handleSnapshot());
+      }
+
       // ── Admin API ─────────────────────────────
       if (path.startsWith("/admin-api")) {
         return respond(await handleAdminApi(method, path, url, request));
@@ -326,3 +333,5 @@ const server = Bun.serve({
 });
 
 console.log(`[patient-sidecar] listening on port ${PORT}`);
+
+startHealthMonitor();

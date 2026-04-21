@@ -177,6 +177,15 @@ service cloud.firestore {
       allow read, list, create, delete: if isAdmin();
     }
 
+    // Admin-to-admin channel — simple group chat for the practice's admins.
+    // Create-only by the sender (own senderId); list/read/delete admin-only.
+    match /admin-channel-messages/{messageId} {
+      allow read, list, delete: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.senderId == request.auth.uid;
+      allow update: if false;
+    }
+
     // ───────────────────────── Support chat ─────────────────────────
 
     match /support-chat/{messageId} {

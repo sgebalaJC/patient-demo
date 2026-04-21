@@ -6,6 +6,7 @@ import { isAdminRole } from '../../lib/roles';
 import { AccessDenied } from '../ui/AccessDenied';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { usePlatformSubscription } from '../../hooks/usePlatformSubscription';
+import { AdminChannelWidget } from '../admin/AdminChannelWidget';
 
 const FULL_HEIGHT_ROUTES = ['/admin/agent'];
 
@@ -81,6 +82,7 @@ export const AdminLayout: React.FC = () => {
           </div>
         </div>
       )}
+      <AdminChannelWidget />
     </div>
   );
 };

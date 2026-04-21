@@ -228,3 +228,62 @@ export const drchronoSetEnabled = onCall({}, async (request) => {
   }, {merge: true});
   return {ok: true, enabled};
 });
+
+// ─── Access-token helper for server-side callers ─────────────────────
+//
+// Reads the current access token from integrations/drchrono. If it's within
+// 5 minutes of expiry, refreshes using the stored refresh_token and persists
+// the new pair. Callers (PA fetcher, payer extractor) that need to hit the
+// DrChrono REST API should always go through this instead of reading the
+// token directly.
+
+export async function getDrChronoAccessToken(): Promise<string> {
+  const ref = db().doc(CONFIG_DOC);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error("DrChrono not connected");
+  const data = snap.data() as {
+    accessToken?: string;
+    refreshToken?: string;
+    clientId?: string;
+    clientSecret?: string;
+    tokenExpiresAt?: admin.firestore.Timestamp;
+    enabled?: boolean;
+  };
+  if (!data.accessToken) throw new Error("DrChrono access token missing");
+  if (data.enabled === false) throw new Error("DrChrono integration disabled");
+
+  const expMs = data.tokenExpiresAt ? data.tokenExpiresAt.toMillis() : 0;
+  const refreshNeeded = expMs - Date.now() < 5 * 60 * 1000;
+  if (!refreshNeeded) return data.accessToken;
+
+  if (!data.refreshToken || !data.clientId || !data.clientSecret) {
+    throw new Error("DrChrono refresh credentials missing");
+  }
+
+  const tokenRes = await fetch(DRCHRONO_TOKEN_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: data.refreshToken,
+      client_id: data.clientId,
+      client_secret: data.clientSecret,
+    }),
+  });
+  if (!tokenRes.ok) {
+    const text = await tokenRes.text();
+    throw new Error(`DrChrono refresh failed: ${tokenRes.status} ${text.slice(0, 200)}`);
+  }
+  const tok = await tokenRes.json() as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in: number;
+  };
+  await ref.set({
+    accessToken: tok.access_token,
+    refreshToken: tok.refresh_token ?? data.refreshToken,
+    tokenExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + tok.expires_in * 1000),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return tok.access_token;
+}

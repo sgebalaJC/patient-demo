@@ -3117,3 +3117,18 @@ export const impersonateUser = onCall(async (request) => {
   });
   return {token};
 });
+
+
+// ─── Prior Authorization subsystem ──────────────────────────────────
+export {
+  policyFetcherCron,
+  triggerPolicyRefresh,
+  createPriorAuth,
+  updatePriorAuthStatus,
+  submitPolicyReview,
+  runChartGapCheck,
+  onPriorAuthWrite,
+  paFollowupCron,
+  extractTopPayers,
+  seedPaData,
+} from "./pa/index.js";

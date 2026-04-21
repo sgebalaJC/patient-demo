@@ -36,4 +36,17 @@ export const FIELD_LIMITS = {
   signature: { max: 200 },
   detailsField: { max: 500 },
   role: { max: 20 },
+
+  // Prior Authorization
+  priorAuth: {
+    memberNumber: { max: 64 },
+    groupNumber: { max: 64 },
+    referenceNumber: { max: 64 },
+    authNumber: { max: 64 },
+    denialReason: { max: 1000 },
+    notes: { max: 2000 },
+    evidence: { max: 2000 },
+    cptCode: { min: 5, max: 5 },
+    icd10Code: { max: 10 },
+  },
 } as const;

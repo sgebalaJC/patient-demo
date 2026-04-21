@@ -17,6 +17,7 @@ import {
   Zap,
   Settings,
   Bug,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeatures } from '../../hooks/useFeatures';
@@ -57,6 +58,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Specialist Requests', href: '/admin/specialist-requests', icon: Stethoscope },
   { label: 'Refills', href: '/admin/refills', icon: Pill, featureFlag: 'prescriptions' },
   { label: 'Intake Forms', href: '/admin/intake-forms', icon: FileText, featureFlag: 'patientIntake' },
+  { label: 'Prior Auth', href: '/admin/prior-auth', icon: ClipboardCheck, matchPrefix: true },
   { label: 'Subscriptions', href: '/admin/subscription-plans', icon: CreditCard },
   { label: 'Platform Billing', href: '/admin/platform-subscription', icon: Zap },
   { label: 'Client Errors', href: '/admin/client-errors', icon: Bug, roles: ['super_admin'] },

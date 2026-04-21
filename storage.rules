@@ -56,6 +56,20 @@ service firebase.storage {
       allow read, write: if false;
     }
 
+    // Prior-auth raw policy snapshots — admin read only; Cloud Functions +
+    // extraction scripts write via Admin SDK (bypasses rules).
+    match /pa-snapshots/{allPaths=**} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Prior-auth supporting documents (chart excerpts, prior imaging). Admin-only.
+    match /pa-attachments/{paId}/{allPaths=**} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.size < 25 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
     // Deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

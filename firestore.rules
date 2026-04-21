@@ -283,5 +283,46 @@ service cloud.firestore {
       allow read, list: if isAdmin();
       allow create, update, delete: if false;
     }
+
+    // ── Prior Authorization ────────────────────────────────────────────────
+    //
+    // Admin-only. Patients never see PA records. Policy data (payers,
+    // policies, snapshots, candidates) is populated by Cloud Functions +
+    // one-shot scripts — client writes denied. Coordinators interact via
+    // `prior-auths` + `target-cpts`. `prior-auth-events` is trigger-written.
+    match /payers/{payerId} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
+
+    match /payer-policies/{policyId} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
+
+    match /payer-policy-snapshots/{snapshotId} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
+
+    match /payer-candidates/{candidateId} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
+
+    match /target-cpts/{cptId} {
+      allow read, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /prior-auths/{paId} {
+      allow read, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /prior-auth-events/{eventId} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
   }
 }

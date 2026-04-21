@@ -24,6 +24,13 @@ export const collections = {
   specialistRequests: collection(db, 'specialist-requests'),
   subscriptionPlans: collection(db, 'subscription-plans'),
   patientSubscriptions: collection(db, 'patient-subscriptions'),
+  priorAuths: collection(db, 'prior-auths'),
+  payers: collection(db, 'payers'),
+  payerPolicies: collection(db, 'payer-policies'),
+  payerPolicySnapshots: collection(db, 'payer-policy-snapshots'),
+  payerCandidates: collection(db, 'payer-candidates'),
+  targetCpts: collection(db, 'target-cpts'),
+  priorAuthEvents: collection(db, 'prior-auth-events'),
 };
 
 // Utility functions

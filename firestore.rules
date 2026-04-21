@@ -324,5 +324,28 @@ service cloud.firestore {
       allow read, list: if isAdmin();
       allow write: if false;
     }
+
+    // ── SignalWire fax ─────────────────────────────────────────────────────
+    //
+    // Inbound + outbound faxes + outbound batch upload staging. All rows are
+    // written by Cloud Functions (webhook / send / retry / actions); clients
+    // read for the admin UI.
+    match /inbound-faxes/{faxSid} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
+
+    match /outbound-faxes/{faxSid} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
+
+    // Outbound batch staging doc — admin creates when starting a batch so
+    // the Storage rule can match uploads against it. Cloud Functions reads
+    // the listed paths during sendOutboundFax.
+    match /outbound-fax-batches/{batchId} {
+      allow read, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

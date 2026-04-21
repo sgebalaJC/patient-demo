@@ -41,6 +41,7 @@ const AdminPriorAuthNewPage = lazy(() => import('./pages/AdminPriorAuthNewPage')
 const AdminPriorAuthDetailPage = lazy(() => import('./pages/AdminPriorAuthDetailPage').then(m => ({ default: m.AdminPriorAuthDetailPage })));
 const AdminPolicyLibraryPage = lazy(() => import('./pages/AdminPolicyLibraryPage').then(m => ({ default: m.AdminPolicyLibraryPage })));
 const AdminPolicyReviewPage = lazy(() => import('./pages/AdminPolicyReviewPage').then(m => ({ default: m.AdminPolicyReviewPage })));
+const AdminFaxesHubPage = lazy(() => import('./pages/AdminFaxesHubPage').then(m => ({ default: m.AdminFaxesHubPage })));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-64">
@@ -142,6 +143,7 @@ function App() {
             <Route path="prior-auth/:paId" element={<AdminPriorAuthDetailPage />} />
             <Route path="prior-auth/policies" element={<AdminPolicyLibraryPage />} />
             <Route path="prior-auth/policies/:policyId" element={<AdminPolicyReviewPage />} />
+            <Route path="faxes" element={<AdminFaxesHubPage />} />
           </Route>
           {/* Add more protected routes here */}
         </Route>

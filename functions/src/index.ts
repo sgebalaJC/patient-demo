@@ -3132,3 +3132,10 @@ export {
   extractTopPayers,
   seedPaData,
 } from "./pa/index.js";
+
+
+// ─── SignalWire fax — inbound webhook, retry cron, actions, outbound ───
+export {signalwireFaxWebhook} from "./signalwire-webhook.js";
+export {retryFailedFaxes} from "./signalwire-fax-retry.js";
+export {sendFaxEmail, reprocessFax, updateFaxDraft, markFaxJunk, attachFaxToDrChrono, detachFaxFromDrChrono, deleteFax, getFaxPdfUrl} from "./signalwire-fax-actions.js";
+export {sendOutboundFax, signalwireFaxStatusWebhook, deleteOutboundFax} from "./signalwire-fax-send.js";

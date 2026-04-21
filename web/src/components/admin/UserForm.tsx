@@ -102,12 +102,15 @@ export const UserForm: React.FC<UserFormProps> = ({
             dobString = d.toISOString().split('T')[0];
         }
 
+        // Super admins have no Firestore user doc and aren't editable here;
+        // narrow to the form's accepted role set.
+        const formRole: 'patient' | 'admin' = editingUser.role === 'patient' ? 'patient' : 'admin';
         reset({
             email: editingUser.email,
             firstName: editingUser.firstName,
             lastName: editingUser.lastName,
             phoneNumber: editingUser.phoneNumber || '',
-            role: editingUser.role,
+            role: formRole,
             dateOfBirth: dobString,
             isActive: editingUser.isActive,
         });

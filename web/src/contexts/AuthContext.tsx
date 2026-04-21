@@ -77,8 +77,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               firstName: 'Super',
               lastName: 'Admin',
               role: 'super_admin',
+              phoneNumber: '',
               isActive: true,
               createdAt: null as any,
+              updatedAt: null as any,
             });
             setLoading(false);
             return;

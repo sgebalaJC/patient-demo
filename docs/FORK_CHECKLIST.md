@@ -11,6 +11,8 @@ narrative walkthroughs see the other docs in this folder.
 - [ ] A Google Workspace account for the customer (BAA must cover it)
 - [ ] A Stripe account for the customer
 - [ ] A Twilio account for the customer (if SMS is enabled)
+- [ ] A SignalWire account for the customer (if faxes are enabled)
+- [ ] OAuth credentials for any EHR the customer uses (DrChrono, Athena, Elation, eCW, NextGen, Tebra, Greenway, Practice Fusion, Cerner, Epic — admins fill them in at runtime; you only need to whitelist the redirect URI per vendor)
 - [ ] SSH access to a Linux VPS (if shipping the AI agent)
 
 ## 1. Clone and rename
@@ -66,6 +68,30 @@ firebase functions:secrets:set TWILIO_ACCOUNT_SID
 firebase functions:secrets:set TWILIO_AUTH_TOKEN
 firebase functions:secrets:set TWILIO_PHONE_NUMBER
 firebase functions:secrets:set GOOGLE_SA_KEY       # if using Calendar sync
+firebase functions:secrets:set SLACK_ALERTS_WEBHOOK_URL   # '=disabled' is fine if unused
+
+# Fax — if SignalWire is enabled
+firebase functions:secrets:set SIGNALWIRE_PROJECT_ID
+firebase functions:secrets:set SIGNALWIRE_AUTH_TOKEN
+firebase functions:secrets:set SIGNALWIRE_SPACE_URL
+firebase functions:secrets:set SIGNALWIRE_SIGNING_KEY
+```
+
+The sidecar reads the SignalWire secrets directly from Secret Manager too
+(native outbound-fax send lives on the sidecar now — no Cloud Function
+hop). Grant the sidecar SA `roles/secretmanager.secretAccessor` on:
+
+- `SIGNALWIRE_PROJECT_ID`, `SIGNALWIRE_AUTH_TOKEN`, `SIGNALWIRE_SPACE_URL`
+- `ehr_<provider>_client_secret` for each EHR the customer uses (only
+  needed if they reconnect the integration after deploy)
+
+```bash
+for s in SIGNALWIRE_PROJECT_ID SIGNALWIRE_AUTH_TOKEN SIGNALWIRE_SPACE_URL; do
+  gcloud secrets add-iam-policy-binding "$s" \
+    --project=<PROJECT_ID> \
+    --member=serviceAccount:<SIDECAR_SA_EMAIL> \
+    --role=roles/secretmanager.secretAccessor
+done
 ```
 
 ## 6. Install & build
@@ -111,10 +137,30 @@ firebase apphosting:rollouts:create web-patient --git-branch main
 - [ ] Provision VPS
 - [ ] Rewrite `{{PLACEHOLDER}}` tokens in `openclaw/` workspace markdown
 - [ ] Run `scripts/vultr-setup.sh <ip> <ssh-key>`
+- [ ] Drop the Firebase service-account key at `/root/.openclaw/credentials/google-sa-key.json` (firebase-admin reads it; sidecar sim + signalwire + chart-gap-check all reuse that path)
+- [ ] Fill `/root/sidecar.env` with, at minimum:
+      ```
+      SIDECAR_API_KEY=<random long string>
+      GCLOUD_PROJECT=<PROJECT_ID>
+      FUNCTION_REGION=us-west1
+      PRACTICE_NAME=<short branded name>  # appears on fax cover sheet
+      ```
 - [ ] Deploy sidecar: `cd sidecar && ./deploy.sh`
 - [ ] Verify health via admin dashboard → AI Agent page
 
-## 10. Pre-launch security review (see [SECURITY.md](SECURITY.md))
+## 10. Simulation middleware (optional — see [SIMULATION.md](SIMULATION.md))
+
+- [ ] Set `system/settings.simulationMode: true` in Firestore if you want
+      a sandbox demo mode for this fork (leave off for production).
+- [ ] Click **Seed demo data** in Admin → Settings to populate
+      `simulation/*` — 50 patients shared across every EHR, 3 inbound +
+      2 outbound faxes with viewable PDFs, sample SMS + workspace entries.
+- [ ] If running a real customer (not a demo fork), consider deleting
+      `sidecar/src/sim/`, `functions/src/simulation/`, and
+      `web/src/lib/integrations/` per the detach recipe in
+      `docs/SIMULATION.md`.
+
+## 11. Pre-launch security review (see [SECURITY.md](SECURITY.md))
 
 - [ ] BAA signed with Google Cloud, Twilio (if applicable), any other subprocessors
 - [ ] No `.env`, `google-services.json`, `GoogleService-Info.plist` committed

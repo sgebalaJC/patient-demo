@@ -84,9 +84,9 @@ export const Layout: React.FC = () => {
           <div
             className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-medium shrink-0"
             style={{
-              background: 'rgba(217, 119, 6, 0.1)',
-              color: 'rgb(146, 64, 14)',
-              borderBottom: '1px solid rgba(217, 119, 6, 0.2)',
+              background: 'rgba(79, 70, 229, 0.08)',
+              color: 'rgb(67, 56, 202)',
+              borderBottom: '1px solid rgba(79, 70, 229, 0.18)',
             }}
             role="status"
             aria-label="Simulation mode banner"

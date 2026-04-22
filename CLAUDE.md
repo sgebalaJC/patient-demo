@@ -7,7 +7,8 @@ Generic HIPAA-posture patient engagement platform. Fork per customer, one dedica
 - **Web:** React 18 + TypeScript, Vite, Tailwind CSS, React Router v6
 - **Mobile:** Flutter 3.41+, Dart 3.11+, Provider state
 - **Backend:** Firebase (Auth, Firestore, Storage, Cloud Functions v2)
-- **External:** Twilio (SMS), Google Maps, Google Workspace, Stripe (billing)
+- **External:** Twilio (SMS), SignalWire (fax), Google Maps, Google Workspace (Gmail/Calendar/Drive), Stripe (billing), Anthropic via OpenClaw gateway (agent LLM calls)
+- **EHR integrations:** DrChrono, Athena, Elation, eClinicalWorks, NextGen, Tebra, Greenway, Practice Fusion, Cerner, Epic — all via sidecar admin-api with OAuth per practice
 - **AI agents:** OpenClaw admin + patient support agents on a customer-owned VPS, proxied via Cloud Functions
 - **Node:** v20
 
@@ -80,7 +81,8 @@ Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000
 - **Chat persistence (non-blocking):** Admin chat in `agent-chat`, patient support in `support-chat`. **All Firestore saves in chat are fire-and-forget with `.catch()`** — show message in UI first, persist in background. Never `await` Firestore writes in the send flow. Never pass `undefined` fields; use conditional spread `...(field ? { field } : {})`.
 - **Stripe billing:** Practice-owned Stripe account. Admins manage `subscription-plans` (doc id = Stripe price id). Patients subscribe via Stripe Checkout (hosted). `stripeWebhook` Cloud Function mirrors subscription state into `patient-subscriptions/{uid}`. Mobile app reads subscription state from Firestore but delegates checkout to the web `/billing` page via `url_launcher`.
 - **AI Agents:** Two OpenClaw agents on a customer-owned host — admin agent (`main`) and patient support agent (`patient-support`). Unified auth via `sidecarProxy` Cloud Function. **Patient support agent has NO patient data access** (HIPAA defense in depth). Slack integration available via `/admin/agent → Channels`. **See [`docs/AI_AGENTS.md`](docs/AI_AGENTS.md) for hosts, health checks, Slack config, sidecar ops, and per-fork setup.**
-- **Integrations (admin-configurable):** `integrations/{id}` Firestore collection holds admin-entered credentials (admin-only rules; writes go through callables). Current modules: Google Workspace (Gmail/Calendar/Drive via OAuth) and **DrChrono** (EHR, OAuth, with enable/disable toggle). The DrChrono admin agent skill lives at `openclaw/workspace/skills/drchrono/` — it's always present but calls fail-fast with 403 when the integration is disabled. Proxy path: `sidecarProxy → sidecar /admin-api/drchrono/<path>`.
+- **Integrations (admin-configurable):** `integrations/{id}` Firestore collection holds admin-entered credentials (admin-only rules; writes go through callables). Current modules: Google Workspace (Gmail/Calendar/Drive via OAuth), SignalWire (fax), and **ten EHRs** — DrChrono, Athena, Elation, eCW, NextGen, Tebra, Greenway, Practice Fusion, Cerner, Epic. Each EHR has an admin Agent → Integrations toggle and a matching skill under `openclaw/workspace/skills/`. Calls fail-fast with 403 when the integration is disabled. Proxy path for all of them: `sidecarProxy → sidecar /admin-api/<integration>/<path>`.
+- **Simulation middleware:** one global switch (`system/settings.simulationMode`) flips every external integration between real and a seeded Firestore sandbox (`simulation/*` collections). Sidecar routes `/admin-api/*` branch per-handler, admin UI uses `lib/integrations/*` façades + `useIntegrationCollection` for live listeners, Cloud Functions intercept Twilio/SMTP sends via `recordSimSms` / `recordSimEmail`. Aurelia sees the sandbox automatically when the flag is on. **See [`docs/SIMULATION.md`](docs/SIMULATION.md).**
 
 ## Security
 

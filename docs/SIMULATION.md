@@ -50,23 +50,27 @@ Why the sidecar and not Cloud Functions?
 sidecar/src/
   sim/
     index.ts        # isSimulationOn() with TTL cache
-    drchrono.ts     # sandbox-backed DrChrono routes
-    faxes.ts        # sandbox-backed fax routes
-  routes/admin-api.ts  # each case starts with the sim check
+    drchrono.ts athena.ts elation.ts ecw.ts nextgen.ts tebra.ts
+    greenway.ts pfusion.ts cerner.ts epic.ts
+    faxes.ts messaging.ts workspace.ts
+  routes/admin-api.ts    # each case branches on isSimulationOn()
+  routes/faxes-real.ts   # real-mode fax reads + PATCH + native send
+  lib/signalwire.ts      # native SignalWire submission (GCS merge + LaML POST)
 
 functions/src/simulation/
-  index.ts          # integrationCall + seed/clear callables
+  index.ts          # exports seed/clear callables only
   seed.ts           # seedSimulationData, clearSimulationData
   simulators/
-    drchrono.ts     # seed-consistent helpers (also used by legacy UI path)
-    faxes.ts
-    …
+    faxes.ts        # pdf-lib synthetic PDFs + seedFaxes()
+    messaging.ts    # recordSimSms (Twilio intercept) + seedSms
+    workspace.ts    # recordSimEmail (Gmail intercept) + seedWorkspace
 
-web/src/lib/
-  integrations/
-    index.ts        # one import surface
-    drchrono.ts     # one-liner façade over sidecar
-    faxes.ts        # one-liner façade over sidecar
+web/src/
+  lib/integrations/
+    index.ts        # one import surface (drchrono, faxes, sms)
+    drchrono.ts faxes.ts sms.ts   # one-liner sidecar façades
+  hooks/
+    useIntegrationCollection.ts   # live Firestore sub with sim-path fork
 ```
 
 ## Sandbox data
@@ -145,16 +149,20 @@ Then:
 
 - Remove the `isSimulationOn()` branches at the top of each
   `<domain>` case in `sidecar/src/routes/admin-api.ts`.
-- Remove the `useSimulationMode`/collection-path forks in
-  subscribing components (AdminFaxesPage, AdminSendFaxPage,
-  AdminFaxesHubPage).
+- Remove the `useIntegrationCollection` calls in subscribing
+  components (AdminFaxesPage, AdminSendFaxPage, AdminSmsPage,
+  AdminFaxesHubPage) or have the hook always return the real path.
 - Revert UI call sites from `lib/integrations/<domain>` imports
   back to direct `sidecar.xxx()` calls. (The façades are thin, so
   this is a find-and-replace.)
+- Remove `recordSimSms` / `recordSimEmail` short-circuit blocks in
+  `functions/src/reminders.ts`, `functions/src/index.ts` (welcome SMS,
+  phone OTPs, appointment status), `functions/src/gmail-workspace.ts`,
+  and `functions/src/email.ts`.
 - Delete the `simulationMode` field from `system/settings` and any
-  seeded `simulation/*` docs.
-- Drop `seedSimulationData` + `clearSimulationData` + `integrationCall`
-  from `functions/src/index.ts` exports.
+  seeded `simulation/*` docs + Storage PDFs.
+- Drop `seedSimulationData` + `clearSimulationData` from
+  `functions/src/index.ts` exports.
 
 ## Current coverage
 

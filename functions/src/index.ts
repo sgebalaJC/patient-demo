@@ -3129,6 +3129,22 @@ export {
   ecwSetEnabled,
 } from "./ecw.js";
 
+// ─── NextGen Healthcare integration ─────────────────────────────────
+export {
+  nextgenSaveCredentials,
+  nextgenAuthorize,
+  nextgenCallback,
+  nextgenSetEnabled,
+} from "./nextgen.js";
+
+// ─── Tebra (Kareo) integration ──────────────────────────────────────
+export {
+  tebraSaveCredentials,
+  tebraAuthorize,
+  tebraCallback,
+  tebraSetEnabled,
+} from "./tebra.js";
+
 // ─── Super-admin impersonation ───────────────────────────────────────
 /**
  * impersonateUser — super-admin-only callable.

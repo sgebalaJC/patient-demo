@@ -10,7 +10,7 @@ import { SimulationToggle } from '../ui/SimulationToggle';
 import { useAuth } from '../../hooks/useAuth';
 import { useSimulationMode } from '../../hooks/useSimulationMode';
 
-const FULL_HEIGHT_ROUTES = ['/support', '/admin/agent'];
+const FULL_HEIGHT_ROUTES = ['/support', '/admin'];
 
 export const Layout: React.FC = () => {
   const location = useLocation();
@@ -105,7 +105,7 @@ export const Layout: React.FC = () => {
             </div>
           ) : (
             <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 lg:min-w-[1280px]">
+              <div className="max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
                 <Outlet />
               </div>
             </div>

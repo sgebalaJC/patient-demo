@@ -32,15 +32,17 @@ For a stricter posture (per-practice forks, multi-tenant), the next step is to s
 
 ## Connected
 
-- [x] **DrChrono** — OAuth2 authorization code, REST
-- [x] **Athenahealth** — OAuth2 authorization code, REST, preview/prod + practice id
-- [x] **Elation Health** — OAuth2 authorization code, REST, sandbox/prod
-- [x] **eClinicalWorks** — SMART-on-FHIR R4, per-practice URLs
+| Provider | Skill doc | Sim | End-to-end tested |
+|---|---|---|---|
+| DrChrono | `openclaw/workspace/skills/drchrono/SKILL.md` | ✓ `sim/drchrono.ts` | ✓ |
+| Athenahealth | `openclaw/workspace/skills/athena/SKILL.md` | ✓ `sim/athena.ts` (shared pool) | — |
+| Elation Health | `openclaw/workspace/skills/elation/SKILL.md` | ✓ `sim/elation.ts` (shared pool) | — |
+| eClinicalWorks (SMART-on-FHIR) | `openclaw/workspace/skills/ecw/SKILL.md` | ✓ `sim/ecw.ts` (shared pool) | — |
+| NextGen Healthcare | `openclaw/workspace/skills/nextgen/SKILL.md` | — (501 in sim) | — |
+| Tebra (Kareo) | `openclaw/workspace/skills/tebra/SKILL.md` | — (501 in sim) | — |
 
 ## TODO — clone the pattern
 
-- [ ] **NextGen** — OAuth2 + REST. Clone `elation.ts`.
-- [ ] **Kareo / Tebra** — OAuth2 + REST. Clone `drchrono.ts`.
 - [ ] **Greenway (Intergy / Prime Suite)** — OAuth2 + REST. Clone `elation.ts`.
 - [ ] **Practice Fusion** — OAuth2 + REST. Clone `drchrono.ts`.
 - [ ] **Cerner / Oracle Health** — SMART-on-FHIR. Clone `ecw.ts`.
@@ -48,9 +50,12 @@ For a stricter posture (per-practice forks, multi-tenant), the next step is to s
 
 Each is ~30 min of glue code once the vendor assigns client id/secret (or an App Orchard slot).
 
-## Deferred work
+## TODO — verification
 
-- **Super-admin gating** — callables currently use `assertAdmin`. When the Integrations tab is mounted, gate the tab in the React tree on super-admin; optionally tighten callables to `assertSuperAdmin`.
-- **Setup UI mount point** — `<Provider>Setup` components exist but aren't rendered anywhere. Add a tab to `AgentPage` (callbacks redirect to `/admin/agent?tab=integrations`).
-- **Factor the factory** — 4× near-identical token/proxy pairs. A `makeEhrProvider({ apiBase, tokenUrl, authUrl, scope, pathPrefix })` would collapse ~80% of each file. Do this when adding #5.
-- **Sim branches** — router cases return 501 in sim mode with `TODO(sim)` markers; the centralized-sim work will wire `simAthena` / `simElation` / `simEcw`.
+- [ ] **Browser-verify the factory refactor** — sign in as super admin at `/admin/agent → Integrations` and walk through save-creds / authorize / toggle for at least one EHR. Builds pass; OAuth round-trips are untested end-to-end since the factories landed.
+- [ ] **Exercise Athena's preview sandbox** — Athena's Basic-auth token exchange path is the farthest from the DrChrono reference. Smoke-test it against preview before pointing a real practice at it.
+
+## TODO — deferred hardening
+
+- [ ] **Split secrets into a private subcollection** — move `clientSecret`, `accessToken`, `refreshToken` to `integrations/{provider}/private/credentials`; parent doc keeps non-secret meta (enabled, status, practiceSubdomain, etc.). Rules: parent readable by admins (for chart-URL helpers), private doc super-admin-only. Only worth doing if super-admin widens beyond one email or we move to multi-tenant.
+- [ ] **Secret Manager instead of Firestore** — push client secrets to GCP Secret Manager via `firebase functions:secrets:set`, store only a secret-name reference in Firestore. Requires a Functions redeploy on each credential change.

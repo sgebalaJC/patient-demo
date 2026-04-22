@@ -19,11 +19,15 @@ import { proxyDrChrono, assertDrChronoReady } from "../lib/drchrono.js";
 import { proxyAthena, assertAthenaReady } from "../lib/athena.js";
 import { proxyElation, assertElationReady } from "../lib/elation.js";
 import { proxyEcw, assertEcwReady } from "../lib/ecw.js";
+import { proxyNextGen, assertNextGenReady } from "../lib/nextgen.js";
+import { proxyTebra, assertTebraReady } from "../lib/tebra.js";
 import { isSimulationOn } from "../sim/index.js";
 import { simDrChrono } from "../sim/drchrono.js";
 import { simAthena } from "../sim/athena.js";
 import { simElation } from "../sim/elation.js";
 import { simEcw } from "../sim/ecw.js";
+import { simNextGen } from "../sim/nextgen.js";
+import { simTebra } from "../sim/tebra.js";
 import { simWorkspace } from "../sim/workspace.js";
 import {
   simFaxGetOurNumber,
@@ -1081,6 +1085,40 @@ export async function handleAdminApi(
         return await proxyEcw(method, ecwPath, url.searchParams, request);
       }
 
+      // ── NextGen Healthcare (generic pass-through) ──
+      case "nextgen": {
+        const nextgenPath = parts.slice(1).join("/");
+        if (!nextgenPath) {
+          return error("NextGen path required (e.g. /admin-api/nextgen/patients)", 400);
+        }
+        if (await isSimulationOn()) {
+          return await simNextGen(method, nextgenPath, url.searchParams);
+        }
+        try {
+          await assertNextGenReady();
+        } catch (err: any) {
+          return error(err.message, 403);
+        }
+        return await proxyNextGen(method, nextgenPath, url.searchParams, request);
+      }
+
+      // ── Tebra (generic pass-through) ──
+      case "tebra": {
+        const tebraPath = parts.slice(1).join("/");
+        if (!tebraPath) {
+          return error("Tebra path required (e.g. /admin-api/tebra/patients)", 400);
+        }
+        if (await isSimulationOn()) {
+          return await simTebra(method, tebraPath, url.searchParams);
+        }
+        try {
+          await assertTebraReady();
+        } catch (err: any) {
+          return error(err.message, 403);
+        }
+        return await proxyTebra(method, tebraPath, url.searchParams, request);
+      }
+
       // ── Faxes ──
       // Path: /admin-api/faxes/<action>
       // In sim mode reads/writes `simulation/faxes/*`. No real path yet —
@@ -1191,6 +1229,8 @@ export async function handleAdminApi(
             "*      /admin-api/athena/<path>    (when integration enabled)",
             "*      /admin-api/elation/<path>   (when integration enabled)",
             "*      /admin-api/ecw/<path>       (when integration enabled)",
+            "*      /admin-api/nextgen/<path>   (when integration enabled)",
+            "*      /admin-api/tebra/<path>     (when integration enabled)",
           ],
         }, 404);
     }

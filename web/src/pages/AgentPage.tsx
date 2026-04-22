@@ -10,6 +10,8 @@ import { DrChronoSetup } from '../components/agent/DrChronoSetup';
 import { AthenaSetup } from '../components/agent/AthenaSetup';
 import { ElationSetup } from '../components/agent/ElationSetup';
 import { EcwSetup } from '../components/agent/EcwSetup';
+import { NextGenSetup } from '../components/agent/NextGenSetup';
+import { TebraSetup } from '../components/agent/TebraSetup';
 import { sidecar } from '../lib/sidecar';
 import { useAuth } from '../hooks/useAuth';
 import { isSuperAdminEmail } from '../lib/roles';
@@ -50,6 +52,8 @@ const IntegrationsPanel: React.FC = () => (
         <AthenaSetup />
         <ElationSetup />
         <EcwSetup />
+        <NextGenSetup />
+        <TebraSetup />
       </div>
     </div>
   </div>

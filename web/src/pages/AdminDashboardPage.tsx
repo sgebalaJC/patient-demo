@@ -168,7 +168,6 @@ export const AdminDashboardPage: React.FC = () => {
                                 })
                             ) : (
                                 <EmptyState
-                                    icon={MessageSquare}
                                     title="No recent messages"
                                     inline
                                 />
@@ -235,7 +234,6 @@ export const AdminDashboardPage: React.FC = () => {
                                 })
                             ) : (
                                 <EmptyState
-                                    icon={Pill}
                                     title="No recent refill requests"
                                     inline
                                 />

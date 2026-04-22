@@ -96,7 +96,7 @@ export const AgentBackups: React.FC = () => {
         <div>
           <h2 className="text-lg font-semibold text-secondary-900">Backups</h2>
           <p className="text-sm text-secondary-500 mt-0.5">
-            Back up and restore OpenClaw state, config, and memories
+            Back up and restore agent state, config, and memories
           </p>
         </div>
         <button

@@ -3,7 +3,7 @@ import { Card } from './Card';
 import { LucideIcon } from 'lucide-react';
 
 interface EmptyStateProps {
-  icon: LucideIcon;
+  icon?: LucideIcon;
   title: string;
   description?: string;
   action?: React.ReactNode;
@@ -20,7 +20,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
   const content = (
     <>
-      <Icon className="h-12 w-12 text-secondary-300 mx-auto mb-3" />
+      {Icon && <Icon className="h-12 w-12 text-secondary-300 mx-auto mb-3" />}
       <h3 className="text-lg font-medium text-secondary-900 mb-2">{title}</h3>
       {description && <p className="text-secondary-600 mb-4">{description}</p>}
       {action}

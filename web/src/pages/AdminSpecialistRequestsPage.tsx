@@ -294,13 +294,13 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
       <PageHeader
         backTo="/admin"
         icon={Stethoscope}
-        iconColor="bg-purple-100 text-purple-600"
+        iconColor="bg-primary-50 text-primary-700"
         title="Specialist Requests"
         subtitle="Manage patient specialist referral requests"
       />
 
       <StatsGrid items={[
-        { icon: Stethoscope, iconColor: 'bg-purple-100 text-purple-600', label: 'Total', value: statusCounts.all },
+        { icon: Stethoscope, iconColor: 'bg-primary-50 text-primary-700', label: 'Total', value: statusCounts.all },
         { icon: Clock, iconColor: 'bg-yellow-100 text-yellow-600', label: 'Pending', value: statusCounts.pending },
         { icon: CheckCircle, iconColor: 'bg-green-100 text-green-600', label: 'Confirmed', value: statusCounts.confirmed },
         { icon: XCircle, iconColor: 'bg-red-100 text-red-600', label: 'Cancelled', value: statusCounts.cancelled },
@@ -319,10 +319,10 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
               <button
                 key={tab.key}
                 onClick={() => setFilter(tab.key)}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium border transition-colors ${
                   filter === tab.key
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
+                    ? 'border-primary-600 text-primary-700 bg-primary-50'
+                    : 'border-transparent bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
                 }`}
               >
                 {tab.label} ({tab.count})
@@ -374,7 +374,7 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
                           <div>
                             <p className="text-sm text-secondary-600">Specialist</p>
                             <p className="font-medium text-secondary-900 flex items-center">
-                              <Stethoscope className="h-4 w-4 mr-1 text-purple-500" />
+                              <Stethoscope className="h-4 w-4 mr-1 text-primary-600" />
                               {getSpecialistLabel(request.specialistType)}
                             </p>
                           </div>
@@ -458,15 +458,15 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
         {confirmingRequest && (
           <div className="p-6 space-y-5">
             {/* Request info */}
-            <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-              <p className="text-sm font-medium text-purple-700">
+            <div className="p-3 bg-primary-50 rounded-lg border border-primary-200">
+              <p className="text-sm font-medium text-primary-700">
                 {confirmingRequest.patientName} — {getSpecialistLabel(confirmingRequest.specialistType)}
               </p>
               {confirmingRequest.reason && (
-                <p className="text-sm text-purple-600 mt-1"><span className="font-medium">Reason:</span> {confirmingRequest.reason}</p>
+                <p className="text-sm text-primary-700 mt-1"><span className="font-medium">Reason:</span> {confirmingRequest.reason}</p>
               )}
               {confirmingRequest.notes && (
-                <p className="text-sm text-purple-600 mt-1">{confirmingRequest.notes}</p>
+                <p className="text-sm text-primary-700 mt-1">{confirmingRequest.notes}</p>
               )}
             </div>
 

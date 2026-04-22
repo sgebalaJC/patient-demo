@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { subscribeToPriorAuths } from '../lib/firestore/prior-auths';
 import { PaStatusBadge } from '../components/prior-auth/StatusBadge';
 import type { PriorAuth, PriorAuthStatus } from '../types/prior-auth';
@@ -26,7 +27,7 @@ export const AdminPriorAuthPage: React.FC = () => {
   const [tab, setTab] = useState<TabKey>('open');
 
   useEffect(() => {
-    if (userProfile?.role !== 'admin') return;
+    if (!isAdminRole(userProfile?.role)) return;
     const unsub = subscribeToPriorAuths(
       (r) => {
         setRows(r);
@@ -63,7 +64,7 @@ export const AdminPriorAuthPage: React.FC = () => {
     }
   }, [rows, tab]);
 
-  if (userProfile?.role !== 'admin') return <AccessDenied />;
+  if (!isAdminRole(userProfile?.role)) return <AccessDenied />;
 
   return (
     <div className="space-y-6">

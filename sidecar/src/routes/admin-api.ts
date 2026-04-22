@@ -36,6 +36,13 @@ import {
   simFaxToDrChrono,
 } from "../sim/faxes.js";
 import {
+  realFaxGetOurNumber,
+  realFaxListInbound,
+  realFaxListOutbound,
+  realFaxGet,
+  realFaxPatch,
+} from "./faxes-real.js";
+import {
   simSmsListInbound,
   simSmsListOutbound,
   simSmsSend,
@@ -1083,22 +1090,44 @@ export async function handleAdminApi(
       // the UI's real fax flow continues to go directly to SignalWire via
       // the sendOutboundFax Cloud Function until that's migrated here.
       case "faxes": {
-        if (!(await isSimulationOn())) {
-          return error("Fax admin-api is currently sim-only; real path is on Cloud Functions", 501);
-        }
         const sub = parts[1];
-        if (method === "GET" && sub === "our-number") return await simFaxGetOurNumber();
-        if (method === "GET" && sub === "inbound") return await simFaxListInbound();
-        if (method === "GET" && sub === "outbound") return await simFaxListOutbound();
-        if (method === "POST" && sub === "inject-inbound") return await simFaxInjectInbound(request);
-        if (method === "POST" && sub === "to-drchrono") return await simFaxToDrChrono(request);
+        const sim = await isSimulationOn();
+
+        // Reads + PATCH + our-number: branch on sim inside each handler so
+        // both modes share the admin-api surface. Aurelia doesn't know or
+        // care whether the rows came from real Firestore or the sandbox.
+        if (method === "GET" && sub === "our-number") {
+          return sim ? await simFaxGetOurNumber() : await realFaxGetOurNumber();
+        }
+        if (method === "GET" && sub === "inbound") {
+          return sim ? await simFaxListInbound() : await realFaxListInbound();
+        }
+        if (method === "GET" && sub === "outbound") {
+          return sim ? await simFaxListOutbound() : await realFaxListOutbound();
+        }
+
+        // Sim-only creators (no real counterpart — seed data, not a real op).
+        if (sim && method === "POST" && sub === "inject-inbound") return await simFaxInjectInbound(request);
+
+        // Send + to-drchrono: sim has a sandbox implementation; real still
+        // lives in Cloud Functions until the full migration.
+        if (method === "POST" && sub === "to-drchrono") {
+          if (!sim) return error("Real fax→chart still on Cloud Functions; use attachFaxToDrChrono callable", 501);
+          return await simFaxToDrChrono(request);
+        }
         if (method === "POST" && sub === "send") {
+          if (!sim) return error("Real fax send still on Cloud Functions; use sendOutboundFax callable", 501);
           const callerUid = request.headers.get("x-caller-uid") || "sidecar";
           return await simFaxSend(request, callerUid);
         }
+
         // Single-fax ops: /admin-api/faxes/:faxSid
-        if (sub && method === "GET") return await simFaxGet(sub);
-        if (sub && method === "PATCH") return await simFaxPatch(sub, request);
+        if (sub && method === "GET") {
+          return sim ? await simFaxGet(sub) : await realFaxGet(sub);
+        }
+        if (sub && method === "PATCH") {
+          return sim ? await simFaxPatch(sub, request) : await realFaxPatch(sub, request);
+        }
         return error(`Unknown faxes action: ${method} ${sub}`, 404);
       }
 

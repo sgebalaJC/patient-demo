@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Menu, User as UserIcon } from 'lucide-react';
+import { Menu, User as UserIcon, FlaskConical } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
 import { BrandLogo } from '../ui/BrandLogo';
 import { BRANDING } from '../../config/branding';
@@ -8,12 +8,14 @@ import { NotificationBell } from './NotificationBell';
 import { ThemeToggle } from '../ui/ThemeSelector';
 import { SimulationToggle } from '../ui/SimulationToggle';
 import { useAuth } from '../../hooks/useAuth';
+import { useSimulationMode } from '../../hooks/useSimulationMode';
 
 const FULL_HEIGHT_ROUTES = ['/support', '/admin/agent'];
 
 export const Layout: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
+  const { enabled: simulated } = useSimulationMode();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -77,6 +79,24 @@ export const Layout: React.FC = () => {
             )}
           </div>
         </div>
+
+        {simulated && (
+          <div
+            className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-medium shrink-0"
+            style={{
+              background: 'rgba(217, 119, 6, 0.1)',
+              color: 'rgb(146, 64, 14)',
+              borderBottom: '1px solid rgba(217, 119, 6, 0.2)',
+            }}
+            role="status"
+            aria-label="Simulation mode banner"
+          >
+            <FlaskConical className="h-3.5 w-3.5" />
+            <span>
+              Simulation mode — you're seeing sandbox data. Integration calls don't reach real services.
+            </span>
+          </div>
+        )}
 
         <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {isFullHeight ? (

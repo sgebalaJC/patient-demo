@@ -23,8 +23,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   const [bgColor, textColor] = iconColor.split(' ');
 
   return (
-    <Card className="p-4 sm:p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+    <Card className="px-3 py-2.5 sm:px-4 sm:py-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
         <div className="flex items-center space-x-3 sm:space-x-4">
           <Link
             to={backTo}
@@ -33,12 +33,12 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex items-center space-x-3 min-w-0">
-            <div className={`${bgColor} p-2 sm:p-3 rounded-lg flex-shrink-0`}>
-              <Icon className={`h-6 w-6 sm:h-8 sm:w-8 ${textColor}`} />
+            <div className={`${bgColor} p-1.5 sm:p-2 rounded-lg flex-shrink-0`}>
+              <Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${textColor}`} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-bold text-secondary-900 truncate">{title}</h1>
-              {subtitle && <p className="text-secondary-600 text-sm sm:text-base">{subtitle}</p>}
+              <h1 className="text-base sm:text-lg font-bold text-secondary-900 truncate">{title}</h1>
+              {subtitle && <p className="text-secondary-600 text-xs sm:text-sm">{subtitle}</p>}
             </div>
           </div>
         </div>

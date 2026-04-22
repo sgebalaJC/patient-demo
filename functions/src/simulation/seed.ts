@@ -133,12 +133,17 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
   const appointments = await seedDrChronoAppointments(db, patientIds);
   const refills = await seedDrChronoRefills(db, patientIds);
   // Each domain seed is isolated — one failing shouldn't block the others.
-  const safeSeed = async <T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+  const safeSeed = async <T extends object>(
+    label: string,
+    fn: () => Promise<T>,
+    fallback: T,
+  ): Promise<T & {_safeSeedError?: string}> => {
     try {
       return await fn();
     } catch (err: any) {
-      console.error(`[seed] ${label} failed:`, err?.message || err);
-      return fallback;
+      const msg = err?.message || String(err);
+      console.error(`[seed] ${label} failed:`, msg);
+      return {...fallback, _safeSeedError: msg};
     }
   };
   const faxes = await safeSeed("faxes", () => seedFaxes(db), {
@@ -146,6 +151,7 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
     outbound: 0,
     pdfsAttached: 0,
     pdfsFailed: 0,
+    stage: "never-ran",
   } as Awaited<ReturnType<typeof seedFaxes>>);
   const sms = await safeSeed("sms", () => seedSms(db), {outbound: 0, inbound: 0});
   const workspace = await safeSeed("workspace", () => seedWorkspace(db), {emails: 0, events: 0});
@@ -162,6 +168,7 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
       ...(faxes.firstPdfError ? {faxes_pdf_error: faxes.firstPdfError} : {}),
       ...(faxes.bucket ? {faxes_bucket: faxes.bucket} : {}),
       ...(faxes.stage ? {faxes_stage: faxes.stage} : {}),
+      ...(faxes._safeSeedError ? {faxes_safeseed_error: faxes._safeSeedError} : {}),
       sms_outbound: sms.outbound,
       sms_inbound: sms.inbound,
       workspace_emails: workspace.emails,

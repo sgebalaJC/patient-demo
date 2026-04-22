@@ -16,6 +16,15 @@
 import { getDb } from "../lib/firebase.js";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { proxyDrChrono, assertDrChronoReady } from "../lib/drchrono.js";
+import { isSimulationOn } from "../sim/index.js";
+import { simDrChrono } from "../sim/drchrono.js";
+import {
+  simFaxGetOurNumber,
+  simFaxListInbound,
+  simFaxListOutbound,
+  simFaxInjectInbound,
+  simFaxSend,
+} from "../sim/faxes.js";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -974,17 +983,43 @@ export async function handleAdminApi(
       // ── DrChrono (generic pass-through) ──
       // Path: /admin-api/drchrono/<drchrono-path>[?...]
       // Only active when integrations/drchrono { enabled: true, status: active }.
+      // In sim mode the call goes to the sandbox instead — no DrChrono token
+      // required, and Aurelia sees the same data the UI does.
       case "drchrono": {
+        const drchronoPath = parts.slice(1).join("/");
+        if (!drchronoPath) {
+          return error("DrChrono path required (e.g. /admin-api/drchrono/patients)", 400);
+        }
+        if (await isSimulationOn()) {
+          return await simDrChrono(method, drchronoPath, url.searchParams);
+        }
         try {
           await assertDrChronoReady();
         } catch (err: any) {
           return error(err.message, 403);
         }
-        const drchronoPath = parts.slice(1).join("/");
-        if (!drchronoPath) {
-          return error("DrChrono path required (e.g. /admin-api/drchrono/patients)", 400);
-        }
         return await proxyDrChrono(method, drchronoPath, url.searchParams, request);
+      }
+
+      // ── Faxes ──
+      // Path: /admin-api/faxes/<action>
+      // In sim mode reads/writes `simulation/faxes/*`. No real path yet —
+      // the UI's real fax flow continues to go directly to SignalWire via
+      // the sendOutboundFax Cloud Function until that's migrated here.
+      case "faxes": {
+        if (!(await isSimulationOn())) {
+          return error("Fax admin-api is currently sim-only; real path is on Cloud Functions", 501);
+        }
+        const sub = parts[1];
+        if (method === "GET" && sub === "our-number") return await simFaxGetOurNumber();
+        if (method === "GET" && sub === "inbound") return await simFaxListInbound();
+        if (method === "GET" && sub === "outbound") return await simFaxListOutbound();
+        if (method === "POST" && sub === "inject-inbound") return await simFaxInjectInbound(request);
+        if (method === "POST" && sub === "send") {
+          const callerUid = request.headers.get("x-caller-uid") || "sidecar";
+          return await simFaxSend(request, callerUid);
+        }
+        return error(`Unknown faxes action: ${method} ${sub}`, 404);
       }
 
       default:

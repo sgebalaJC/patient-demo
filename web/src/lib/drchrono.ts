@@ -1,32 +1,26 @@
 /**
- * Thin client for the DrChrono integration.
- * - Credentials (clientId + clientSecret) are saved via callable so they're
- *   only writable server-side (rule denies client writes to `integrations/*`).
- * - OAuth flow is kicked off by redirecting the browser to the authorize URL.
- * - Status is read directly from Firestore (admin-only rule allows it).
+ * DrChrono-specific UI helpers consumed outside the Integrations setup UI.
+ *
+ * The admin-facing OAuth flow has moved to the generic registry + setup:
+ *   - web/src/lib/integrations/registry.ts   (provider def)
+ *   - web/src/lib/integrations/ehr-admin.ts  (callable + Firestore client)
+ *   - web/src/components/agent/EhrSetup.tsx  (UI)
+ *
+ * This file keeps the small chart-URL helper used by `UnifiedPatientCard`,
+ * which needs the practice subdomain for deep links into the DrChrono chart.
  */
 
-import { httpsCallable } from 'firebase/functions';
-import { doc, getDoc, deleteDoc } from 'firebase/firestore';
-import { db, functions } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from './firebase';
 
 export interface DrChronoIntegration {
   provider: string;
   enabled?: boolean;
   status?: 'active' | 'not-authorized' | string;
-  clientId?: string;
-  redirectUri?: string;
-  scope?: string;
   /** Practice subdomain for chart URLs, e.g. "acme" → acme.drchrono.com/chart/<id>/summary.
    *  `app.drchrono.com` 404s on per-practice chart links, so admins set this
    *  once in the integration UI. */
   practiceSubdomain?: string;
-  tokenExpiresAt?: { seconds: number; nanoseconds: number } | null;
-  connectedAt?: unknown;
-  updatedAt?: unknown;
-  connectedBy?: string;
-  // clientSecret / accessToken / refreshToken are present on the doc but
-  // intentionally not exposed in the TS type — UI should never display them.
 }
 
 /** Build a browsable chart URL for a DrChrono patient id. Falls back to
@@ -36,54 +30,18 @@ export function drchronoChartUrl(patientId: number, subdomain?: string): string 
   return `https://app.drchrono.com/patient/chart/${patientId}/`;
 }
 
+/** Lightweight status read used only by `UnifiedPatientCard` to populate the
+ *  chart-URL subdomain cache. The Firestore rule allows `isSuperAdmin()` read
+ *  only; non-super-admin admins get a permission denied and the card falls
+ *  back to the generic app.drchrono.com URL (see UnifiedPatientCard). */
 export async function getDrChronoStatus(): Promise<DrChronoIntegration | null> {
   const snap = await getDoc(doc(db, 'integrations', 'drchrono'));
   if (!snap.exists()) return null;
   const d = snap.data() as Record<string, unknown>;
-  // Whitelist fields returned to UI. Never surface secrets client-side.
   return {
     provider: (d.provider as string) || 'drchrono',
     enabled: Boolean(d.enabled),
     status: d.status as DrChronoIntegration['status'],
-    clientId: d.clientId as string | undefined,
-    redirectUri: d.redirectUri as string | undefined,
-    scope: d.scope as string | undefined,
-    tokenExpiresAt: (d.tokenExpiresAt as DrChronoIntegration['tokenExpiresAt']) ?? null,
-    connectedAt: d.connectedAt,
-    updatedAt: d.updatedAt,
-    connectedBy: d.connectedBy as string | undefined,
+    practiceSubdomain: d.practiceSubdomain as string | undefined,
   };
-}
-
-export async function saveDrChronoCredentials(
-  clientId: string,
-  clientSecret: string,
-): Promise<{ ok: boolean; redirectUri: string }> {
-  const fn = httpsCallable<
-    { clientId: string; clientSecret: string },
-    { ok: boolean; redirectUri: string }
-  >(functions, 'drchronoSaveCredentials');
-  const result = await fn({ clientId, clientSecret });
-  return result.data;
-}
-
-export async function getDrChronoAuthUrl(): Promise<{ url: string; redirectUri: string }> {
-  const fn = httpsCallable<Record<string, never>, { url: string; redirectUri: string }>(
-    functions,
-    'drchronoAuthorize',
-  );
-  const result = await fn({});
-  return result.data;
-}
-
-export async function setDrChronoEnabled(enabled: boolean): Promise<void> {
-  const fn = httpsCallable<{ enabled: boolean }, { ok: boolean }>(
-    functions,
-    'drchronoSetEnabled',
-  );
-  await fn({ enabled });
-}
-
-export async function disconnectDrChrono(): Promise<void> {
-  await deleteDoc(doc(db, 'integrations', 'drchrono'));
 }

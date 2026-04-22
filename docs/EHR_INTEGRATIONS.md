@@ -1,15 +1,26 @@
 # EHR Integrations
 
-All EHR integrations share two factories; per-vendor files are thin specs (~20–60 lines):
+All EHR integrations share three generic layers. Each new vendor is a thin spec that hooks into them.
 
-| Layer | Shared factory | Per-vendor spec |
+| Layer | Shared | Per-vendor spec |
 |---|---|---|
-| OAuth callables + callback (Functions) | `functions/src/lib/ehr-oauth.ts` | `functions/src/<provider>.ts` |
-| Sidecar proxy + token refresh | `sidecar/src/lib/ehr-provider.ts` | `sidecar/src/lib/<provider>.ts` |
-| Web status/save/toggle client | — | `web/src/lib/<provider>.ts` |
-| Setup UI | — | `web/src/components/agent/<Provider>Setup.tsx` |
+| OAuth callables (Functions) | `functions/src/lib/ehr-oauth.ts` | `functions/src/<provider>.ts` (~25 lines) |
+| Sidecar proxy + token refresh | `sidecar/src/lib/ehr-provider.ts` | `sidecar/src/lib/<provider>.ts` (~25 lines) |
+| Admin Setup UI | `web/src/components/agent/EhrSetup.tsx` + `web/src/lib/integrations/ehr-admin.ts` | one entry in `web/src/lib/integrations/registry.ts` |
+| Agent skill docs | — | `openclaw/workspace/skills/<provider>/SKILL.md` |
 
 Admin-api router case in `sidecar/src/routes/admin-api.ts`. Cloud Function exports in `functions/src/index.ts`.
+
+## Adding a new EHR (recipe)
+
+1. `functions/src/<provider>.ts` — `makeEhrOAuth({…})` with URLs, scope, any vendor-specific extra-field validator.
+2. `sidecar/src/lib/<provider>.ts` — `makeEhrProvider({…})` with API base + token refresh auth.
+3. Export callables from `functions/src/index.ts`.
+4. Add router case in `sidecar/src/routes/admin-api.ts` (mirror the existing ones).
+5. Add an entry in `web/src/lib/integrations/registry.ts` — UI, badges, extra fields picked up automatically by `EhrSetup`.
+6. Write `openclaw/workspace/skills/<provider>/SKILL.md`.
+
+No UI glue code needed — the Integrations panel in `AgentPage` maps over the registry.
 
 ## Super-admin gating
 
@@ -22,13 +33,14 @@ Integration credentials are platform-level, not per-practice.
 
 ## Secret storage
 
-OAuth client secrets, access tokens, and refresh tokens are stored in Firestore at `integrations/{provider}`. They are:
-- Encrypted at rest by Firestore's default CMEK-capable storage
-- Writable only by Cloud Functions via Admin SDK (Firestore rules deny client writes)
-- Readable only by the super admin (email allowlist)
-- Never returned to the browser — the web thin clients whitelist non-secret fields in `getStatus()`
+Split-doc model:
 
-For a stricter posture (per-practice forks, multi-tenant), the next step is to split secrets into a `integrations-secrets/{provider}` collection that not even the super admin's browser reads — credentials would then be writeable via callable and readable only server-side. Not needed for single-super-admin demo.
+- **Public doc** `integrations/{provider}` — non-secret metadata (provider, enabled, status, clientId, redirectUri, practiceId/sandbox/preview/fhirBase/etc.). Rule: `isSuperAdmin()` read/delete. Super admin's browser reads this to populate the Setup form.
+- **Private subdoc** `integrations/{provider}/private/credentials` — `clientSecret`, `accessToken`, `refreshToken`, `tokenExpiresAt`. Rule: `allow read, write: if false` — **all client reads blocked, including super admin**. Only Admin SDK (Cloud Functions + sidecar) touches it.
+
+This means a compromised super-admin browser session (XSS, malicious extension) cannot exfiltrate OAuth tokens — no browser code path exists that reads the private subdoc. Writes flow exclusively through Cloud Functions (`saveCredentials`, `callback`) which use Admin SDK to bypass rules.
+
+Migrating existing integrations: any integration saved before this split has secrets in the public doc. On next `saveCredentials` call, the factory re-splits — admin just re-enters the client secret. Or run a one-shot migration: read `clientSecret`/`accessToken`/`refreshToken`/`tokenExpiresAt` out of the public doc, write to the private subdoc, delete from public. Not needed for fresh deploys.
 
 ## Connected
 
@@ -38,13 +50,13 @@ For a stricter posture (per-practice forks, multi-tenant), the next step is to s
 | Athenahealth | `openclaw/workspace/skills/athena/SKILL.md` | ✓ `sim/athena.ts` (shared pool) | — |
 | Elation Health | `openclaw/workspace/skills/elation/SKILL.md` | ✓ `sim/elation.ts` (shared pool) | — |
 | eClinicalWorks (SMART-on-FHIR) | `openclaw/workspace/skills/ecw/SKILL.md` | ✓ `sim/ecw.ts` (shared pool) | — |
-| NextGen Healthcare | `openclaw/workspace/skills/nextgen/SKILL.md` | — (501 in sim) | — |
-| Tebra (Kareo) | `openclaw/workspace/skills/tebra/SKILL.md` | — (501 in sim) | — |
+| NextGen Healthcare | `openclaw/workspace/skills/nextgen/SKILL.md` | ✓ `sim/nextgen.ts` (shared pool) | — |
+| Tebra (Kareo) | `openclaw/workspace/skills/tebra/SKILL.md` | ✓ `sim/tebra.ts` (shared pool) | — |
+| Greenway Health | `openclaw/workspace/skills/greenway/SKILL.md` | — (501 in sim) | — |
+| Practice Fusion | `openclaw/workspace/skills/pfusion/SKILL.md` | — (501 in sim) | — |
 
 ## TODO — clone the pattern
 
-- [ ] **Greenway (Intergy / Prime Suite)** — OAuth2 + REST. Clone `elation.ts`.
-- [ ] **Practice Fusion** — OAuth2 + REST. Clone `drchrono.ts`.
 - [ ] **Cerner / Oracle Health** — SMART-on-FHIR. Clone `ecw.ts`.
 - [ ] **Epic** — SMART-on-FHIR. Requires App Orchard enrollment. Clone `ecw.ts`.
 
@@ -57,5 +69,6 @@ Each is ~30 min of glue code once the vendor assigns client id/secret (or an App
 
 ## TODO — deferred hardening
 
-- [ ] **Split secrets into a private subcollection** — move `clientSecret`, `accessToken`, `refreshToken` to `integrations/{provider}/private/credentials`; parent doc keeps non-secret meta (enabled, status, practiceSubdomain, etc.). Rules: parent readable by admins (for chart-URL helpers), private doc super-admin-only. Only worth doing if super-admin widens beyond one email or we move to multi-tenant.
-- [ ] **Secret Manager instead of Firestore** — push client secrets to GCP Secret Manager via `firebase functions:secrets:set`, store only a secret-name reference in Firestore. Requires a Functions redeploy on each credential change.
+- [x] ~~Split secrets into a private subcollection~~ — done; see "Secret storage" above.
+- [ ] **Secret Manager instead of Firestore** — push client secrets to GCP Secret Manager via `firebase functions:secrets:set`, store only a secret-name reference in Firestore. Requires a Functions redeploy on each credential change. Heavier than the split-doc model but removes Firestore as a secrets store entirely.
+- [ ] **End-to-end browser test the split-doc model** — save/authorize/toggle flow for one EHR, confirm that `integrations/{provider}/private/credentials` is only ever written by functions, never read by the browser.

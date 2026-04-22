@@ -21,11 +21,22 @@ export interface BaseEhrConfig {
   enabled?: boolean;
   status?: string;
   clientId?: string;
+  /** Populated by the factory at load time by merging the private subdoc. */
+  clientSecret?: string;
+  /** Populated by the factory at load time by merging the private subdoc. */
+  accessToken?: string;
+  /** Populated by the factory at load time by merging the private subdoc. */
+  refreshToken?: string;
+  /** Populated by the factory at load time by merging the private subdoc. */
+  tokenExpiresAt?: Timestamp;
+  scope?: string;
+}
+
+interface PrivateCredentials {
   clientSecret?: string;
   accessToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: Timestamp;
-  scope?: string;
 }
 
 export interface TokenRefreshAuth {
@@ -66,11 +77,18 @@ const MAX_PROXY_BODY_BYTES = 10 * 1024 * 1024;
 
 export function makeEhrProvider<C extends BaseEhrConfig>(spec: EhrProviderSpec<C>): EhrProvider<C> {
   const accept = spec.acceptHeader ?? "application/json";
+  const privateCredsPath = `${spec.configDoc}/private/credentials`;
 
   async function loadConfig(): Promise<C> {
-    const snap = await getDb().doc(spec.configDoc).get();
-    if (!snap.exists) throw new Error(`${spec.providerName} not configured`);
-    return snap.data() as C;
+    const db = getDb();
+    const [publicSnap, privateSnap] = await Promise.all([
+      db.doc(spec.configDoc).get(),
+      db.doc(privateCredsPath).get(),
+    ]);
+    if (!publicSnap.exists) throw new Error(`${spec.providerName} not configured`);
+    const pub = publicSnap.data() as Record<string, unknown>;
+    const priv = (privateSnap.exists ? (privateSnap.data() as PrivateCredentials) : {}) ?? {};
+    return { ...pub, ...priv } as C;
   }
 
   async function assertReady(): Promise<void> {
@@ -116,12 +134,17 @@ export function makeEhrProvider<C extends BaseEhrConfig>(spec: EhrProviderSpec<C
       expires_in: number;
     };
     const expiresAt = Timestamp.fromMillis(Date.now() + data.expires_in * 1000);
-    await getDb().doc(spec.configDoc).update({
+    const db = getDb();
+    // Write refreshed tokens to the private subdoc — secrets never touch the
+    // public doc, where even super-admins read from the browser.
+    await db.doc(privateCredsPath).set({
       accessToken: data.access_token,
       refreshToken: data.refresh_token ?? cfg.refreshToken,
       tokenExpiresAt: expiresAt,
+    }, { merge: true });
+    await db.doc(spec.configDoc).set({
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    }, { merge: true });
     return data.access_token;
   }
 

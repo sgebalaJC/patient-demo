@@ -3145,6 +3145,22 @@ export {
   tebraSetEnabled,
 } from "./tebra.js";
 
+// ─── Greenway Health integration ────────────────────────────────────
+export {
+  greenwaySaveCredentials,
+  greenwayAuthorize,
+  greenwayCallback,
+  greenwaySetEnabled,
+} from "./greenway.js";
+
+// ─── Practice Fusion integration ────────────────────────────────────
+export {
+  pfusionSaveCredentials,
+  pfusionAuthorize,
+  pfusionCallback,
+  pfusionSetEnabled,
+} from "./pfusion.js";
+
 // ─── Super-admin impersonation ───────────────────────────────────────
 /**
  * impersonateUser — super-admin-only callable.

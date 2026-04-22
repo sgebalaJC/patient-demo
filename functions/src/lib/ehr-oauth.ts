@@ -117,6 +117,28 @@ function getRedirectUri(callbackName: string): string {
   return `https://${FUNCTIONS_REGION}-${projectId}.cloudfunctions.net/${callbackName}`;
 }
 
+/**
+ * Secrets subcollection path: `integrations/{provider}/private/credentials`.
+ * Firestore rules deny ALL client access — only Admin SDK (bypassing rules)
+ * can read or write. Super-admin's browser never fetches this doc, so a
+ * compromised session can't exfiltrate tokens.
+ */
+function privateCredsRef(configDoc: string) {
+  return admin.firestore().doc(`${configDoc}/private/credentials`);
+}
+
+interface PrivateCredentials {
+  clientSecret?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: admin.firestore.Timestamp;
+}
+
+async function loadPrivateCreds(configDoc: string): Promise<PrivateCredentials> {
+  const snap = await privateCredsRef(configDoc).get();
+  return (snap.exists ? (snap.data() as PrivateCredentials) : {}) ?? {};
+}
+
 export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
   const tokenExchangeAuth = spec.tokenExchangeAuth ?? defaultTokenExchangeAuth;
   const postAuthFields = spec.resolvePostAuthFields ?? defaultPostAuthFields;
@@ -139,26 +161,24 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
     if (clientId.length > 500 || clientSecret.length > 500) {
       throw new HttpsError("invalid-argument", "credentials too long");
     }
-    // Confidential clients require a secret; public clients (some SMART
-    // flows) may omit it. Specs using only confidential clients should
-    // validate in validateExtraFields.
     const extra = spec.validateExtraFields ? spec.validateExtraFields(request.data) : {};
 
     const ref = db().doc(spec.configDoc);
     const existing = await ref.get();
     const existingData = existing.data() ?? {};
+    const existingPriv = await loadPrivateCreds(spec.configDoc);
 
     let credsChanged = !existing.exists
       || existingData.clientId !== clientId
-      || existingData.clientSecret !== clientSecret;
+      || existingPriv.clientSecret !== clientSecret;
     for (const key of credsChangeKeys) {
       if (existingData[key] !== (extra as any)[key]) credsChanged = true;
     }
 
-    const base: Record<string, unknown> = {
+    // Public doc: client id + non-secret config. No tokens, no clientSecret.
+    const publicBase: Record<string, unknown> = {
       provider: spec.provider,
       clientId,
-      clientSecret,
       ...extra,
       redirectUri: redirectUri(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -166,19 +186,21 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
     };
 
     if (existing.exists && !credsChanged) {
-      await ref.set(base, { merge: true });
+      await ref.set(publicBase, { merge: true });
+      // Secret may have been re-entered even if unchanged — keep it fresh.
+      await privateCredsRef(spec.configDoc).set({ clientSecret }, { merge: true });
     } else {
       await ref.set({
-        ...base,
+        ...publicBase,
         status: "not-authorized",
         enabled: existingData.enabled ?? false,
-        accessToken: admin.firestore.FieldValue.delete(),
-        refreshToken: admin.firestore.FieldValue.delete(),
-        tokenExpiresAt: admin.firestore.FieldValue.delete(),
         scope: admin.firestore.FieldValue.delete(),
         grantedScope: admin.firestore.FieldValue.delete(),
         connectedAt: admin.firestore.FieldValue.delete(),
       }, { merge: true });
+      // Replace the entire private doc — any stale tokens are deleted because
+      // credentials changed.
+      await privateCredsRef(spec.configDoc).set({ clientSecret });
     }
 
     logger.info(`[${spec.provider}] credentials saved`, { uid });
@@ -249,12 +271,13 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
       const snap = await ref.get();
       if (!snap.exists) throw new Error(`${spec.provider} credentials not configured`);
       const cfg = snap.data()!;
+      const priv = await loadPrivateCreds(spec.configDoc);
       const clientId = cfg.clientId as string | undefined;
       const redirectUriStored = (cfg.redirectUri as string) || redirectUri();
       const tokenUrl = spec.resolveTokenUrl(cfg);
       if (!clientId) throw new Error("clientId missing");
 
-      const { headers, bodyExtras } = tokenExchangeAuth(cfg);
+      const { headers, bodyExtras } = tokenExchangeAuth({ ...cfg, clientSecret: priv.clientSecret });
       const tokenRes = await fetch(tokenUrl, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded", ...headers },
@@ -274,14 +297,19 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
         Date.now() + tok.expires_in * 1000,
       );
 
+      // Public doc: status + non-secret post-auth fields.
       await ref.set({
         status: "active",
-        accessToken: tok.access_token,
-        refreshToken: tok.refresh_token ?? null,
-        tokenExpiresAt: expiresAt,
         ...postAuthFields(tok, spec.defaultScope),
         connectedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      // Private doc: tokens only.
+      await privateCredsRef(spec.configDoc).set({
+        accessToken: tok.access_token,
+        refreshToken: tok.refresh_token ?? null,
+        tokenExpiresAt: expiresAt,
       }, { merge: true });
 
       logger.info(`[${spec.provider}] OAuth connected`);
@@ -309,21 +337,24 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
     const snap = await ref.get();
     if (!snap.exists) throw new Error(`${spec.provider} not connected`);
     const cfg = snap.data() as any;
-    if (!cfg.accessToken) throw new Error(`${spec.provider} access token missing`);
     if (cfg.enabled === false) throw new Error(`${spec.provider} integration disabled`);
 
-    const expMs = cfg.tokenExpiresAt ? (cfg.tokenExpiresAt as admin.firestore.Timestamp).toMillis() : 0;
-    if (expMs - Date.now() >= 5 * 60 * 1000) return cfg.accessToken as string;
+    const priv = await loadPrivateCreds(spec.configDoc);
+    if (!priv.accessToken) throw new Error(`${spec.provider} access token missing`);
 
-    if (!cfg.refreshToken) throw new Error(`${spec.provider} refresh credentials missing`);
-    const { headers, bodyExtras } = tokenExchangeAuth(cfg);
-    const tokenUrl = spec.resolveTokenUrl(cfg);
+    const expMs = priv.tokenExpiresAt ? priv.tokenExpiresAt.toMillis() : 0;
+    if (expMs - Date.now() >= 5 * 60 * 1000) return priv.accessToken;
+
+    if (!priv.refreshToken) throw new Error(`${spec.provider} refresh credentials missing`);
+    const merged = { ...cfg, clientSecret: priv.clientSecret };
+    const { headers, bodyExtras } = tokenExchangeAuth(merged);
+    const tokenUrl = spec.resolveTokenUrl(merged);
     const tokenRes = await fetch(tokenUrl, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", ...headers },
       body: new URLSearchParams({
         grant_type: "refresh_token",
-        refresh_token: cfg.refreshToken,
+        refresh_token: priv.refreshToken,
         ...bodyExtras,
       }),
     });
@@ -332,10 +363,12 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
       throw new Error(`${spec.provider} refresh failed: ${tokenRes.status} ${text.slice(0, 200)}`);
     }
     const tok = await tokenRes.json() as OAuthTokenResponse;
-    await ref.set({
+    await privateCredsRef(spec.configDoc).set({
       accessToken: tok.access_token,
-      refreshToken: tok.refresh_token ?? cfg.refreshToken,
+      refreshToken: tok.refresh_token ?? priv.refreshToken,
       tokenExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + tok.expires_in * 1000),
+    }, { merge: true });
+    await ref.set({
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     return tok.access_token;

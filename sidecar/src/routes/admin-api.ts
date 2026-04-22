@@ -21,6 +21,8 @@ import { proxyElation, assertElationReady } from "../lib/elation.js";
 import { proxyEcw, assertEcwReady } from "../lib/ecw.js";
 import { proxyNextGen, assertNextGenReady } from "../lib/nextgen.js";
 import { proxyTebra, assertTebraReady } from "../lib/tebra.js";
+import { proxyGreenway, assertGreenwayReady } from "../lib/greenway.js";
+import { proxyPfusion, assertPfusionReady } from "../lib/pfusion.js";
 import { isSimulationOn } from "../sim/index.js";
 import { simDrChrono } from "../sim/drchrono.js";
 import { simAthena } from "../sim/athena.js";
@@ -1119,6 +1121,42 @@ export async function handleAdminApi(
         return await proxyTebra(method, tebraPath, url.searchParams, request);
       }
 
+      // ── Greenway Health (generic pass-through) ──
+      // Path: /admin-api/greenway/<path>[?...]
+      case "greenway": {
+        const greenwayPath = parts.slice(1).join("/");
+        if (!greenwayPath) {
+          return error("Greenway path required (e.g. /admin-api/greenway/patients)", 400);
+        }
+        if (await isSimulationOn()) {
+          return error("Greenway sim not yet implemented", 501);
+        }
+        try {
+          await assertGreenwayReady();
+        } catch (err: any) {
+          return error(err.message, 403);
+        }
+        return await proxyGreenway(method, greenwayPath, url.searchParams, request);
+      }
+
+      // ── Practice Fusion (generic pass-through) ──
+      // Path: /admin-api/pfusion/<path>[?...]
+      case "pfusion": {
+        const pfusionPath = parts.slice(1).join("/");
+        if (!pfusionPath) {
+          return error("Practice Fusion path required (e.g. /admin-api/pfusion/patients)", 400);
+        }
+        if (await isSimulationOn()) {
+          return error("Practice Fusion sim not yet implemented", 501);
+        }
+        try {
+          await assertPfusionReady();
+        } catch (err: any) {
+          return error(err.message, 403);
+        }
+        return await proxyPfusion(method, pfusionPath, url.searchParams, request);
+      }
+
       // ── Faxes ──
       // Path: /admin-api/faxes/<action>
       // Reads + PATCH work in both modes (sim → simulation/faxes/*,
@@ -1232,6 +1270,8 @@ export async function handleAdminApi(
             "*      /admin-api/ecw/<path>       (when integration enabled)",
             "*      /admin-api/nextgen/<path>   (when integration enabled)",
             "*      /admin-api/tebra/<path>     (when integration enabled)",
+            "*      /admin-api/greenway/<path>  (when integration enabled)",
+            "*      /admin-api/pfusion/<path>   (when integration enabled)",
           ],
         }, 404);
     }

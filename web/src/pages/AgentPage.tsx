@@ -6,12 +6,8 @@ import { AgentSkills } from '../components/agent/AgentSkills';
 import { AgentChannels } from '../components/agent/AgentChannels';
 import { AgentBackups } from '../components/agent/AgentBackups';
 import { AgentHealth } from '../components/agent/AgentHealth';
-import { DrChronoSetup } from '../components/agent/DrChronoSetup';
-import { AthenaSetup } from '../components/agent/AthenaSetup';
-import { ElationSetup } from '../components/agent/ElationSetup';
-import { EcwSetup } from '../components/agent/EcwSetup';
-import { NextGenSetup } from '../components/agent/NextGenSetup';
-import { TebraSetup } from '../components/agent/TebraSetup';
+import { EhrSetup } from '../components/agent/EhrSetup';
+import { EHR_PROVIDERS } from '../lib/integrations/registry';
 import { sidecar } from '../lib/sidecar';
 import { useAuth } from '../hooks/useAuth';
 import { isSuperAdminEmail } from '../lib/roles';
@@ -48,12 +44,9 @@ const IntegrationsPanel: React.FC = () => (
         </p>
       </div>
       <div className="space-y-3">
-        <DrChronoSetup />
-        <AthenaSetup />
-        <ElationSetup />
-        <EcwSetup />
-        <NextGenSetup />
-        <TebraSetup />
+        {EHR_PROVIDERS.map((p) => (
+          <EhrSetup key={p.id} provider={p} />
+        ))}
       </div>
     </div>
   </div>

@@ -1,23 +1,42 @@
+/**
+ * Generic EHR setup card. One component drives every entry in the
+ * provider registry — save creds, authorize, toggle enabled, disconnect.
+ *
+ * See web/src/lib/integrations/registry.ts for the provider definitions
+ * that feed this component.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, Activity, Check, Copy, ExternalLink } from 'lucide-react';
+import { Loader2, Check, Copy, ExternalLink } from 'lucide-react';
 import {
-  getEcwStatus,
-  saveEcwCredentials,
-  getEcwAuthUrl,
-  setEcwEnabled,
-  disconnectEcw,
-  type EcwIntegration,
-} from '../../lib/ecw';
+  getIntegrationStatus,
+  saveIntegrationCredentials,
+  getIntegrationAuthUrl,
+  setIntegrationEnabled,
+  disconnectIntegration,
+  type IntegrationStatus,
+} from '../../lib/integrations/ehr-admin';
+import type { EhrProviderDef, FieldDef } from '../../lib/integrations/registry';
 import { ConfirmModal } from '../ui/ConfirmModal';
 
 interface Props {
+  provider: EhrProviderDef;
   onStateChange?: () => void;
 }
 
-export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
+const BADGE_CLASSES: Record<'blue' | 'purple', string> = {
+  blue: 'bg-blue-100 text-blue-700',
+  purple: 'bg-purple-100 text-purple-700',
+};
+
+export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
+  const Icon = provider.icon;
+  const errParamKey = `${provider.id}_error`;
+  const statusParamKey = `${provider.id}_status`;
+
   const [searchParams, setSearchParams] = useSearchParams();
-  const [integration, setIntegration] = useState<EcwIntegration | null>(null);
+  const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [authorizing, setAuthorizing] = useState(false);
@@ -27,40 +46,46 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
   const [success, setSuccess] = useState('');
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
-  const [fhirBase, setFhirBase] = useState('');
-  const [authUrl, setAuthUrl] = useState('');
-  const [tokenUrl, setTokenUrl] = useState('');
-  const [scope, setScope] = useState('');
+  const [extras, setExtras] = useState<Record<string, string | boolean>>(() =>
+    Object.fromEntries(
+      provider.extraFields.map((f) => [f.key, f.type === 'checkbox' ? false : '']),
+    ),
+  );
   const [showEdit, setShowEdit] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
+  // ── OAuth callback param handling ────────────────────────────
   useEffect(() => {
-    const errParam = searchParams.get('ecw_error');
-    const statusParam = searchParams.get('ecw_status');
+    const errParam = searchParams.get(errParamKey);
+    const statusParam = searchParams.get(statusParamKey);
     if (errParam) setError(decodeURIComponent(errParam));
-    if (statusParam === 'connected') setSuccess('eClinicalWorks connected successfully');
+    if (statusParam === 'connected') setSuccess(`${provider.name} connected successfully`);
     if (errParam || statusParam) {
       const next = new URLSearchParams(searchParams);
-      next.delete('ecw_error');
-      next.delete('ecw_status');
+      next.delete(errParamKey);
+      next.delete(statusParamKey);
       setSearchParams(next, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, errParamKey, statusParamKey, provider.name]);
 
   useEffect(() => {
     loadStatus();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider.id]);
 
   async function loadStatus() {
     setLoading(true);
     try {
-      const data = await getEcwStatus();
+      const data = await getIntegrationStatus(provider.id);
       setIntegration(data);
-      if (data?.clientId) setClientId(data.clientId);
-      if (data?.fhirBase) setFhirBase(data.fhirBase);
-      if (data?.authUrl) setAuthUrl(data.authUrl);
-      if (data?.tokenUrl) setTokenUrl(data.tokenUrl);
-      if (data?.scope) setScope(data.scope);
+      if (data?.clientId) setClientId(data.clientId as string);
+      // Populate extra-field values from the stored doc.
+      const next: Record<string, string | boolean> = {};
+      for (const f of provider.extraFields) {
+        const v = data?.[f.key];
+        next[f.key] = f.type === 'checkbox' ? Boolean(v) : ((v as string) || '');
+      }
+      setExtras(next);
       if (!data?.clientId) setShowEdit(true);
     } catch {
       setShowEdit(true);
@@ -69,22 +94,45 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
     }
   }
 
+  function validateExtras(): string | null {
+    for (const f of provider.extraFields) {
+      if (f.type === 'checkbox') continue;
+      const raw = extras[f.key];
+      const value = typeof raw === 'string' ? raw.trim() : '';
+      if (f.required && !value) return `${f.label} is required`;
+      if (value && f.pattern && !f.pattern.test(value)) {
+        return f.patternMessage || `${f.label} is invalid`;
+      }
+    }
+    return null;
+  }
+
   async function handleSaveCreds() {
     setError('');
-    if (!clientId.trim() || !fhirBase.trim() || !authUrl.trim() || !tokenUrl.trim()) {
-      setError('Client ID, FHIR base, Authorize URL, and Token URL are all required');
+    if (!clientId.trim()) {
+      setError('Client ID is required');
+      return;
+    }
+    if (provider.clientSecretRequired !== false && !clientSecret.trim()) {
+      setError('Client Secret is required');
+      return;
+    }
+    const extrasError = validateExtras();
+    if (extrasError) {
+      setError(extrasError);
       return;
     }
     setSaving(true);
     try {
-      await saveEcwCredentials({
+      const payload: Record<string, unknown> = {
         clientId: clientId.trim(),
         clientSecret: clientSecret.trim(),
-        fhirBase: fhirBase.trim(),
-        authUrl: authUrl.trim(),
-        tokenUrl: tokenUrl.trim(),
-        scope: scope.trim() || undefined,
-      });
+      };
+      for (const f of provider.extraFields) {
+        const v = extras[f.key];
+        payload[f.key] = f.type === 'checkbox' ? Boolean(v) : (v as string).trim();
+      }
+      await saveIntegrationCredentials(provider.id, payload);
       setClientSecret('');
       setShowEdit(false);
       await loadStatus();
@@ -99,7 +147,7 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
     setError('');
     setAuthorizing(true);
     try {
-      const { url } = await getEcwAuthUrl();
+      const { url } = await getIntegrationAuthUrl(provider.id);
       window.location.href = url;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start OAuth flow');
@@ -111,7 +159,7 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
     setError('');
     setTogglePending(true);
     try {
-      await setEcwEnabled(next);
+      await setIntegrationEnabled(provider.id, next);
       await loadStatus();
       onStateChange?.();
     } catch (err) {
@@ -126,14 +174,15 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
     setDisconnecting(true);
     setError('');
     try {
-      await disconnectEcw();
+      await disconnectIntegration(provider.id);
       setIntegration(null);
       setClientId('');
       setClientSecret('');
-      setFhirBase('');
-      setAuthUrl('');
-      setTokenUrl('');
-      setScope('');
+      const reset: Record<string, string | boolean> = {};
+      for (const f of provider.extraFields) {
+        reset[f.key] = f.type === 'checkbox' ? false : '';
+      }
+      setExtras(reset);
       setShowEdit(true);
       setSuccess('');
       onStateChange?.();
@@ -145,8 +194,9 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
   }
 
   function copyRedirect() {
-    if (!integration?.redirectUri) return;
-    navigator.clipboard.writeText(integration.redirectUri);
+    const uri = integration?.redirectUri;
+    if (!uri) return;
+    navigator.clipboard.writeText(uri as string);
     setSuccess('Redirect URI copied');
     setTimeout(() => setSuccess(''), 1500);
   }
@@ -154,16 +204,20 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
   const hasCreds = !!integration?.clientId;
   const isAuthorized = integration?.status === 'active';
   const isEnabled = !!integration?.enabled;
+  const dynamicBadges = provider.extraBadges
+    ? provider.extraBadges((integration ?? {}) as Record<string, unknown>)
+    : [];
+  const badges = [...(provider.staticBadges ?? []), ...dynamicBadges];
 
   if (loading) {
     return (
       <div className="card p-6">
         <div className="flex items-center gap-4">
           <div className="shrink-0 bg-secondary-50 rounded-lg p-2">
-            <Activity className="w-6 h-6 text-primary-600" />
+            <Icon className="w-6 h-6 text-primary-600" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-secondary-900">eClinicalWorks</h3>
+            <h3 className="text-sm font-semibold text-secondary-900">{provider.name}</h3>
             <p className="text-xs text-secondary-500 mt-0.5">Loading...</p>
           </div>
         </div>
@@ -175,26 +229,39 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
     <div className="card overflow-hidden">
       <div className="p-4 flex items-center gap-4">
         <div className="shrink-0 bg-secondary-50 rounded-lg p-2">
-          <Activity className="w-6 h-6 text-primary-600" />
+          <Icon className="w-6 h-6 text-primary-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-secondary-900">eClinicalWorks</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-semibold text-secondary-900">{provider.name}</h3>
             {isAuthorized && isEnabled ? (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Active</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                Active
+              </span>
             ) : isAuthorized ? (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">Authorized, disabled</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">
+                Authorized, disabled
+              </span>
             ) : hasCreds ? (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-secondary-100 text-secondary-600">Credentials saved</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-secondary-100 text-secondary-600">
+                Credentials saved
+              </span>
             ) : (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-secondary-100 text-secondary-500">Not configured</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-secondary-100 text-secondary-500">
+                Not configured
+              </span>
             )}
-            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">FHIR R4</span>
+            {badges.map((b) => (
+              <span
+                key={b.label}
+                className={`text-xs px-2 py-0.5 rounded-full font-medium ${BADGE_CLASSES[b.tone]}`}
+              >
+                {b.label}
+              </span>
+            ))}
           </div>
           <p className="text-xs text-secondary-500 mt-0.5">
-            {isAuthorized
-              ? 'The admin agent can read Patient/Appointment/Encounter FHIR resources when this integration is enabled'
-              : 'Connect eClinicalWorks via SMART-on-FHIR so the admin agent can query the practice EHR'}
+            {isAuthorized ? provider.activeDescription : provider.description}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
@@ -208,7 +275,11 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
                 className="sr-only peer"
               />
               <div className="relative w-9 h-5 bg-secondary-200 rounded-full peer peer-checked:bg-primary-600 transition-colors">
-                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${isEnabled ? 'translate-x-4' : ''}`} />
+                <div
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                    isEnabled ? 'translate-x-4' : ''
+                  }`}
+                />
               </div>
             </label>
           )}
@@ -233,79 +304,47 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
 
       {showEdit && (
         <div className="border-t border-secondary-200 p-4 bg-secondary-50/50 space-y-3">
-          <div>
-            <p className="text-xs font-medium text-secondary-700 mb-1">eClinicalWorks SMART-on-FHIR Client</p>
-            <p className="text-xs text-secondary-500 mb-3">
-              eCW assigns a FHIR base URL, authorize endpoint, and token endpoint per practice. Pull them from the
-              practice's{' '}
-              <code className="px-1 py-0.5 bg-white border rounded">/.well-known/smart-configuration</code> document
-              and paste here along with the client ID/secret.
-            </p>
-          </div>
+          {provider.setupHelp && (
+            <div>
+              <p className="text-xs font-medium text-secondary-700 mb-1">{provider.name} OAuth Client</p>
+              <p className="text-xs text-secondary-500 mb-3">{provider.setupHelp}</p>
+            </div>
+          )}
           <label className="block">
             <span className="text-xs font-medium text-secondary-700">Client ID</span>
             <input
               type="text"
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              placeholder="SMART-on-FHIR client ID"
+              placeholder={provider.clientIdPlaceholder || 'Client ID'}
               className="mt-1 block w-full text-xs px-3 py-2 rounded-md border border-secondary-200 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
           </label>
           <label className="block">
-            <span className="text-xs font-medium text-secondary-700">Client Secret (leave blank for public client)</span>
+            <span className="text-xs font-medium text-secondary-700">
+              Client Secret
+              {provider.clientSecretRequired === false && ' (leave blank for public client)'}
+            </span>
             <input
               type="password"
               value={clientSecret}
               onChange={(e) => setClientSecret(e.target.value)}
-              placeholder="Optional — confidential clients only"
+              placeholder={provider.clientSecretPlaceholder || 'Client secret'}
               className="mt-1 block w-full text-xs px-3 py-2 rounded-md border border-secondary-200 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
           </label>
-          <label className="block">
-            <span className="text-xs font-medium text-secondary-700">FHIR base URL</span>
-            <input
-              type="text"
-              value={fhirBase}
-              onChange={(e) => setFhirBase(e.target.value)}
-              placeholder="https://fhir4.eclinicalworks.com/fhir/r4/<practice-id>"
-              className="mt-1 block w-full text-xs px-3 py-2 rounded-md border border-secondary-200 focus:outline-none focus:ring-1 focus:ring-primary-500 font-mono"
+          {provider.extraFields.map((f) => (
+            <ExtraFieldInput
+              key={f.key}
+              field={f}
+              value={extras[f.key]}
+              onChange={(v) => setExtras((s) => ({ ...s, [f.key]: v }))}
             />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-secondary-700">Authorize URL</span>
-            <input
-              type="text"
-              value={authUrl}
-              onChange={(e) => setAuthUrl(e.target.value)}
-              placeholder="https://.../oauth2/authorize"
-              className="mt-1 block w-full text-xs px-3 py-2 rounded-md border border-secondary-200 focus:outline-none focus:ring-1 focus:ring-primary-500 font-mono"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-secondary-700">Token URL</span>
-            <input
-              type="text"
-              value={tokenUrl}
-              onChange={(e) => setTokenUrl(e.target.value)}
-              placeholder="https://.../oauth2/token"
-              className="mt-1 block w-full text-xs px-3 py-2 rounded-md border border-secondary-200 focus:outline-none focus:ring-1 focus:ring-primary-500 font-mono"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-secondary-700">Scopes (optional)</span>
-            <input
-              type="text"
-              value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              placeholder="Default: system/Patient.read system/Appointment.read …"
-              className="mt-1 block w-full text-xs px-3 py-2 rounded-md border border-secondary-200 focus:outline-none focus:ring-1 focus:ring-primary-500 font-mono"
-            />
-          </label>
+          ))}
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveCreds}
-              disabled={saving || !clientId.trim() || !fhirBase.trim() || !authUrl.trim() || !tokenUrl.trim()}
+              disabled={saving || !clientId.trim()}
               className="text-xs px-3 py-1.5 rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -313,7 +352,10 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
             </button>
             {hasCreds && (
               <button
-                onClick={() => { setShowEdit(false); setClientSecret(''); }}
+                onClick={() => {
+                  setShowEdit(false);
+                  setClientSecret('');
+                }}
                 className="text-xs px-3 py-1.5 rounded-md border border-secondary-200 text-secondary-700 hover:bg-secondary-100"
               >
                 Cancel
@@ -327,10 +369,12 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
         <div className="border-t border-secondary-200 p-4 bg-secondary-50/50 space-y-3">
           {integration?.redirectUri && (
             <div>
-              <p className="text-xs font-medium text-secondary-700 mb-1">Redirect URI (register in eCW)</p>
+              <p className="text-xs font-medium text-secondary-700 mb-1">
+                Redirect URI (register in {provider.name})
+              </p>
               <div className="flex items-center gap-2">
                 <code className="text-xs bg-white border border-secondary-200 rounded px-2 py-1 flex-1 truncate">
-                  {integration.redirectUri}
+                  {integration.redirectUri as string}
                 </code>
                 <button
                   onClick={copyRedirect}
@@ -353,8 +397,12 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
                 disabled={authorizing}
                 className="text-xs px-3 py-1.5 rounded-md bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
-                {authorizing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
-                Authorize with eClinicalWorks
+                {authorizing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ExternalLink className="h-3.5 w-3.5" />
+                )}
+                Authorize with {provider.name}
               </button>
             )}
             <button
@@ -375,11 +423,48 @@ export const EcwSetup: React.FC<Props> = ({ onStateChange }) => {
         isOpen={confirmDisconnect}
         onClose={() => setConfirmDisconnect(false)}
         onConfirm={performDisconnect}
-        title="Disconnect eClinicalWorks"
-        message="Disconnect eClinicalWorks? Stored credentials and tokens will be deleted."
+        title={`Disconnect ${provider.name}`}
+        message={`Disconnect ${provider.name}? Stored credentials and tokens will be deleted.`}
         confirmLabel="Disconnect"
         variant="danger"
       />
     </div>
+  );
+};
+
+interface ExtraFieldInputProps {
+  field: FieldDef;
+  value: string | boolean;
+  onChange: (v: string | boolean) => void;
+}
+
+const ExtraFieldInput: React.FC<ExtraFieldInputProps> = ({ field, value, onChange }) => {
+  if (field.type === 'checkbox') {
+    return (
+      <label className="inline-flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={Boolean(value)}
+          onChange={(e) => onChange(e.target.checked)}
+          className="h-3.5 w-3.5"
+        />
+        <span className="text-xs text-secondary-700">{field.label}</span>
+      </label>
+    );
+  }
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-secondary-700">{field.label}</span>
+      <input
+        type={field.type === 'password' ? 'password' : 'text'}
+        value={typeof value === 'string' ? value : ''}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={field.placeholder}
+        className={`mt-1 block w-full text-xs px-3 py-2 rounded-md border border-secondary-200 focus:outline-none focus:ring-1 focus:ring-primary-500 ${
+          field.type === 'url' ? 'font-mono' : ''
+        }`}
+      />
+      {field.help && <span className="block text-xs text-secondary-500 mt-1">{field.help}</span>}
+    </label>
   );
 };

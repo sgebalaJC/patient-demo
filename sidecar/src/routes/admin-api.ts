@@ -60,6 +60,16 @@ import {
   simSmsSend,
   simSmsInjectInbound,
 } from "../sim/messaging.js";
+import {
+  listPriorAuths,
+  getPriorAuth,
+  listPriorAuthEvents,
+  appendPriorAuthNote,
+  chartGapCheckStub,
+  listPayers,
+  getPayerPolicy,
+  listTargetCpts,
+} from "./prior-auth.js";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -1351,6 +1361,31 @@ export async function handleAdminApi(
         if (method === "POST" && sub === "send") return await simSmsSend(request);
         if (method === "POST" && sub === "inject-inbound") return await simSmsInjectInbound(request);
         return error(`Unknown messaging action: ${method} ${sub}`, 404);
+      }
+
+      // ── Prior Auth ──
+      // Read PAs + events, append notes. Writes that drive the state
+      // machine (create, status change, policy review) stay in the
+      // admin UI / Cloud Functions — those enforce server-side rules.
+      case "prior-auths": {
+        if (method === "GET" && !id) return await listPriorAuths(url);
+        if (method === "GET" && id && action === "events") return await listPriorAuthEvents(id, url);
+        if (method === "GET" && id) return await getPriorAuth(id);
+        if (method === "POST" && id && action === "notes") return await appendPriorAuthNote(id, request);
+        if (method === "POST" && id && action === "chart-gap-check") return await chartGapCheckStub(id);
+        break;
+      }
+      case "payers": {
+        if (method === "GET" && !id) return await listPayers();
+        break;
+      }
+      case "payer-policies": {
+        if (method === "GET" && id) return await getPayerPolicy(id);
+        break;
+      }
+      case "target-cpts": {
+        if (method === "GET" && !id) return await listTargetCpts();
+        break;
       }
 
       default:

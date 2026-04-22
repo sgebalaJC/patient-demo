@@ -6,13 +6,6 @@ user-invocable: true
 
 # Prior Auth
 
-> **Status:** The routes below (`/prior-auths`, `/payers`,
-> `/payer-policies`, `/target-cpts`) are not yet wired on the
-> sidecar admin-api — the data lives in Firestore and the UI at
-> `/admin/prior-auth` works, but this skill will 404 until the
-> routes are added. If the admin asks about a PA, point them at
-> `/admin/prior-auth/:PA_ID` in the UI for now.
-
 The prior-auth tracker lives in three Firestore collections:
 
 - `prior-auths` — one PA case per row (patient + payer + CPT + criteria checklist + status)
@@ -27,10 +20,10 @@ run the state machine in the Cloud Functions.
 ## List prior auths
 
 ```bash
-admin-api GET /prior-auths
-admin-api GET /prior-auths?status=submitted
-admin-api GET /prior-auths?status=needs_info&limit=50
-admin-api GET /prior-auths?payerId=aetna
+admin-api GET /admin-api/prior-auths
+admin-api GET /admin-api/prior-auths?status=submitted
+admin-api GET /admin-api/prior-auths?status=needs_info&limit=50
+admin-api GET /admin-api/prior-auths?payerId=aetna
 ```
 
 Status values: `draft`, `submitted`, `pending`, `needs_info`,
@@ -39,7 +32,7 @@ Status values: `draft`, `submitted`, `pending`, `needs_info`,
 ## Read one PA
 
 ```bash
-admin-api GET /prior-auths/PA_ID
+admin-api GET /admin-api/prior-auths/PA_ID
 ```
 
 Returns the full document: patient + DOB, payer + policy freshness,
@@ -50,8 +43,8 @@ coordinator.
 ## Audit trail
 
 ```bash
-admin-api GET /prior-auths/PA_ID/events
-admin-api GET /prior-auths/PA_ID/events?limit=100
+admin-api GET /admin-api/prior-auths/PA_ID/events
+admin-api GET /admin-api/prior-auths/PA_ID/events?limit=100
 ```
 
 Event types you'll see: `status_changed`, `chart_check_ran`, `policy_refreshed`.
@@ -59,7 +52,7 @@ Event types you'll see: `status_changed`, `chart_check_ran`, `policy_refreshed`.
 ## Append a coordinator note
 
 ```bash
-admin-api POST /prior-auths/PA_ID/notes '{"text":"Called Aetna, ref #12345. Rep says docs look complete, expect decision within 5 business days."}'
+admin-api POST /admin-api/prior-auths/PA_ID/notes '{"text":"Called Aetna, ref #12345. Rep says docs look complete, expect decision within 5 business days."}'
 ```
 
 The note gets stamped with `authorId: "agent"` and `authorName` from
@@ -76,7 +69,7 @@ notes) and fills in `met` / `evidence` / `chartRef` / `confidence` per
 criterion.
 
 ```bash
-admin-api POST /prior-auths/PA_ID/chart-gap-check
+admin-api POST /admin-api/prior-auths/PA_ID/chart-gap-check
 ```
 
 Returns the updated checklist and logs a `chart_check_ran` event
@@ -91,14 +84,14 @@ with `GET /prior-auths/PA_ID` to confirm nothing was persisted.
 
 ```bash
 # List all payers (insurance carriers)
-admin-api GET /payers
+admin-api GET /admin-api/payers
 
 # Pull a specific policy (criteria for one payer + CPT)
-admin-api GET /payer-policies/aetna_70553       # MRI brain w/o contrast, Aetna
-admin-api GET /payer-policies/cigna_95810       # Polysomnography, Cigna
+admin-api GET /admin-api/payer-policies/aetna_70553       # MRI brain w/o contrast, Aetna
+admin-api GET /admin-api/payer-policies/cigna_95810       # Polysomnography, Cigna
 
 # List the CPT panel the practice tracks
-admin-api GET /target-cpts
+admin-api GET /admin-api/target-cpts
 ```
 
 Policy ID format is `{payerId}_{cptCode}`. If a policy hasn't been

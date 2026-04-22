@@ -18,6 +18,11 @@ import {onCall, onRequest, HttpsError, CallableRequest} from "firebase-functions
 import * as logger from "firebase-functions/logger";
 import {SignJWT, jwtVerify} from "jose";
 import {assertSuperAdmin} from "../superAdmins.js";
+import {
+  getEhrClientSecret,
+  setEhrClientSecret,
+  deleteEhrClientSecret,
+} from "./secret-manager.js";
 
 const FUNCTIONS_REGION = "us-west1";
 
@@ -90,6 +95,7 @@ export interface EhrOAuth {
   authorize: ReturnType<typeof onCall>;
   callback: ReturnType<typeof onRequest>;
   setEnabled: ReturnType<typeof onCall>;
+  disconnect: ReturnType<typeof onCall>;
   /** Server-side helper — reads the access token, refreshing if near expiry. */
   getAccessToken: () => Promise<string>;
 }
@@ -127,8 +133,11 @@ function privateCredsRef(configDoc: string) {
   return admin.firestore().doc(`${configDoc}/private/credentials`);
 }
 
+/**
+ * Private subdoc now holds TOKENS only. `clientSecret` has moved to
+ * GCP Secret Manager — see ./secret-manager.ts.
+ */
 interface PrivateCredentials {
-  clientSecret?: string;
   accessToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: admin.firestore.Timestamp;

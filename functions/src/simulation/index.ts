@@ -22,6 +22,7 @@ import {isSuperAdminEmail} from "../superAdmins.js";
 import * as drchronoSim from "./simulators/drchrono.js";
 import * as faxesSim from "./simulators/faxes.js";
 import * as messagingSim from "./simulators/messaging.js";
+import * as workspaceSim from "./simulators/workspace.js";
 import * as messagesGen from "./generators/messages.js";
 
 export interface SimContext {
@@ -43,6 +44,7 @@ const REGISTRY: Record<string, IntegrationSpec> = {
   drchrono: {ops: drchronoSim as unknown as Record<string, Handler>, allowedRoles: ["admin"]},
   faxes: {ops: faxesSim as unknown as Record<string, Handler>, allowedRoles: ["admin"]},
   messaging: {ops: messagingSim as unknown as Record<string, Handler>, allowedRoles: ["admin"]},
+  workspace: {ops: workspaceSim as unknown as Record<string, Handler>, allowedRoles: ["admin"]},
   messages: {ops: messagesGen as unknown as Record<string, Handler>, allowedRoles: ["patient", "admin"]},
 };
 

@@ -24,6 +24,7 @@ import { simDrChrono } from "../sim/drchrono.js";
 import { simAthena } from "../sim/athena.js";
 import { simElation } from "../sim/elation.js";
 import { simEcw } from "../sim/ecw.js";
+import { simWorkspace } from "../sim/workspace.js";
 import {
   simFaxGetOurNumber,
   simFaxListInbound,
@@ -1092,6 +1093,16 @@ export async function handleAdminApi(
           return await simFaxSend(request, callerUid);
         }
         return error(`Unknown faxes action: ${method} ${sub}`, 404);
+      }
+
+      // ── Google Workspace (sim-only) ──
+      // Path: /admin-api/workspace/<gmail|calendar>/<action>
+      case "workspace": {
+        if (!(await isSimulationOn())) {
+          return error("Workspace admin-api is currently sim-only; real path is on Cloud Functions", 501);
+        }
+        const wsPath = parts.slice(1).join("/");
+        return await simWorkspace(method, wsPath, url.searchParams, request);
       }
 
       // ── Messaging (SMS) ──

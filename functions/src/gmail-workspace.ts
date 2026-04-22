@@ -80,6 +80,20 @@ export async function sendEmail(
   body: string,
   from?: string,
 ): Promise<{messageId: string; threadId: string}> {
+  // Sim short-circuit: the global simulation flag routes outbound email to
+  // simulation/workspace/emails instead of Gmail. Admins see it in the
+  // sandbox view; nothing leaves the tenant.
+  try {
+    const admin = await import("firebase-admin");
+    const snap = await admin.firestore().doc("system/settings").get();
+    if (snap.exists && snap.data()?.simulationMode === true) {
+      const {recordSimEmail} = await import("./simulation/simulators/workspace.js");
+      return await recordSimEmail({to, from, subject, body, kind: "gmail-send"});
+    }
+  } catch {
+    /* tolerate — fall through to real send */
+  }
+
   const raw = [
     ...(from ? [`From: ${from}`] : []),
     `To: ${to}`,

@@ -410,13 +410,13 @@ export const AdminSettingsPage: React.FC = () => {
         </div>
 
         {/* Placeholder info */}
-        <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+        <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
           <p className="font-medium mb-1">Available placeholders:</p>
           <ul className="space-y-1">
-            <li><code className="bg-blue-100 px-1 rounded">{'{content}'}</code> — Appointment description (type, location, reason)</li>
-            <li><code className="bg-blue-100 px-1 rounded">{'{time}'}</code> — Formatted appointment time (e.g., "Mar 25, 2:00 PM")</li>
+            <li><code className="bg-green-100 px-1 rounded">{'{content}'}</code> — Appointment description (type, location, reason)</li>
+            <li><code className="bg-green-100 px-1 rounded">{'{time}'}</code> — Formatted appointment time (e.g., "Mar 25, 2:00 PM")</li>
           </ul>
-          <p className="mt-2 text-blue-600">Both placeholders are required in each template.</p>
+          <p className="mt-2 text-green-700">Both placeholders are required in each template.</p>
         </div>
 
         {templates && (

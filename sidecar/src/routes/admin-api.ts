@@ -53,6 +53,7 @@ import {
   realFaxListOutbound,
   realFaxGet,
   realFaxPatch,
+  realFaxSend,
 } from "./faxes-real.js";
 import {
   simSmsListInbound,
@@ -1321,9 +1322,11 @@ export async function handleAdminApi(
           return await simFaxToDrChrono(request);
         }
         if (method === "POST" && sub === "send") {
-          if (!sim) return error("Real fax send still on Cloud Functions; use sendOutboundFax callable", 501);
-          const callerUid = request.headers.get("x-caller-uid") || "sidecar";
-          return await simFaxSend(request, callerUid);
+          if (sim) {
+            const callerUid = request.headers.get("x-caller-uid") || "sidecar";
+            return await simFaxSend(request, callerUid);
+          }
+          return await realFaxSend(request);
         }
 
         // Single-fax ops: /admin-api/faxes/:faxSid

@@ -73,3 +73,40 @@ export async function realFaxPatch(faxSid: string, request: Request): Promise<Re
   await ref.update(updates);
   return json({ faxSid, ...snap.data(), ...updates });
 }
+
+/**
+ * Forwards to the `sendOutboundFaxHttp` Cloud Function. Staging + merge
+ * + SignalWire submission still live there — this is a single HTTP hop.
+ *
+ * Required env on the sidecar:
+ *   SIDECAR_API_KEY           — shared secret, same key the CF compares against
+ *   FUNCTIONS_BASE_URL        — e.g. https://us-west1-{project}.cloudfunctions.net
+ */
+export async function realFaxSend(request: Request): Promise<Response> {
+  const base = process.env.FUNCTIONS_BASE_URL;
+  const key = process.env.SIDECAR_API_KEY;
+  if (!base || !key) {
+    return json(
+      { error: "Fax send not configured on sidecar — set FUNCTIONS_BASE_URL + SIDECAR_API_KEY" },
+      501,
+    );
+  }
+  const body = await request.clone().text();
+  try {
+    const res = await fetch(`${base.replace(/\/+$/, "")}/sendOutboundFaxHttp`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body,
+    });
+    const text = await res.text();
+    return new Response(text, {
+      status: res.status,
+      headers: { "Content-Type": res.headers.get("content-type") || "application/json" },
+    });
+  } catch (err: any) {
+    return json({ error: `Fax send forwarder failed: ${err?.message || err}` }, 502);
+  }
+}

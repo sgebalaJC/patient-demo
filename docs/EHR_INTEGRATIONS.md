@@ -52,13 +52,14 @@ Migrating existing integrations: any integration saved before this split has sec
 | eClinicalWorks (SMART-on-FHIR) | `openclaw/workspace/skills/ecw/SKILL.md` | ✓ `sim/ecw.ts` (shared pool) | — |
 | NextGen Healthcare | `openclaw/workspace/skills/nextgen/SKILL.md` | ✓ `sim/nextgen.ts` (shared pool) | — |
 | Tebra (Kareo) | `openclaw/workspace/skills/tebra/SKILL.md` | ✓ `sim/tebra.ts` (shared pool) | — |
-| Greenway Health | `openclaw/workspace/skills/greenway/SKILL.md` | — (501 in sim) | — |
-| Practice Fusion | `openclaw/workspace/skills/pfusion/SKILL.md` | — (501 in sim) | — |
+| Greenway Health | `openclaw/workspace/skills/greenway/SKILL.md` | ✓ `sim/greenway.ts` (shared pool) | — |
+| Practice Fusion | `openclaw/workspace/skills/pfusion/SKILL.md` | ✓ `sim/pfusion.ts` (shared pool) | — |
+| Cerner / Oracle Health | `openclaw/workspace/skills/cerner/SKILL.md` | ✓ `sim/cerner.ts` (shared pool) | — |
+| Epic | `openclaw/workspace/skills/epic/SKILL.md` | ✓ `sim/epic.ts` (shared pool) | — |
 
 ## TODO — clone the pattern
 
-- [ ] **Cerner / Oracle Health** — SMART-on-FHIR. Clone `ecw.ts`.
-- [ ] **Epic** — SMART-on-FHIR. Requires App Orchard enrollment. Clone `ecw.ts`.
+All major ambulatory EHRs shipped. Next tier (inpatient / specialty): MEDITECH, Allscripts/Veradigm, athenaIDX, Greenway Success EHR, eClinicalWorks healow (patient-facing).
 
 Each is ~30 min of glue code once the vendor assigns client id/secret (or an App Orchard slot).
 

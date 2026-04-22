@@ -233,4 +233,78 @@ export const EHR_PROVIDERS: EhrProviderDef[] = [
     setupHelp:
       "Create an OAuth application in the Practice Fusion developer portal and paste the Client ID and Client Secret here.",
   },
+  // SMART-on-FHIR providers share the same extra fields.
+  ...smartProviders(),
 ];
+
+function smartProviders(): EhrProviderDef[] {
+  const smartFields: FieldDef[] = [
+    {
+      key: 'fhirBase',
+      label: 'FHIR base URL',
+      type: 'url',
+      placeholder: 'https://.../FHIR/R4',
+      required: true,
+      pattern: /^https:\/\/.+/,
+      patternMessage: 'Must be an https URL',
+    },
+    {
+      key: 'authUrl',
+      label: 'Authorize URL',
+      type: 'url',
+      placeholder: 'https://.../oauth2/authorize',
+      required: true,
+      pattern: /^https:\/\/.+/,
+      patternMessage: 'Must be an https URL',
+    },
+    {
+      key: 'tokenUrl',
+      label: 'Token URL',
+      type: 'url',
+      placeholder: 'https://.../oauth2/token',
+      required: true,
+      pattern: /^https:\/\/.+/,
+      patternMessage: 'Must be an https URL',
+    },
+    {
+      key: 'scope',
+      label: 'Scopes (optional)',
+      type: 'text',
+      placeholder: 'Default: system/Patient.read system/Appointment.read …',
+    },
+  ];
+  return [
+    {
+      id: 'cerner',
+      name: 'Cerner / Oracle Health',
+      icon: Activity,
+      description:
+        'Connect Cerner / Oracle Health via SMART-on-FHIR so the admin agent can query the practice EHR',
+      activeDescription:
+        'The admin agent can read Patient/Appointment/Encounter FHIR resources when this integration is enabled',
+      clientIdPlaceholder: 'SMART-on-FHIR client ID',
+      clientSecretPlaceholder: 'Optional — confidential clients only',
+      clientSecretRequired: false,
+      extraFields: smartFields,
+      setupHelp:
+        "Register an app at Cerner Code Console (FHIR R4). Paste the practice's FHIR base, authorize URL, and token URL (discoverable via `.well-known/smart-configuration`). Leave client secret blank for public SMART clients.",
+      staticBadges: [{ label: 'FHIR R4', tone: 'purple' }],
+    },
+    {
+      id: 'epic',
+      name: 'Epic',
+      icon: Activity,
+      description:
+        'Connect Epic via SMART-on-FHIR so the admin agent can query the practice EHR',
+      activeDescription:
+        'The admin agent can read Patient/Appointment/Encounter/Observation FHIR resources when this integration is enabled',
+      clientIdPlaceholder: 'SMART-on-FHIR client ID (App Orchard or sandbox)',
+      clientSecretPlaceholder: 'Optional — confidential clients only',
+      clientSecretRequired: false,
+      extraFields: smartFields,
+      setupHelp:
+        "For production, requires Epic App Orchard enrollment. Sandbox is available at fhir.epic.com without enrollment. Pull fhirBase / authUrl / tokenUrl from the practice's `.well-known/smart-configuration`.",
+      staticBadges: [{ label: 'FHIR R4', tone: 'purple' }],
+    },
+  ];
+}

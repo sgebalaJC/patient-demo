@@ -1732,6 +1732,20 @@ export const sendPhoneVerificationCode = onCall({
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Sim short-circuit: record to simulation/sms/outbound instead of
+    // calling Twilio. The verification code still validates against
+    // the Firestore `phone-verifications` doc, so sim users can grab
+    // the code from the admin SMS panel.
+    const settingsSnap = await admin.firestore().doc('system/settings').get();
+    const simOn = settingsSnap.exists && settingsSnap.data()?.simulationMode === true;
+    const body = `Your ${FUNCTIONS_BRANDING.shortName} verification code is: ${code}`;
+    if (simOn) {
+      const {recordSimSms} = await import('./simulation/simulators/messaging.js');
+      await recordSimSms({to: formatted, body, kind: 'verification'});
+      logger.info('Verification code recorded (sim)', { uid: context.uid });
+      return { success: true, message: 'Verification code sent' };
+    }
+
     // Send SMS via Twilio
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -1742,11 +1756,7 @@ export const sendPhoneVerificationCode = onCall({
     }
 
     const client = twilio(accountSid, authToken);
-    await client.messages.create({
-      body: `Your ${FUNCTIONS_BRANDING.shortName} verification code is: ${code}`,
-      from: fromNumber,
-      to: formatted,
-    });
+    await client.messages.create({body, from: fromNumber, to: formatted});
 
     logger.info('Verification code sent', { uid: context.uid });
     return { success: true, message: 'Verification code sent' };
@@ -1883,6 +1893,17 @@ export const sendPhoneLoginCode = onCall({
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Sim short-circuit: record to sandbox instead of hitting Twilio.
+    const settingsSnap = await admin.firestore().doc('system/settings').get();
+    const simOn = settingsSnap.exists && settingsSnap.data()?.simulationMode === true;
+    const body = `Your ${FUNCTIONS_BRANDING.shortName} login code is: ${code}`;
+    if (simOn) {
+      const {recordSimSms} = await import('./simulation/simulators/messaging.js');
+      await recordSimSms({to: formatted, body, kind: 'verification'});
+      logger.info('Phone login code recorded (sim)', { phone: formatted.slice(-4) });
+      return { success: true, message: 'Verification code sent' };
+    }
+
     // Send SMS via Twilio
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -1893,11 +1914,7 @@ export const sendPhoneLoginCode = onCall({
     }
 
     const client = twilio(accountSid, authToken);
-    await client.messages.create({
-      body: `Your ${FUNCTIONS_BRANDING.shortName} login code is: ${code}`,
-      from: fromNumber,
-      to: formatted,
-    });
+    await client.messages.create({body, from: fromNumber, to: formatted});
 
     logger.info('Phone login code sent', { phone: formatted.slice(-4) });
     return { success: true, message: 'Verification code sent' };
@@ -2215,14 +2232,22 @@ async function sendAppointmentStatusSMS(
       message += ' Please contact us to reschedule.';
     }
 
-    const client = twilio(accountSid, authToken);
-    await client.messages.create({
-      body: message,
-      from: fromNumber,
-      to: formatted,
-    });
+    // Sim short-circuit: route to sandbox instead of Twilio.
+    const settingsSnap = await admin.firestore().doc('system/settings').get();
+    const simOn = settingsSnap.exists && settingsSnap.data()?.simulationMode === true;
+    if (simOn) {
+      const {recordSimSms} = await import('./simulation/simulators/messaging.js');
+      await recordSimSms({to: formatted, body: message, kind: 'admin'});
+    } else {
+      const client = twilio(accountSid, authToken);
+      await client.messages.create({
+        body: message,
+        from: fromNumber,
+        to: formatted,
+      });
+    }
 
-    logger.info(`Appointment ${status} SMS sent to patient ${patientId}`);
+    logger.info(`Appointment ${status} SMS ${simOn ? 'recorded (sim)' : 'sent'} to patient ${patientId}`);
 
     // Also send email notification
     const email = patientData?.email;
@@ -3160,6 +3185,22 @@ export {
   pfusionCallback,
   pfusionSetEnabled,
 } from "./pfusion.js";
+
+// ─── Cerner / Oracle Health (SMART-on-FHIR) integration ─────────────
+export {
+  cernerSaveCredentials,
+  cernerAuthorize,
+  cernerCallback,
+  cernerSetEnabled,
+} from "./cerner.js";
+
+// ─── Epic (SMART-on-FHIR) integration ───────────────────────────────
+export {
+  epicSaveCredentials,
+  epicAuthorize,
+  epicCallback,
+  epicSetEnabled,
+} from "./epic.js";
 
 // ─── Super-admin impersonation ───────────────────────────────────────
 /**

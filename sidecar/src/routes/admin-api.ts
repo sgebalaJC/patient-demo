@@ -23,6 +23,8 @@ import { proxyNextGen, assertNextGenReady } from "../lib/nextgen.js";
 import { proxyTebra, assertTebraReady } from "../lib/tebra.js";
 import { proxyGreenway, assertGreenwayReady } from "../lib/greenway.js";
 import { proxyPfusion, assertPfusionReady } from "../lib/pfusion.js";
+import { proxyCerner, assertCernerReady } from "../lib/cerner.js";
+import { proxyEpic, assertEpicReady } from "../lib/epic.js";
 import { isSimulationOn } from "../sim/index.js";
 import { simDrChrono } from "../sim/drchrono.js";
 import { simAthena } from "../sim/athena.js";
@@ -30,6 +32,10 @@ import { simElation } from "../sim/elation.js";
 import { simEcw } from "../sim/ecw.js";
 import { simNextGen } from "../sim/nextgen.js";
 import { simTebra } from "../sim/tebra.js";
+import { simGreenway } from "../sim/greenway.js";
+import { simPfusion } from "../sim/pfusion.js";
+import { simCerner } from "../sim/cerner.js";
+import { simEpic } from "../sim/epic.js";
 import { simWorkspace } from "../sim/workspace.js";
 import {
   simFaxGetOurNumber,
@@ -242,6 +248,83 @@ async function listAppointments(db: Db, url: URL): Promise<Response> {
   });
 
   return json({ appointments, count: appointments.length });
+}
+
+async function createAppointment(db: Db, req: Request): Promise<Response> {
+  // SAFETY: creating an appointment writes to a real shared calendar (via the
+  // Cloud Function calendar sync trigger) and can notify the patient. Require
+  // explicit operator confirmation, just like cancel.
+  if (!isOperatorAuthorized(req)) {
+    return error("Creating an appointment requires operator authorization. Include X-Operator-Authorized: true header after confirming with the admin.", 403);
+  }
+
+  const body = await req.json() as Record<string, any>;
+  if (!body.patientId) return error("patientId is required");
+  if (!body.appointmentDate) return error("appointmentDate is required (ISO-8601 UTC timestamp)");
+
+  const patientDoc = await db.collection("users").doc(body.patientId).get();
+  if (!patientDoc.exists || patientDoc.data()!.role !== "patient") {
+    return error("Patient not found", 404);
+  }
+
+  const apptDate = new Date(body.appointmentDate);
+  if (isNaN(apptDate.getTime())) return error("appointmentDate must be a valid ISO-8601 timestamp");
+
+  const duration = typeof body.duration === "number" ? Math.max(5, Math.min(body.duration, 240)) : 30;
+  const validStatuses = ["scheduled", "confirmed"];
+  const status = validStatuses.includes(body.status) ? body.status : "scheduled";
+
+  const ref = await db.collection("appointments").add({
+    patientId: body.patientId,
+    appointmentDate: Timestamp.fromDate(apptDate),
+    duration,
+    appointmentType: body.appointmentType ? String(body.appointmentType).slice(0, 100) : null,
+    reason: body.reason ? String(body.reason).slice(0, 500) : null,
+    notes: body.notes ? String(body.notes).slice(0, 2000) : null,
+    location: body.location ? String(body.location).slice(0, 200) : null,
+    status,
+    reminderSent: false,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return json({ success: true, appointmentId: ref.id, status }, 201);
+}
+
+async function appointmentSlots(db: Db, url: URL): Promise<Response> {
+  const date = url.searchParams.get("date");
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return error("date query param required (YYYY-MM-DD)");
+  }
+
+  const dayStart = new Date(`${date}T00:00:00Z`);
+  const dayEnd = new Date(`${date}T23:59:59Z`);
+  const snap = await db.collection("appointments")
+    .where("appointmentDate", ">=", Timestamp.fromDate(dayStart))
+    .where("appointmentDate", "<", Timestamp.fromDate(dayEnd))
+    .get();
+
+  const busy = snap.docs
+    .filter(d => {
+      const s = d.data().status;
+      return s !== "cancelled" && s !== "no-show";
+    })
+    .map(d => {
+      const data = d.data();
+      const start = data.appointmentDate.toDate() as Date;
+      const dur = (data.duration ?? 30) as number;
+      return {
+        appointmentId: d.id,
+        patientId: data.patientId,
+        start: start.toISOString(),
+        end: new Date(start.getTime() + dur * 60_000).toISOString(),
+        duration: dur,
+        status: data.status,
+      };
+    })
+    .sort((a, b) => a.start.localeCompare(b.start));
+
+  return json({ date, busy, count: busy.length });
 }
 
 async function upcomingAppointments(db: Db): Promise<Response> {
@@ -955,12 +1038,14 @@ export async function handleAdminApi(
         if (method === "DELETE") return error("Patient deletion is forbidden. Use PATCH to deactivate instead.", 403);
         break;
 
-      // ── Appointments (cancel requires authorization) ──
+      // ── Appointments (create + cancel require authorization) ──
       case "appointments":
         if (method === "GET" && !id) return await listAppointments(db, url);
         if (method === "GET" && id === "upcoming") return await upcomingAppointments(db);
+        if (method === "GET" && id === "slots") return await appointmentSlots(db, url);
         if (method === "GET" && id === "patient" && action) return await patientAppointments(db, action, url);
         if (method === "GET" && id) return await getAppointment(db, id);
+        if (method === "POST" && !id) return await createAppointment(db, request);
         if (method === "PATCH" && id) return await updateAppointment(db, id, request);
         break;
 
@@ -1129,7 +1214,7 @@ export async function handleAdminApi(
           return error("Greenway path required (e.g. /admin-api/greenway/patients)", 400);
         }
         if (await isSimulationOn()) {
-          return error("Greenway sim not yet implemented", 501);
+          return await simGreenway(method, greenwayPath, url.searchParams);
         }
         try {
           await assertGreenwayReady();
@@ -1147,7 +1232,7 @@ export async function handleAdminApi(
           return error("Practice Fusion path required (e.g. /admin-api/pfusion/patients)", 400);
         }
         if (await isSimulationOn()) {
-          return error("Practice Fusion sim not yet implemented", 501);
+          return await simPfusion(method, pfusionPath, url.searchParams);
         }
         try {
           await assertPfusionReady();
@@ -1155,6 +1240,42 @@ export async function handleAdminApi(
           return error(err.message, 403);
         }
         return await proxyPfusion(method, pfusionPath, url.searchParams, request);
+      }
+
+      // ── Cerner / Oracle Health (FHIR R4 pass-through) ──
+      // Path: /admin-api/cerner/<fhir-resource>[?...]
+      case "cerner": {
+        const cernerPath = parts.slice(1).join("/");
+        if (!cernerPath) {
+          return error("Cerner path required (e.g. /admin-api/cerner/Patient)", 400);
+        }
+        if (await isSimulationOn()) {
+          return await simCerner(method, cernerPath, url.searchParams);
+        }
+        try {
+          await assertCernerReady();
+        } catch (err: any) {
+          return error(err.message, 403);
+        }
+        return await proxyCerner(method, cernerPath, url.searchParams, request);
+      }
+
+      // ── Epic (FHIR R4 pass-through) ──
+      // Path: /admin-api/epic/<fhir-resource>[?...]
+      case "epic": {
+        const epicPath = parts.slice(1).join("/");
+        if (!epicPath) {
+          return error("Epic path required (e.g. /admin-api/epic/Patient)", 400);
+        }
+        if (await isSimulationOn()) {
+          return await simEpic(method, epicPath, url.searchParams);
+        }
+        try {
+          await assertEpicReady();
+        } catch (err: any) {
+          return error(err.message, 403);
+        }
+        return await proxyEpic(method, epicPath, url.searchParams, request);
       }
 
       // ── Faxes ──
@@ -1242,8 +1363,10 @@ export async function handleAdminApi(
             "PATCH  /admin-api/patients/:id  (deactivate requires X-Operator-Authorized)",
             "GET    /admin-api/appointments[?status=&limit=&after=]",
             "GET    /admin-api/appointments/upcoming",
+            "GET    /admin-api/appointments/slots?date=YYYY-MM-DD",
             "GET    /admin-api/appointments/patient/:patientId",
             "GET    /admin-api/appointments/:id",
+            "POST   /admin-api/appointments  (requires X-Operator-Authorized)",
             "PATCH  /admin-api/appointments/:id  (cancel requires X-Operator-Authorized)",
             "GET    /admin-api/messages[?filter=all|unread|priority&limit=&after=]",
             "GET    /admin-api/messages/:threadId",
@@ -1272,6 +1395,8 @@ export async function handleAdminApi(
             "*      /admin-api/tebra/<path>     (when integration enabled)",
             "*      /admin-api/greenway/<path>  (when integration enabled)",
             "*      /admin-api/pfusion/<path>   (when integration enabled)",
+            "*      /admin-api/cerner/<path>    (when integration enabled)",
+            "*      /admin-api/epic/<path>      (when integration enabled)",
           ],
         }, 404);
     }

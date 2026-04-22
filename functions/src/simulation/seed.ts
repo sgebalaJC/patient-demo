@@ -161,6 +161,7 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
       faxes_pdfs_failed: faxes.pdfsFailed,
       ...(faxes.firstPdfError ? {faxes_pdf_error: faxes.firstPdfError} : {}),
       ...(faxes.bucket ? {faxes_bucket: faxes.bucket} : {}),
+      ...(faxes.stage ? {faxes_stage: faxes.stage} : {}),
       sms_outbound: sms.outbound,
       sms_inbound: sms.inbound,
       workspace_emails: workspace.emails,

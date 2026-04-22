@@ -434,104 +434,125 @@ export async function seedFaxes(db: admin.firestore.Firestore): Promise<{
   pdfsFailed: number;
   firstPdfError?: string;
   bucket?: string;
+  stage?: string;
 }> {
-  const wipe = async (path: string) => {
-    const snap = await db.collection(path).limit(500).get();
-    if (snap.empty) return;
-    const batch = db.batch();
-    snap.docs.forEach((d) => batch.delete(d.ref));
-    await batch.commit();
-  };
-  await wipe(INBOUND);
-  await wipe(OUTBOUND);
-
-  const now = Date.now();
-  const ts = (ms: number) => admin.firestore.Timestamp.fromMillis(ms);
-
+  // Self-reporting seed: any throw is returned as a diagnostic result
+  // instead of bubbling to safeSeed (which would hide the reason).
   let pdfsAttached = 0;
   let pdfsFailed = 0;
   let firstPdfError: string | undefined;
-  // Storage may not be initialized on the project (no default bucket). Guard
-  // the lookup so the whole fax seed doesn't die before the Firestore writes.
   let bucketName: string | undefined;
+  let inboundCount = 0;
+  let outboundCount = 0;
+  let stage = "start";
+
   try {
-    bucketName = admin.storage().bucket().name;
+    stage = "wipe";
+    const wipe = async (path: string) => {
+      const snap = await db.collection(path).limit(500).get();
+      if (snap.empty) return;
+      const batch = db.batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    };
+    await wipe(INBOUND);
+    await wipe(OUTBOUND);
+
+    const now = Date.now();
+    const ts = (ms: number) => admin.firestore.Timestamp.fromMillis(ms);
+
+    stage = "bucket-lookup";
+    try {
+      bucketName = admin.storage().bucket().name;
+    } catch (err: any) {
+      firstPdfError = `bucket lookup: ${err?.message || String(err)}`;
+    }
+
+    // Inbound — 3 samples with viewable PDFs. Upload is best-effort: if it
+    // fails we still write the Firestore row (pdfPath=null) and surface the
+    // underlying Storage/IAM error in the seed result so the operator can
+    // diagnose without grepping Cloud Logging.
+    stage = "inbound-render";
+    const inSpecs = sampleSpecs();
+    const inboundSamples: InboundFax[] = [];
+    for (let i = 0; i < inSpecs.length; i++) {
+      const spec = inSpecs[i];
+      const faxSid = `SIM-SEED-IN-${i + 1001}`;
+      spec.faxSid = faxSid;
+      const pdfBytes = await renderFaxPdf(spec);
+      const pdfPath = `${INBOUND}/${faxSid}/original.pdf`;
+      const uploaded = await uploadPdf(pdfPath, pdfBytes);
+      if (uploaded.ok) pdfsAttached++;
+      else {
+        pdfsFailed++;
+        if (!firstPdfError) firstPdfError = uploaded.error;
+      }
+      inboundSamples.push({
+        faxSid,
+        from: SAMPLE_SENDERS[i % SAMPLE_SENDERS.length],
+        to: SIM_FAX_NUMBER,
+        pageCount: spec.pageCount,
+        status: i === 0 ? "needs_review" : i === 1 ? "completed" : "processing",
+        receivedAt: ts(now - (2 + i * 6) * 3600_000),
+        pdfPath: uploaded.ok ? pdfPath : null,
+        attempts: 1,
+      });
+    }
+    stage = "inbound-commit";
+    const inboundBatch = db.batch();
+    inboundSamples.forEach((f) => inboundBatch.set(db.doc(`${INBOUND}/${f.faxSid}`), f));
+    await inboundBatch.commit();
+    inboundCount = inboundSamples.length;
+
+    // Outbound — 2 samples, also with PDFs (best-effort upload).
+    stage = "outbound-render";
+    const outSpecs = outboundSpecs();
+    const outboundSamples: (OutboundFax & {pdfPath: string | null})[] = [];
+    for (let i = 0; i < outSpecs.length; i++) {
+      const spec = outSpecs[i];
+      const faxSid = `SIM-SEED-OUT-${i + 1}`;
+      spec.faxSid = faxSid;
+      const pdfBytes = await renderFaxPdf(spec);
+      const pdfPath = `${OUTBOUND}/${faxSid}/original.pdf`;
+      const uploaded = await uploadPdf(pdfPath, pdfBytes);
+      if (uploaded.ok) pdfsAttached++;
+      else {
+        pdfsFailed++;
+        if (!firstPdfError) firstPdfError = uploaded.error;
+      }
+      outboundSamples.push({
+        faxSid,
+        from: SIM_FAX_NUMBER,
+        to: ["+14155552020", "+12125550250"][i] || "+15555550100",
+        subject: spec.procedure,
+        pageCount: spec.pageCount,
+        fileCount: 1,
+        status: "delivered",
+        submittedBy: "sim-seed",
+        submittedAt: ts(now - (3 + i * 45) * 3600_000),
+        completedAt: ts(now - (3 + i * 45) * 3600_000 + 60_000),
+        pdfPath: uploaded.ok ? pdfPath : null,
+      });
+    }
+    stage = "outbound-commit";
+    const outboundBatch = db.batch();
+    outboundSamples.forEach((f) => outboundBatch.set(db.doc(`${OUTBOUND}/${f.faxSid}`), f));
+    await outboundBatch.commit();
+    outboundCount = outboundSamples.length;
+    stage = "done";
   } catch (err: any) {
-    firstPdfError = `bucket lookup: ${err?.message || String(err)}`;
+    const msg = err?.message || String(err);
+    console.error(`[sim-fax] seedFaxes failed at stage=${stage}:`, msg);
+    if (!firstPdfError) firstPdfError = `${stage}: ${msg}`;
   }
-
-  // Inbound — 3 samples with viewable PDFs. Upload is best-effort: if it
-  // fails we still write the Firestore row (pdfPath=null) and surface the
-  // underlying Storage/IAM error in the seed result so the operator can
-  // diagnose without grepping Cloud Logging.
-  const inSpecs = sampleSpecs();
-  const inboundSamples: InboundFax[] = [];
-  for (let i = 0; i < inSpecs.length; i++) {
-    const spec = inSpecs[i];
-    const faxSid = `SIM-SEED-IN-${i + 1001}`;
-    spec.faxSid = faxSid;
-    const pdfBytes = await renderFaxPdf(spec);
-    const pdfPath = `${INBOUND}/${faxSid}/original.pdf`;
-    const uploaded = await uploadPdf(pdfPath, pdfBytes);
-    if (uploaded.ok) pdfsAttached++;
-    else {
-      pdfsFailed++;
-      if (!firstPdfError) firstPdfError = uploaded.error;
-    }
-    inboundSamples.push({
-      faxSid,
-      from: SAMPLE_SENDERS[i % SAMPLE_SENDERS.length],
-      to: SIM_FAX_NUMBER,
-      pageCount: spec.pageCount,
-      status: i === 0 ? "needs_review" : i === 1 ? "completed" : "processing",
-      receivedAt: ts(now - (2 + i * 6) * 3600_000),
-      pdfPath: uploaded.ok ? pdfPath : null,
-      attempts: 1,
-    });
-  }
-  const inboundBatch = db.batch();
-  inboundSamples.forEach((f) => inboundBatch.set(db.doc(`${INBOUND}/${f.faxSid}`), f));
-  await inboundBatch.commit();
-
-  // Outbound — 2 samples, also with PDFs (best-effort upload).
-  const outSpecs = outboundSpecs();
-  const outboundSamples: (OutboundFax & {pdfPath: string | null})[] = [];
-  for (let i = 0; i < outSpecs.length; i++) {
-    const spec = outSpecs[i];
-    const faxSid = `SIM-SEED-OUT-${i + 1}`;
-    spec.faxSid = faxSid;
-    const pdfBytes = await renderFaxPdf(spec);
-    const pdfPath = `${OUTBOUND}/${faxSid}/original.pdf`;
-    const uploaded = await uploadPdf(pdfPath, pdfBytes);
-    if (uploaded.ok) pdfsAttached++;
-    else {
-      pdfsFailed++;
-      if (!firstPdfError) firstPdfError = uploaded.error;
-    }
-    outboundSamples.push({
-      faxSid,
-      from: SIM_FAX_NUMBER,
-      to: ["+14155552020", "+12125550250"][i] || "+15555550100",
-      subject: spec.procedure,
-      pageCount: spec.pageCount,
-      fileCount: 1,
-      status: "delivered",
-      submittedBy: "sim-seed",
-      submittedAt: ts(now - (3 + i * 45) * 3600_000),
-      completedAt: ts(now - (3 + i * 45) * 3600_000 + 60_000),
-      pdfPath: uploaded.ok ? pdfPath : null,
-    });
-  }
-  const outboundBatch = db.batch();
-  outboundSamples.forEach((f) => outboundBatch.set(db.doc(`${OUTBOUND}/${f.faxSid}`), f));
-  await outboundBatch.commit();
 
   return {
-    inbound: inboundSamples.length,
-    outbound: outboundSamples.length,
+    inbound: inboundCount,
+    outbound: outboundCount,
     pdfsAttached,
     pdfsFailed,
     firstPdfError,
     bucket: bucketName,
+    stage,
   };
 }

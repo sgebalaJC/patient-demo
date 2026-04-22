@@ -17,6 +17,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { formatDateTime } from '../lib/date-helpers';
 import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
+import { isAdminRole } from '../lib/roles';
 
 interface OutboundFax {
   faxSid: string;
@@ -55,7 +56,7 @@ const TONE_ICON: Record<'pending' | 'success' | 'error', React.ComponentType<{ c
 
 export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { userProfile } = useAuth();
-  const isAdmin = userProfile?.role === 'admin';
+  const isAdmin = isAdminRole(userProfile?.role);
 
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');

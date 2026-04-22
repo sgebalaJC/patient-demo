@@ -106,7 +106,9 @@ export const Layout: React.FC = () => {
             borderTop: '1px solid var(--shell-border)',
           }}
         >
-          <span />
+          <span className="justify-self-start whitespace-nowrap">
+            &copy; {new Date().getFullYear()} {BRANDING.appName}
+          </span>
           <div className="flex items-center justify-center gap-4">
             <Link to="/privacy" className="hover:underline">
               Privacy
@@ -118,9 +120,7 @@ export const Layout: React.FC = () => {
               Contact
             </Link>
           </div>
-          <span className="justify-self-end whitespace-nowrap">
-            &copy; {new Date().getFullYear()} {BRANDING.appName}
-          </span>
+          <span />
         </footer>
       </div>
     </div>

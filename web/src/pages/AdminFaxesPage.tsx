@@ -22,6 +22,7 @@ import { StatsGrid } from '../components/ui/StatsGrid';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { formatDateTime } from '../lib/date-helpers';
+import { isAdminRole } from '../lib/roles';
 
 type FaxStatus = 'pending' | 'processing' | 'needs_review' | 'completed' | 'failed';
 
@@ -165,7 +166,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
   }
 
   useEffect(() => {
-    if (!user || userProfile?.role !== 'admin') return;
+    if (!user || !isAdminRole(userProfile?.role)) return;
     setLoading(true);
     const q = query(collection(db, 'inbound-faxes'), orderBy('receivedAt', 'desc'), limit(200));
     const unsub = onSnapshot(q, (snap) => {
@@ -180,7 +181,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
   }, [user, userProfile]);
 
   if (authLoading) return <LoadingSpinner />;
-  if (!user || userProfile?.role !== 'admin') return <AccessDenied />;
+  if (!user || !isAdminRole(userProfile?.role)) return <AccessDenied />;
 
   const counts = {
     all: faxes.length,

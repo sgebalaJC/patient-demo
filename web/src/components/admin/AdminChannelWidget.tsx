@@ -220,7 +220,7 @@ export const AdminChannelWidget: React.FC = () => {
   if (!isAdmin) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
+    <div className="fixed bottom-2 right-4 z-50 flex flex-col items-end gap-2">
       {open && (
         <div className="w-80 sm:w-96 h-[520px] bg-surface-card rounded-xl shadow-2xl border border-secondary-200 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-secondary-200 bg-surface-elevated">

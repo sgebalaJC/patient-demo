@@ -1322,11 +1322,9 @@ export async function handleAdminApi(
           return await simFaxToDrChrono(request);
         }
         if (method === "POST" && sub === "send") {
-          if (sim) {
-            const callerUid = request.headers.get("x-caller-uid") || "sidecar";
-            return await simFaxSend(request, callerUid);
-          }
-          return await realFaxSend(request);
+          const callerUid = request.headers.get("x-caller-uid") || "sidecar-agent";
+          if (sim) return await simFaxSend(request, callerUid);
+          return await realFaxSend(request, callerUid);
         }
 
         // Single-fax ops: /admin-api/faxes/:faxSid

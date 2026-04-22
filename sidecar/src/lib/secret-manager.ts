@@ -13,7 +13,10 @@
 
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 
-const client = new SecretManagerServiceClient();
+const client = new SecretManagerServiceClient({
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS
+    || "/root/.openclaw/credentials/google-sa-key.json",
+});
 
 function projectId(): string {
   const id = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;

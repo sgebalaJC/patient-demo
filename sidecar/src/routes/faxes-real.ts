@@ -5,6 +5,7 @@
  * in the `sendOutboundFax` Cloud Function today.
  */
 import { getDb } from "../lib/firebase.js";
+import { runSendOutboundFax, type SendOutboundFaxArgs } from "../lib/signalwire.js";
 
 const INBOUND = "inbound-faxes";
 const OUTBOUND = "outbound-faxes";
@@ -75,38 +76,26 @@ export async function realFaxPatch(faxSid: string, request: Request): Promise<Re
 }
 
 /**
- * Forwards to the `sendOutboundFaxHttp` Cloud Function. Staging + merge
- * + SignalWire submission still live there — this is a single HTTP hop.
+ * Submits a fax natively from the sidecar — no Cloud Function hop.
+ * Reads SignalWire secrets from Google Secret Manager, downloads +
+ * merges the staged PDFs from GCS, renders the cover sheet, posts to
+ * SignalWire's LaML API, and writes outbound-faxes/{faxSid}.
  *
- * Required env on the sidecar:
- *   SIDECAR_API_KEY           — shared secret, same key the CF compares against
- *   FUNCTIONS_BASE_URL        — e.g. https://us-west1-{project}.cloudfunctions.net
+ * Status-callback webhook continues to land on the
+ * signalwireFaxStatusWebhook Cloud Function — SignalWire configuration
+ * is unchanged.
  */
-export async function realFaxSend(request: Request): Promise<Response> {
-  const base = process.env.FUNCTIONS_BASE_URL;
-  const key = process.env.SIDECAR_API_KEY;
-  if (!base || !key) {
-    return json(
-      { error: "Fax send not configured on sidecar — set FUNCTIONS_BASE_URL + SIDECAR_API_KEY" },
-      501,
-    );
-  }
-  const body = await request.clone().text();
+export async function realFaxSend(request: Request, callerUid: string): Promise<Response> {
+  const body = (await request.clone().json().catch(() => null)) as
+    | (SendOutboundFaxArgs & { actingAs?: string })
+    | null;
+  if (!body) return json({ error: "Invalid body" }, 400);
   try {
-    const res = await fetch(`${base.replace(/\/+$/, "")}/sendOutboundFaxHttp`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body,
-    });
-    const text = await res.text();
-    return new Response(text, {
-      status: res.status,
-      headers: { "Content-Type": res.headers.get("content-type") || "application/json" },
-    });
+    const result = await runSendOutboundFax(body, body.actingAs || callerUid);
+    return json(result);
   } catch (err: any) {
-    return json({ error: `Fax send forwarder failed: ${err?.message || err}` }, 502);
+    const msg = String(err?.message || err);
+    const status = /invalid|required/i.test(msg) ? 400 : 500;
+    return json({ error: msg }, status);
   }
 }

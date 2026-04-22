@@ -343,8 +343,9 @@ interface SendOutboundFaxArgs {
 }
 
 /**
- * Core send logic. Shared by the onCall (admin UI) and onRequest
- * (sidecar → Aurelia) wrappers. Both paths end up here.
+ * Core send logic. Shared by the onCall wrapper (admin UI) — the sidecar
+ * has its own native port in `sidecar/src/lib/signalwire.ts`. Both sides
+ * implement the same pipeline; UI + Aurelia hit different entry points.
  */
 async function runSendOutboundFax(
   args: SendOutboundFaxArgs,
@@ -530,48 +531,6 @@ export const sendOutboundFax = onCall(
   async (request) => {
     const uid = await requireAdmin(request.auth as any);
     return runSendOutboundFax(request.data as SendOutboundFaxArgs, uid);
-  },
-);
-
-// ---------------------------------------------------------------------------
-// sendOutboundFaxHttp — sidecar-authenticated HTTP entry for Aurelia
-// ---------------------------------------------------------------------------
-//
-// Separate from the `sendOutboundFax` callable so the sidecar can forward
-// agent-initiated sends here. Auth is the sidecar API key (same key the
-// sidecar uses to auth admin-api requests). Callable protocol doesn't
-// accept SA tokens, so this onRequest variant exists to avoid duplicating
-// the send logic.
-
-const sidecarApiKey = defineSecret("SIDECAR_API_KEY");
-
-export const sendOutboundFaxHttp = onRequest(
-  {
-    secrets: [signalwireProjectId, signalwireAuthToken, signalwireSpaceUrl, sidecarApiKey],
-    timeoutSeconds: 120,
-    memory: "512MiB",
-    cors: false,
-  },
-  async (req, res) => {
-    if (req.method !== "POST") {
-      res.status(405).json({error: "Method not allowed"});
-      return;
-    }
-    const auth = req.headers.authorization || "";
-    const expected = process.env.SIDECAR_API_KEY || sidecarApiKey.value();
-    if (!expected || auth !== `Bearer ${expected}`) {
-      res.status(401).json({error: "Unauthorized"});
-      return;
-    }
-    try {
-      const body = req.body as SendOutboundFaxArgs & {actingAs?: string};
-      const result = await runSendOutboundFax(body, body.actingAs || "sidecar-agent");
-      res.status(200).json(result);
-    } catch (err: any) {
-      const code = (err?.code || "internal") as string;
-      const status = code === "invalid-argument" ? 400 : code === "failed-precondition" ? 412 : 500;
-      res.status(status).json({error: err?.message || "Send failed", code});
-    }
   },
 );
 

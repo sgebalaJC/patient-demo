@@ -4,8 +4,8 @@ import { Search, Loader2, AlertTriangle, XCircle, ExternalLink, Users } from 'lu
 import { Card } from '../../ui/Card';
 import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
-import { sidecar, type DrChronoLookupQuery, type DrChronoLookupResult } from '../../../lib/sidecar';
-import { integrationCall } from '../../../lib/integration-call';
+import { type DrChronoLookupQuery, type DrChronoLookupResult } from '../../../lib/sidecar';
+import { drchrono } from '../../../lib/integrations';
 import { useSimulationMode } from '../../../hooks/useSimulationMode';
 import { UnifiedPatientCard } from './UnifiedPatientCard';
 import logger from '../../../lib/logger';
@@ -94,14 +94,7 @@ export const PatientLookupPanel: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      const r = simulated
-        ? (await integrationCall<DrChronoLookupResult>({
-            integration: 'drchrono',
-            operation: 'patient_lookup',
-            params: q as unknown as Record<string, unknown>,
-            simulated: true,
-          })).data
-        : await sidecar.lookupDrChronoPatient(q);
+      const r = await drchrono.lookupPatient(q, { simulated });
       if (cancelledRef.current) return;
       setResult(r);
     } catch (err: any) {

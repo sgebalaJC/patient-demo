@@ -13,7 +13,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from './firebase';
 
 export interface IntegrationCallRequest<P = Record<string, unknown>> {
-  integration: 'drchrono' | 'workspace' | 'messages';
+  integration: 'drchrono' | 'workspace' | 'messages' | 'faxes';
   operation: string;
   params?: P;
   simulated?: boolean;

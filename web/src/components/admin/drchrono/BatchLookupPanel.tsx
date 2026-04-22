@@ -15,11 +15,12 @@ import {
 import { Card } from '../../ui/Card';
 import { Button } from '../../ui/Button';
 import {
-  sidecar,
   type DrChronoLookupQuery,
   type DrChronoLookupResult,
   type UnifiedDrChronoPatient,
 } from '../../../lib/sidecar';
+import { drchrono } from '../../../lib/integrations';
+import { useSimulationMode } from '../../../hooks/useSimulationMode';
 import { UnifiedPatientCard } from './UnifiedPatientCard';
 import { parseSearchInput } from './PatientLookupPanel';
 import logger from '../../../lib/logger';
@@ -46,6 +47,7 @@ function parsePaste(text: string): Row[] {
 }
 
 export const BatchLookupPanel: React.FC = () => {
+  const { enabled: simulated } = useSimulationMode();
   const [text, setText] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [running, setRunning] = useState(false);
@@ -81,8 +83,9 @@ export const BatchLookupPanel: React.FC = () => {
     setExpanded({});
     setRunning(true);
     try {
-      const { results } = await sidecar.lookupDrChronoPatientsBatch(
+      const { results } = await drchrono.lookupPatientsBatch(
         parsed.map(p => ({ id: p.id, query: p.query! })),
+        { simulated },
       );
       const byId = new Map(results.map(r => [r.id, r]));
       setRows(prev =>

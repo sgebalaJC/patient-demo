@@ -20,6 +20,7 @@ import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {isSuperAdminEmail} from "../superAdmins.js";
 
 import * as drchronoSim from "./simulators/drchrono.js";
+import * as faxesSim from "./simulators/faxes.js";
 import * as messagesGen from "./generators/messages.js";
 
 export interface SimContext {
@@ -39,6 +40,7 @@ interface IntegrationSpec {
 
 const REGISTRY: Record<string, IntegrationSpec> = {
   drchrono: {ops: drchronoSim as unknown as Record<string, Handler>, allowedRoles: ["admin"]},
+  faxes: {ops: faxesSim as unknown as Record<string, Handler>, allowedRoles: ["admin"]},
   messages: {ops: messagesGen as unknown as Record<string, Handler>, allowedRoles: ["patient", "admin"]},
 };
 

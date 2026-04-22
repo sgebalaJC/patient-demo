@@ -8,6 +8,7 @@
 import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {isSuperAdminEmail} from "../superAdmins.js";
+import {seedFaxes} from "./simulators/faxes.js";
 
 function assertSuperAdmin(auth: {uid: string; token?: {email?: string}} | undefined) {
   if (!auth) throw new HttpsError("unauthenticated", "Sign-in required");
@@ -129,12 +130,15 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
   const patientIds = await seedDrChronoPatients(db);
   const appointments = await seedDrChronoAppointments(db, patientIds);
   const refills = await seedDrChronoRefills(db, patientIds);
+  const faxes = await seedFaxes(db);
   return {
     ok: true,
     seeded: {
       drchrono_patients: patientIds.length,
       drchrono_appointments: appointments,
       drchrono_refills: refills,
+      faxes_inbound: faxes.inbound,
+      faxes_outbound: faxes.outbound,
     },
   };
 });
@@ -146,6 +150,8 @@ export const clearSimulationData = onCall({timeoutSeconds: 120}, async (req) => 
     "simulation/drchrono/patients",
     "simulation/drchrono/appointments",
     "simulation/drchrono/refills",
+    "simulation/faxes/inbound",
+    "simulation/faxes/outbound",
   ];
   const cleared: Record<string, number> = {};
   for (const p of paths) {

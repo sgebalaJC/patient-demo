@@ -26,3 +26,4 @@ export function isSimulationOn(globalAvailable: boolean): boolean {
 
 export * as drchrono from './drchrono';
 export * as faxes from './faxes';
+export * as sms from './sms';

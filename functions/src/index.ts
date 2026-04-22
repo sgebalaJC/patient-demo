@@ -566,26 +566,35 @@ export const createUserWithAuth = onCall({
 
     logger.info('User created successfully', { uid: userRecord.uid, role });
 
-    // Optional welcome SMS via Twilio (best-effort, non-fatal on failure)
+    // Optional welcome SMS via Twilio (best-effort, non-fatal on failure).
+    // In sim mode the call routes into simulation/sms/outbound — admins see
+    // it in the SMS history panel, real Twilio is not hit.
     let smsSent = false;
     if (sendWelcomeSms && phoneNumber) {
       try {
-        const accountSid = process.env.TWILIO_ACCOUNT_SID;
-        const authToken = process.env.TWILIO_AUTH_TOKEN;
-        const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-        if (accountSid && authToken && fromNumber) {
-          const client = twilio(accountSid, authToken);
-          const formattedTo = phoneNumber.startsWith('+')
-            ? phoneNumber
-            : formatPhoneNumber(phoneNumber);
-          await client.messages.create({
-            body: `Welcome to ${FUNCTIONS_BRANDING.shortName}, ${firstName}! Check your email for a sign-in link to access your account.`,
-            from: fromNumber,
-            to: formattedTo,
-          });
+        const formattedTo = phoneNumber.startsWith('+')
+          ? phoneNumber
+          : formatPhoneNumber(phoneNumber);
+        const body = `Welcome to ${FUNCTIONS_BRANDING.shortName}, ${firstName}! Check your email for a sign-in link to access your account.`;
+
+        const settingsSnap = await admin.firestore().doc('system/settings').get();
+        const simOn = settingsSnap.exists && settingsSnap.data()?.simulationMode === true;
+
+        if (simOn) {
+          const {recordSimSms} = await import('./simulation/simulators/messaging.js');
+          await recordSimSms({to: formattedTo, body, kind: 'welcome'});
           smsSent = true;
         } else {
-          logger.warn('Welcome SMS requested but Twilio not configured');
+          const accountSid = process.env.TWILIO_ACCOUNT_SID;
+          const authToken = process.env.TWILIO_AUTH_TOKEN;
+          const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+          if (accountSid && authToken && fromNumber) {
+            const client = twilio(accountSid, authToken);
+            await client.messages.create({body, from: fromNumber, to: formattedTo});
+            smsSent = true;
+          } else {
+            logger.warn('Welcome SMS requested but Twilio not configured');
+          }
         }
       } catch (smsError: any) {
         logger.error('Welcome SMS failed (non-fatal):', { message: smsError.message });
@@ -3094,6 +3103,14 @@ export {
   drchronoCallback,
   drchronoSetEnabled,
 } from "./drchrono.js";
+
+// ─── Athenahealth integration ───────────────────────────────────────
+export {
+  athenaSaveCredentials,
+  athenaAuthorize,
+  athenaCallback,
+  athenaSetEnabled,
+} from "./athena.js";
 
 // ─── Super-admin impersonation ───────────────────────────────────────
 /**

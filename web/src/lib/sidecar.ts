@@ -462,6 +462,22 @@ class SidecarClient {
     });
   }
 
+  // ── Messaging (SMS; sim-backed today) ──
+
+  async smsSend(args: { to: string; body: string; kind?: string }): Promise<{ sid: string; status: string; ok: boolean }> {
+    return this.request('/admin-api/messaging/send', {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+  }
+
+  async smsInjectInbound(args: { from?: string; body?: string } = {}): Promise<{ sid: string; status: string }> {
+    return this.request('/admin-api/messaging/inject-inbound', {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+  }
+
   // ── Health ────────────────────────────────────
 
   async healthCheck(): Promise<boolean> {

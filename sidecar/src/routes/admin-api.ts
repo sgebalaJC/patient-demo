@@ -16,6 +16,7 @@
 import { getDb } from "../lib/firebase.js";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { proxyDrChrono, assertDrChronoReady } from "../lib/drchrono.js";
+import { proxyAthena, assertAthenaReady } from "../lib/athena.js";
 import { isSimulationOn } from "../sim/index.js";
 import { simDrChrono } from "../sim/drchrono.js";
 import {
@@ -25,6 +26,12 @@ import {
   simFaxInjectInbound,
   simFaxSend,
 } from "../sim/faxes.js";
+import {
+  simSmsListInbound,
+  simSmsListOutbound,
+  simSmsSend,
+  simSmsInjectInbound,
+} from "../sim/messaging.js";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -1001,6 +1008,26 @@ export async function handleAdminApi(
         return await proxyDrChrono(method, drchronoPath, url.searchParams, request);
       }
 
+      // ── Athenahealth (generic pass-through) ──
+      // Path: /admin-api/athena/<athena-path>[?...]
+      // Only active when integrations/athena { enabled: true, status: active }.
+      // TODO(sim): wire an `simAthena` branch when the centralized sim layer lands.
+      case "athena": {
+        const athenaPath = parts.slice(1).join("/");
+        if (!athenaPath) {
+          return error("Athena path required (e.g. /admin-api/athena/patients)", 400);
+        }
+        if (await isSimulationOn()) {
+          return error("Athena sim not yet implemented", 501);
+        }
+        try {
+          await assertAthenaReady();
+        } catch (err: any) {
+          return error(err.message, 403);
+        }
+        return await proxyAthena(method, athenaPath, url.searchParams, request);
+      }
+
       // ── Faxes ──
       // Path: /admin-api/faxes/<action>
       // In sim mode reads/writes `simulation/faxes/*`. No real path yet —
@@ -1020,6 +1047,23 @@ export async function handleAdminApi(
           return await simFaxSend(request, callerUid);
         }
         return error(`Unknown faxes action: ${method} ${sub}`, 404);
+      }
+
+      // ── Messaging (SMS) ──
+      // Path: /admin-api/messaging/<action>
+      // Sim-only for now; real Twilio path stays on Cloud Functions until
+      // migrated. Used by welcome SMS, reminders, and the admin-visible
+      // SMS history panel.
+      case "messaging": {
+        if (!(await isSimulationOn())) {
+          return error("Messaging admin-api is currently sim-only; real path is on Cloud Functions", 501);
+        }
+        const sub = parts[1];
+        if (method === "GET" && sub === "outbound") return await simSmsListOutbound();
+        if (method === "GET" && sub === "inbound") return await simSmsListInbound();
+        if (method === "POST" && sub === "send") return await simSmsSend(request);
+        if (method === "POST" && sub === "inject-inbound") return await simSmsInjectInbound(request);
+        return error(`Unknown messaging action: ${method} ${sub}`, 404);
       }
 
       default:
@@ -1055,6 +1099,7 @@ export async function handleAdminApi(
             "GET    /admin-api/specialist-requests[?limit=]",
             "PATCH  /admin-api/specialist-requests/:id",
             "*      /admin-api/drchrono/<path>  (when integration enabled)",
+            "*      /admin-api/athena/<path>    (when integration enabled)",
           ],
         }, 404);
     }

@@ -158,12 +158,20 @@ Then:
 
 ## Current coverage
 
-| Domain     | UI façade | Sidecar sim | Seed | Aurelia |
-|------------|:--:|:--:|:--:|:--:|
-| DrChrono   | ✓  | ✓  | ✓  | ✓ |
-| Faxes      | ✓  | ✓  | ✓  | ✓ *(UI only today; agent skills pending)* |
-| SMS        | –  | –  | –  | – |
-| Workspace  | –  | –  | –  | – |
+| Domain     | UI façade | Sidecar sim | Seed | Aurelia | CF interception |
+|------------|:--:|:--:|:--:|:--:|:--:|
+| DrChrono   | ✓  | ✓  | ✓  | ✓ | n/a |
+| Faxes      | ✓  | ✓  | ✓  | ✓ *(UI only today; agent skills pending)* | n/a |
+| SMS        | ✓  | ✓  | ✓  | ✓ *(via admin-api)* | ✓ *(welcome + reminders)* |
+| Workspace  | –  | –  | –  | – | – |
+
+**CF interception** means that Cloud Functions which originate the
+outbound call (e.g. `sendReminderSMS`, welcome SMS in `createUserWithAuth`)
+check `system/settings.simulationMode` and route to the simulator
+instead of the real provider. Use `recordSimSms()` from
+`functions/src/simulation/simulators/messaging.ts` for new SMS call
+sites; it's fire-and-forget and swallows errors so real flows aren't
+broken.
 
 Real-path fax routes on the sidecar return 501 today — the real path
 still lives in the `sendOutboundFax` / `signalwireFaxWebhook` Cloud

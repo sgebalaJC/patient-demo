@@ -71,7 +71,21 @@ async function getReminderCalendarClient() {
   return google.calendar({version: "v3", auth: authClient as any});
 }
 
+async function isSimulationOn(): Promise<boolean> {
+  try {
+    const snap = await db().doc("system/settings").get();
+    return snap.exists && snap.data()?.simulationMode === true;
+  } catch {
+    return false;
+  }
+}
+
 async function sendReminderSMS(phoneNumber: string, body: string): Promise<void> {
+  if (await isSimulationOn()) {
+    const {recordSimSms} = await import("./simulation/simulators/messaging.js");
+    await recordSimSms({to: phoneNumber, body, kind: "reminder"});
+    return;
+  }
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const fromNumber = process.env.TWILIO_PHONE_NUMBER;

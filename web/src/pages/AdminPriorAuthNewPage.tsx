@@ -10,6 +10,7 @@ import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { listPayersOnce, listTargetCpts, getPolicy } from '../lib/firestore/prior-auths';
 import { userOperations } from '../lib/firestore/users';
 import type { Payer, PayerPolicy, TargetCpt } from '../types/prior-auth';
@@ -44,7 +45,7 @@ export const AdminPriorAuthNewPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (userProfile?.role !== 'admin') return;
+    if (!isAdminRole(userProfile?.role)) return;
     (async () => {
       const [p, c] = await Promise.all([listPayersOnce(), listTargetCpts()]);
       setPayers(p.filter((x) => x.active));
@@ -143,7 +144,7 @@ export const AdminPriorAuthNewPage: React.FC = () => {
     }
   }
 
-  if (userProfile?.role !== 'admin') return <AccessDenied />;
+  if (!isAdminRole(userProfile?.role)) return <AccessDenied />;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-5">

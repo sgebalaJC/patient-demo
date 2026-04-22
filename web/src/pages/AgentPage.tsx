@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { AgentChat } from '../components/agent/AgentChat';
@@ -7,6 +7,8 @@ import { AgentChannels } from '../components/agent/AgentChannels';
 import { AgentBackups } from '../components/agent/AgentBackups';
 import { AgentHealth } from '../components/agent/AgentHealth';
 import { sidecar } from '../lib/sidecar';
+import { useAuth } from '../hooks/useAuth';
+import { isSuperAdminEmail } from '../lib/roles';
 import {
   ArrowLeft,
   MessageSquare,
@@ -19,15 +21,21 @@ import {
 
 type Tab = 'chat' | 'skills' | 'channels' | 'backups' | 'health';
 
-const NAV_ITEMS: { key: Tab; label: string; icon: React.ElementType }[] = [
+const ALL_NAV_ITEMS: { key: Tab; label: string; icon: React.ElementType; superAdminOnly?: boolean }[] = [
   { key: 'chat', label: 'Chat', icon: MessageSquare },
   { key: 'skills', label: 'Skills', icon: Star },
   { key: 'channels', label: 'Channels', icon: Radio },
-  { key: 'backups', label: 'Backups', icon: Archive },
+  { key: 'backups', label: 'Backups', icon: Archive, superAdminOnly: true },
   { key: 'health', label: 'Health', icon: Activity },
 ];
 
 export const AgentPage: React.FC = () => {
+  const { user } = useAuth();
+  const isSuperAdmin = isSuperAdminEmail(user?.email);
+  const NAV_ITEMS = useMemo(
+    () => ALL_NAV_ITEMS.filter((item) => !item.superAdminOnly || isSuperAdmin),
+    [isSuperAdmin],
+  );
   const [searchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as Tab) || 'chat';
   const [activeTab, setActiveTab] = useState<Tab>(
@@ -101,7 +109,7 @@ export const AgentPage: React.FC = () => {
       case 'channels':
         return <AgentChannels />;
       case 'backups':
-        return <AgentBackups />;
+        return isSuperAdmin ? <AgentBackups /> : <AgentChat />;
       case 'health':
         return <AgentHealth />;
     }
@@ -148,7 +156,7 @@ export const AgentPage: React.FC = () => {
         </div>
 
         {/* Status indicator */}
-        <div className="px-4 py-3 border-t border-secondary-200">
+        <div className="px-4 min-h-[60px] flex items-center border-t border-secondary-200">
           <div className="flex items-center gap-2 text-xs text-secondary-500">
             <span
               className={`h-2 w-2 rounded-full ${

@@ -1,15 +1,34 @@
 # EHR Integrations
 
-Each EHR follows the same four-file pattern, gated on `integrations/<provider>.enabled === true`:
+All EHR integrations share two factories; per-vendor files are thin specs (~20–60 lines):
 
-| Layer | File |
-|---|---|
-| OAuth + callback + token refresh (Functions) | `functions/src/<provider>.ts` |
-| Sidecar proxy + token refresh | `sidecar/src/lib/<provider>.ts` |
-| Web status/save/toggle client | `web/src/lib/<provider>.ts` |
-| Admin setup UI | `web/src/components/agent/<Provider>Setup.tsx` |
+| Layer | Shared factory | Per-vendor spec |
+|---|---|---|
+| OAuth callables + callback (Functions) | `functions/src/lib/ehr-oauth.ts` | `functions/src/<provider>.ts` |
+| Sidecar proxy + token refresh | `sidecar/src/lib/ehr-provider.ts` | `sidecar/src/lib/<provider>.ts` |
+| Web status/save/toggle client | — | `web/src/lib/<provider>.ts` |
+| Setup UI | — | `web/src/components/agent/<Provider>Setup.tsx` |
 
 Admin-api router case in `sidecar/src/routes/admin-api.ts`. Cloud Function exports in `functions/src/index.ts`.
+
+## Super-admin gating
+
+Integration credentials are platform-level, not per-practice.
+
+- **Callables** — `functions/src/lib/ehr-oauth.ts` uses `assertSuperAdmin` on `saveCredentials`, `authorize`, `setEnabled`.
+- **Firestore** — `integrations/*` read/delete is `isSuperAdmin()` only. Practice admins cannot read the OAuth secrets, tokens, or scopes.
+- **Setup UI** — MUST be wrapped in `<AdminGuard superOnly>` when mounted. The UI components (`DrChronoSetup`, `AthenaSetup`, `ElationSetup`, `EcwSetup`) are otherwise routable by any admin.
+- **Non-secret reads** — `UnifiedPatientCard` reads `practiceSubdomain` from `integrations/drchrono` for chart URL formatting; non-super-admins now fail that fetch silently and fall back to the generic `app.drchrono.com` URL (already handled with `.catch()`).
+
+## Secret storage
+
+OAuth client secrets, access tokens, and refresh tokens are stored in Firestore at `integrations/{provider}`. They are:
+- Encrypted at rest by Firestore's default CMEK-capable storage
+- Writable only by Cloud Functions via Admin SDK (Firestore rules deny client writes)
+- Readable only by the super admin (email allowlist)
+- Never returned to the browser — the web thin clients whitelist non-secret fields in `getStatus()`
+
+For a stricter posture (per-practice forks, multi-tenant), the next step is to split secrets into a `integrations-secrets/{provider}` collection that not even the super admin's browser reads — credentials would then be writeable via callable and readable only server-side. Not needed for single-super-admin demo.
 
 ## Connected
 

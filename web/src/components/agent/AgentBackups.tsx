@@ -102,14 +102,14 @@ export const AgentBackups: React.FC = () => {
         <button
           onClick={handleCreate}
           disabled={creating}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors disabled:opacity-50"
+          className="flex items-center justify-center gap-2 min-w-[160px] px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors disabled:opacity-50"
         >
           {creating ? (
-            <LoadingSpinner size="sm" />
+            <LoadingSpinner size="sm" className="p-0" />
           ) : (
             <Plus className="h-4 w-4" />
           )}
-          {creating ? 'Creating...' : 'Create Backup'}
+          {creating ? 'Creating backup…' : 'Create Backup'}
         </button>
       </div>
 

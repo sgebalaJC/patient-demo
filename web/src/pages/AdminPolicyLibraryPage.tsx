@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import {
   subscribeToPayers,
   subscribeToPoliciesByPayer,
@@ -25,7 +26,7 @@ export const AdminPolicyLibraryPage: React.FC = () => {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (userProfile?.role !== 'admin') return;
+    if (!isAdminRole(userProfile?.role)) return;
     const unsub = subscribeToPayers(
       (r) => {
         setPayers(r);
@@ -67,7 +68,7 @@ export const AdminPolicyLibraryPage: React.FC = () => {
     }
   }
 
-  if (userProfile?.role !== 'admin') return <AccessDenied />;
+  if (!isAdminRole(userProfile?.role)) return <AccessDenied />;
 
   return (
     <div className="space-y-5">

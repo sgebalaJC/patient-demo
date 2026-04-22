@@ -273,37 +273,66 @@ export const AdminSettingsPage: React.FC = () => {
             </label>
           </div>
 
-          {/* Simulation mode (demo-only feature) */}
+          {/* Support email */}
           <div className="p-4 border border-secondary-200 rounded-lg">
-            <div className="flex items-start justify-between space-x-4">
-              <div className="flex items-start space-x-3 flex-1">
-                <div className="bg-secondary-100 p-2 rounded-lg mt-0.5">
-                  <FlaskConical className="h-4 w-4 text-secondary-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-secondary-900">Simulation mode</p>
-                  <p className="text-xs text-secondary-500 mt-0.5">
-                    When on, a per-session "Demo data" switch appears in the header.
-                    Users can flip it to route integration calls (DrChrono, inbox, etc.)
-                    to a seeded sandbox instead of real services. Leave off on real
-                    customer forks.
-                  </p>
-                </div>
+            <div className="flex items-start space-x-3">
+              <div className="bg-secondary-100 p-2 rounded-lg mt-0.5">
+                <Mail className="h-4 w-4 text-secondary-600" />
               </div>
-              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={appSettingsDraft.simulationMode}
+              <label className="block flex-1 min-w-0">
+                <p className="text-sm font-medium text-secondary-900">Support email</p>
+                <p className="text-xs text-secondary-500 mt-0.5 mb-2">
+                  The address shown across the patient and admin UI for support
+                  inquiries (Billing fallback, Contact page, legal pages). Leave
+                  empty to use the build-time default
+                  (<code className="bg-secondary-100 px-1 rounded">{BRANDING.supportEmail}</code>).
+                </p>
+                <Input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder={BRANDING.supportEmail}
+                  value={appSettingsDraft.supportEmail}
                   onChange={(e) =>
-                    setAppSettingsDraft((d) => ({ ...d, simulationMode: e.target.checked }))
+                    setAppSettingsDraft((d) => ({ ...d, supportEmail: e.target.value }))
                   }
-                  className="sr-only peer"
+                  className="w-full max-w-md"
                 />
-                <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-secondary-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600" />
               </label>
             </div>
+          </div>
 
-            {isSuperAdmin && (
+          {/* Simulation mode (super-admin only) */}
+          {isSuperAdmin && (
+            <div className="p-4 border border-secondary-200 rounded-lg">
+              <div className="flex items-start justify-between space-x-4">
+                <div className="flex items-start space-x-3 flex-1">
+                  <div className="bg-secondary-100 p-2 rounded-lg mt-0.5">
+                    <FlaskConical className="h-4 w-4 text-secondary-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-secondary-900">Simulation mode</p>
+                    <p className="text-xs text-secondary-500 mt-0.5">
+                      When on, a per-session "Demo data" switch appears in the header.
+                      Users can flip it to route integration calls (DrChrono, inbox, etc.)
+                      to a seeded sandbox instead of real services. Leave off on real
+                      customer forks.
+                    </p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={appSettingsDraft.simulationMode}
+                    onChange={(e) =>
+                      setAppSettingsDraft((d) => ({ ...d, simulationMode: e.target.checked }))
+                    }
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-secondary-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600" />
+                </label>
+              </div>
+
               <div className="mt-3 pt-3 border-t border-secondary-200">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <p className="text-xs text-secondary-500">
@@ -341,37 +370,8 @@ export const AdminSettingsPage: React.FC = () => {
                   <p className="mt-2 text-xs text-red-700">{seedState.error}</p>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Support email */}
-          <div className="p-4 border border-secondary-200 rounded-lg">
-            <div className="flex items-start space-x-3">
-              <div className="bg-secondary-100 p-2 rounded-lg mt-0.5">
-                <Mail className="h-4 w-4 text-secondary-600" />
-              </div>
-              <label className="block flex-1 min-w-0">
-                <p className="text-sm font-medium text-secondary-900">Support email</p>
-                <p className="text-xs text-secondary-500 mt-0.5 mb-2">
-                  The address shown across the patient and admin UI for support
-                  inquiries (Billing fallback, Contact page, legal pages). Leave
-                  empty to use the build-time default
-                  (<code className="bg-secondary-100 px-1 rounded">{BRANDING.supportEmail}</code>).
-                </p>
-                <Input
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  placeholder={BRANDING.supportEmail}
-                  value={appSettingsDraft.supportEmail}
-                  onChange={(e) =>
-                    setAppSettingsDraft((d) => ({ ...d, supportEmail: e.target.value }))
-                  }
-                  className="w-full max-w-md"
-                />
-              </label>
             </div>
-          </div>
+          )}
         </div>
       </Card>
 

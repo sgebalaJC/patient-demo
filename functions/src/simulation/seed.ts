@@ -132,9 +132,18 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
   const patientIds = await seedDrChronoPatients(db);
   const appointments = await seedDrChronoAppointments(db, patientIds);
   const refills = await seedDrChronoRefills(db, patientIds);
-  const faxes = await seedFaxes(db);
-  const sms = await seedSms(db);
-  const workspace = await seedWorkspace(db);
+  // Each domain seed is isolated — one failing shouldn't block the others.
+  const safeSeed = async <T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await fn();
+    } catch (err: any) {
+      console.error(`[seed] ${label} failed:`, err?.message || err);
+      return fallback;
+    }
+  };
+  const faxes = await safeSeed("faxes", () => seedFaxes(db), {inbound: 0, outbound: 0});
+  const sms = await safeSeed("sms", () => seedSms(db), {outbound: 0, inbound: 0});
+  const workspace = await safeSeed("workspace", () => seedWorkspace(db), {emails: 0, events: 0});
   return {
     ok: true,
     seeded: {

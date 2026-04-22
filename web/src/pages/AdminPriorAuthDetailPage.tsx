@@ -10,6 +10,7 @@ import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { subscribeToPriorAuth, appendNote, updateChecklist } from '../lib/firestore/prior-auths';
 import { PaStatusBadge } from '../components/prior-auth/StatusBadge';
 import { FreshnessBadge } from '../components/prior-auth/FreshnessBadge';
@@ -100,7 +101,7 @@ export const AdminPriorAuthDetailPage: React.FC = () => {
     await updateChecklist(paId, next);
   }
 
-  if (userProfile?.role !== 'admin') return <AccessDenied />;
+  if (!isAdminRole(userProfile?.role)) return <AccessDenied />;
   if (loading) return <LoadingSpinner />;
   if (!pa) return <div className="p-6 text-secondary-500">Not found.</div>;
 

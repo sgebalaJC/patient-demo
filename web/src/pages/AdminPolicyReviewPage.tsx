@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
+import { isAdminRole } from '../lib/roles';
 import { getPolicy } from '../lib/firestore/prior-auths';
 import type { PayerPolicy } from '../types/prior-auth';
 import { PolicyStatusBadge } from '../components/prior-auth/StatusBadge';
@@ -67,7 +68,7 @@ export const AdminPolicyReviewPage: React.FC = () => {
     }
   }
 
-  if (userProfile?.role !== 'admin') return <AccessDenied />;
+  if (!isAdminRole(userProfile?.role)) return <AccessDenied />;
   if (loading) return <LoadingSpinner />;
   if (!policy) {
     return (

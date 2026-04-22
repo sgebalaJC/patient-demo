@@ -121,11 +121,8 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
 
     if (simulated) {
       try {
-        const res = await faxesApi.sendFax(
-          { to: toNormalized, subject, fileCount: files.length } as any,
-          { simulated: true },
-        );
-        setSubmitOk(`Simulated fax queued — SID ${res.id.slice(0, 16)}… (delivers in ~2s)`);
+        const res = await faxesApi.sendFax({ to: toNormalized, subject, fileCount: files.length });
+        setSubmitOk(`Simulated fax queued — SID ${res.faxSid.slice(0, 16)}… (delivers in ~2s)`);
         setFiles([]);
         setSubject('');
         setTo('');

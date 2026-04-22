@@ -188,7 +188,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
   async function handleInjectInbound() {
     setInjecting(true);
     try {
-      await faxesApi.injectInbound({}, { simulated: true });
+      await faxesApi.injectInbound();
     } catch (err: any) {
       // eslint-disable-next-line no-alert
       alert(`Inject failed: ${err.message || err}`);

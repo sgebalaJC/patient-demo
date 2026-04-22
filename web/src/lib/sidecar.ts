@@ -441,6 +441,27 @@ class SidecarClient {
     });
   }
 
+  // ── Faxes (sim-backed for now; real path still on Cloud Functions) ──
+
+  async faxGetOurNumber(): Promise<string | null> {
+    const data = await this.request<{ number: string | null }>('/admin-api/faxes/our-number');
+    return data.number || null;
+  }
+
+  async faxInjectInbound(args: { from?: string; pages?: number } = {}): Promise<{ faxSid: string }> {
+    return this.request('/admin-api/faxes/inject-inbound', {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+  }
+
+  async faxSend(args: { to: string; subject?: string; fileCount?: number }): Promise<{ faxSid: string; status: string; ok: boolean }> {
+    return this.request('/admin-api/faxes/send', {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+  }
+
   // ── Health ────────────────────────────────────
 
   async healthCheck(): Promise<boolean> {

@@ -38,7 +38,7 @@ export const AdminFaxesHubPage: React.FC<{ defaultTab?: Tab }> = ({ defaultTab =
   useEffect(() => {
     if (simulated) {
       let alive = true;
-      faxesApi.getOurFaxNumber({ simulated: true })
+      faxesApi.getOurFaxNumber()
         .then((n) => { if (alive) setFaxNumberE164(n || undefined); })
         .catch(() => { /* keep previous */ });
       return () => { alive = false; };

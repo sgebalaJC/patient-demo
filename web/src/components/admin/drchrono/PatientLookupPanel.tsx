@@ -6,7 +6,6 @@ import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
 import { type DrChronoLookupQuery, type DrChronoLookupResult } from '../../../lib/sidecar';
 import { drchrono } from '../../../lib/integrations';
-import { useSimulationMode } from '../../../hooks/useSimulationMode';
 import { UnifiedPatientCard } from './UnifiedPatientCard';
 import logger from '../../../lib/logger';
 
@@ -61,7 +60,6 @@ function describeQuery(q: DrChronoLookupQuery): string {
 
 export const PatientLookupPanel: React.FC = () => {
   const [params] = useSearchParams();
-  const { enabled: simulated } = useSimulationMode();
   const [input, setInput] = useState('');
   const [query, setQuery] = useState<DrChronoLookupQuery | null>(null);
   const [result, setResult] = useState<DrChronoLookupResult | null>(null);
@@ -94,7 +92,7 @@ export const PatientLookupPanel: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      const r = await drchrono.lookupPatient(q, { simulated });
+      const r = await drchrono.lookupPatient(q);
       if (cancelledRef.current) return;
       setResult(r);
     } catch (err: any) {

@@ -20,6 +20,7 @@ import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
 import { isAdminRole } from '../lib/roles';
 import { useSimulationMode } from '../hooks/useSimulationMode';
 import { faxes as faxesApi } from '../lib/integrations';
+import { alert as modalAlert } from '../lib/modals';
 
 interface OutboundFax {
   faxSid: string;
@@ -179,8 +180,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
       await fn({ faxSid: deleteTarget.faxSid });
       setDeleteTarget(null);
     } catch (err: any) {
-      // eslint-disable-next-line no-alert
-      alert(`Delete failed: ${err.message || err}`);
+      void modalAlert({ tone: 'error', title: 'Delete failed', message: err?.message || String(err) });
     } finally {
       setDeleting(false);
     }

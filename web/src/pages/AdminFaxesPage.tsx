@@ -25,6 +25,7 @@ import { formatDateTime } from '../lib/date-helpers';
 import { isAdminRole } from '../lib/roles';
 import { useSimulationMode } from '../hooks/useSimulationMode';
 import { faxes as faxesApi } from '../lib/integrations';
+import { alert as modalAlert } from '../lib/modals';
 
 type FaxStatus = 'pending' | 'processing' | 'needs_review' | 'completed' | 'failed';
 
@@ -162,8 +163,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
       setInlineDeleteTarget(null);
       if (selectedFaxSid === inlineDeleteTarget.faxSid) setSelectedFaxSid(null);
     } catch (err: any) {
-      // eslint-disable-next-line no-alert
-      alert(`Delete failed: ${err.message || err}`);
+      void modalAlert({ tone: 'error', title: 'Delete failed', message: err?.message || String(err) });
     } finally {
       setInlineDeleting(false);
     }
@@ -190,8 +190,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
     try {
       await faxesApi.injectInbound();
     } catch (err: any) {
-      // eslint-disable-next-line no-alert
-      alert(`Inject failed: ${err.message || err}`);
+      void modalAlert({ tone: 'error', title: 'Inject failed', message: err?.message || String(err) });
     } finally {
       setInjecting(false);
     }

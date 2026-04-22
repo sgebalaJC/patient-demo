@@ -4,6 +4,7 @@ import { Layout } from './components/layout/Layout';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { useAuth } from './hooks/useAuth';
 import { AuthProvider } from './contexts/AuthContext';
+import { GlobalModals } from './components/ui/GlobalModals';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { PendingApproval } from './components/ui/PendingApproval';
 import { ImpersonationBanner } from './components/layout/ImpersonationBanner';
@@ -98,6 +99,7 @@ function App() {
   return (
     <AppSettingsProvider>
     <AuthProvider>
+      <GlobalModals />
       <Router>
         <Suspense fallback={<PageLoader />}>
         <Routes>

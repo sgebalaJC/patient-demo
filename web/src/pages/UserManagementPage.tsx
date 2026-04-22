@@ -46,6 +46,7 @@ import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { formatDate } from '../lib/date-helpers';
 import { DocumentSnapshot } from 'firebase/firestore';
 import logger from '../lib/logger';
+import { alert as modalAlert } from '../lib/modals';
 export const UserManagementPage: React.FC = () => {
   const { userProfile } = useAuth();
   const { settings: appSettings } = useAppSettings();
@@ -186,7 +187,7 @@ export const UserManagementPage: React.FC = () => {
       }
     } catch (err: any) {
       logger.error('Impersonation failed:', err);
-      alert('Impersonation failed: ' + (err.message || 'Unknown error'));
+      void modalAlert({ tone: 'error', title: 'Impersonation failed', message: err?.message || 'Unknown error' });
     }
   };
 

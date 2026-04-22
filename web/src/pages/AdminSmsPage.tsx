@@ -6,6 +6,7 @@ import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
 import { db } from '../lib/firebase';
 import { sms as smsApi } from '../lib/integrations';
+import { alert as modalAlert } from '../lib/modals';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -69,8 +70,7 @@ export const AdminSmsPage: React.FC = () => {
     try {
       await smsApi.injectInbound();
     } catch (err: any) {
-      // eslint-disable-next-line no-alert
-      alert(`Inject failed: ${err.message || err}`);
+      void modalAlert({ tone: 'error', title: 'Inject failed', message: err?.message || String(err) });
     } finally {
       setInjecting(false);
     }

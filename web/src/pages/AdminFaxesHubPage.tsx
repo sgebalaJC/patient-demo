@@ -7,6 +7,8 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { AdminFaxesPage } from './AdminFaxesPage';
 import { AdminSendFaxPage } from './AdminSendFaxPage';
+import { useSimulationMode } from '../hooks/useSimulationMode';
+import { faxes as faxesApi } from '../lib/integrations';
 
 function formatFaxDisplay(e164: string | undefined): string {
   if (!e164) return '—';
@@ -27,19 +29,27 @@ export const AdminFaxesHubPage: React.FC<{ defaultTab?: Tab }> = ({ defaultTab =
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [faxNumberE164, setFaxNumberE164] = useState<string | undefined>(undefined);
+  const { enabled: simulated } = useSimulationMode();
 
   useEffect(() => () => {
     if (copiedTimer.current) clearTimeout(copiedTimer.current);
   }, []);
 
   useEffect(() => {
+    if (simulated) {
+      let alive = true;
+      faxesApi.getOurFaxNumber({ simulated: true })
+        .then((n) => { if (alive) setFaxNumberE164(n || undefined); })
+        .catch(() => { /* keep previous */ });
+      return () => { alive = false; };
+    }
     const ref = doc(db, 'integrations', 'signalwire');
     const unsub = onSnapshot(ref, (snap) => {
       const data = snap.data() as { faxNumber?: string } | undefined;
       setFaxNumberE164(data?.faxNumber);
     });
     return unsub;
-  }, []);
+  }, [simulated]);
 
   function switchTab(next: string) {
     const t = (next === 'send' || next === 'inbox') ? next : 'inbox';

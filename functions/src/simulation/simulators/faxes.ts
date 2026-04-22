@@ -1,7 +1,7 @@
 /**
- * Fax simulator — reads/writes Firestore `simulation/faxes/*`. Shape matches
- * the real inbound/outbound fax pipelines so admin UI + Aurelia can operate
- * against the sandbox identically.
+ * Fax simulator — reads/writes Firestore `simulation/faxes/*`. Seed data
+ * mirrors the real inbound-faxes/outbound-faxes shape exactly, so the UI
+ * can simply subscribe to the sim collection path in sim mode.
  *
  * Real counterpart: signalwireFaxWebhook (inbound) + sendFax (outbound) +
  * `integrations/signalwire.faxNumber` (our number).
@@ -9,29 +9,32 @@
 import * as admin from "firebase-admin";
 import {SimContext} from "../index.js";
 
-/** Reserved North-American "555-01xx" range, never routable. */
+/** Reserved North-American "555" range, never routable. */
 export const SIM_FAX_NUMBER = "+15559990000";
 
 const INBOUND = "simulation/faxes/inbound";
 const OUTBOUND = "simulation/faxes/outbound";
 
+type FaxStatus = "pending" | "processing" | "needs_review" | "completed" | "failed";
+
 interface InboundFax {
-  id: string;
+  faxSid: string;
+  receivedAt: admin.firestore.Timestamp;
   from: string;
   to: string;
-  pages: number;
-  status: "received" | "needs-review" | "processing" | "completed" | "failed";
-  receivedAt: string;
-  pdfUrl: string | null;
+  pageCount: number;
+  pdfPath: string | null;
+  status: FaxStatus;
+  attempts: number;
 }
 
 interface OutboundFax {
-  id: string;
+  faxSid: string;
   from: string;
   to: string;
-  pages: number;
+  pageCount: number;
   status: "queued" | "sending" | "delivered" | "failed";
-  sentAt: string | null;
+  sentAt: admin.firestore.Timestamp;
 }
 
 export async function get_our_number(): Promise<{number: string}> {
@@ -56,24 +59,24 @@ const SAMPLE_SENDERS = [
 ];
 
 /** Drops a new inbound fax into the sandbox so admins can exercise the
- *  review flow end-to-end without SignalWire. Randomizes sender + page
- *  count unless the caller supplies them. */
+ *  review flow end-to-end without SignalWire. */
 export async function inject_inbound(
   ctx: SimContext,
   params: {from?: string; pages?: number} = {},
 ): Promise<{id: string}> {
-  const id = `SIM-${Date.now()}`;
+  const faxSid = `SIM-${Date.now()}`;
   const doc: InboundFax = {
-    id,
+    faxSid,
     from: params.from || SAMPLE_SENDERS[Math.floor(Math.random() * SAMPLE_SENDERS.length)],
     to: SIM_FAX_NUMBER,
-    pages: params.pages || 1 + Math.floor(Math.random() * 5),
-    status: "needs-review",
-    receivedAt: new Date().toISOString(),
-    pdfUrl: null,
+    pageCount: params.pages || 1 + Math.floor(Math.random() * 5),
+    status: "needs_review",
+    receivedAt: admin.firestore.Timestamp.now(),
+    pdfPath: null,
+    attempts: 0,
   };
-  await ctx.db.doc(`${INBOUND}/${id}`).set(doc);
-  return {id};
+  await ctx.db.doc(`${INBOUND}/${faxSid}`).set(doc);
+  return {id: faxSid};
 }
 
 export async function send_fax(
@@ -81,24 +84,23 @@ export async function send_fax(
   params: {to?: string; pdfBase64?: string; filename?: string; coverNote?: string},
 ): Promise<{id: string; status: OutboundFax["status"]}> {
   if (!params.to) throw new Error("to required");
-  const id = `SIM-OUT-${Date.now()}`;
+  const faxSid = `SIM-OUT-${Date.now()}`;
   const doc: OutboundFax = {
-    id,
+    faxSid,
     from: SIM_FAX_NUMBER,
     to: params.to,
-    pages: 1,
+    pageCount: 1,
     status: "queued",
-    sentAt: new Date().toISOString(),
+    sentAt: admin.firestore.Timestamp.now(),
   };
-  await ctx.db.doc(`${OUTBOUND}/${id}`).set(doc);
-  // Simulate async delivery: flip to delivered after a short delay (fire-and-forget).
+  await ctx.db.doc(`${OUTBOUND}/${faxSid}`).set(doc);
   setTimeout(() => {
     ctx.db
-      .doc(`${OUTBOUND}/${id}`)
-      .update({status: "delivered", sentAt: new Date().toISOString()})
+      .doc(`${OUTBOUND}/${faxSid}`)
+      .update({status: "delivered"})
       .catch(() => {/* tolerate transient errors */});
   }, 2000);
-  return {id, status: "queued"};
+  return {id: faxSid, status: "queued"};
 }
 
 /** Idempotent seeder — called from `seedSimulationData`. */
@@ -114,59 +116,64 @@ export async function seedFaxes(db: admin.firestore.Firestore): Promise<{inbound
   await wipe(OUTBOUND);
 
   const now = Date.now();
+  const ts = (ms: number) => admin.firestore.Timestamp.fromMillis(ms);
+
   const inboundBatch = db.batch();
   const inboundSamples: InboundFax[] = [
     {
-      id: "SIM-1001",
+      faxSid: "SIM-1001",
       from: "+14155552010",
       to: SIM_FAX_NUMBER,
-      pages: 3,
-      status: "needs-review",
-      receivedAt: new Date(now - 2 * 3600_000).toISOString(),
-      pdfUrl: null,
+      pageCount: 3,
+      status: "needs_review",
+      receivedAt: ts(now - 2 * 3600_000),
+      pdfPath: null,
+      attempts: 1,
     },
     {
-      id: "SIM-1002",
+      faxSid: "SIM-1002",
       from: "+12125550142",
       to: SIM_FAX_NUMBER,
-      pages: 2,
+      pageCount: 2,
       status: "completed",
-      receivedAt: new Date(now - 24 * 3600_000).toISOString(),
-      pdfUrl: null,
+      receivedAt: ts(now - 24 * 3600_000),
+      pdfPath: null,
+      attempts: 1,
     },
     {
-      id: "SIM-1003",
+      faxSid: "SIM-1003",
       from: "+13105551177",
       to: SIM_FAX_NUMBER,
-      pages: 5,
+      pageCount: 5,
       status: "processing",
-      receivedAt: new Date(now - 6 * 3600_000).toISOString(),
-      pdfUrl: null,
+      receivedAt: ts(now - 6 * 3600_000),
+      pdfPath: null,
+      attempts: 1,
     },
   ];
-  inboundSamples.forEach((f) => inboundBatch.set(db.doc(`${INBOUND}/${f.id}`), f));
+  inboundSamples.forEach((f) => inboundBatch.set(db.doc(`${INBOUND}/${f.faxSid}`), f));
   await inboundBatch.commit();
 
   const outboundBatch = db.batch();
   const outboundSamples: OutboundFax[] = [
     {
-      id: "SIM-OUT-1",
+      faxSid: "SIM-OUT-1",
       from: SIM_FAX_NUMBER,
       to: "+14155552020",
-      pages: 2,
+      pageCount: 2,
       status: "delivered",
-      sentAt: new Date(now - 3 * 3600_000).toISOString(),
+      sentAt: ts(now - 3 * 3600_000),
     },
     {
-      id: "SIM-OUT-2",
+      faxSid: "SIM-OUT-2",
       from: SIM_FAX_NUMBER,
       to: "+12125550250",
-      pages: 1,
+      pageCount: 1,
       status: "delivered",
-      sentAt: new Date(now - 48 * 3600_000).toISOString(),
+      sentAt: ts(now - 48 * 3600_000),
     },
   ];
-  outboundSamples.forEach((f) => outboundBatch.set(db.doc(`${OUTBOUND}/${f.id}`), f));
+  outboundSamples.forEach((f) => outboundBatch.set(db.doc(`${OUTBOUND}/${f.faxSid}`), f));
   await outboundBatch.commit();
 
   return {inbound: inboundSamples.length, outbound: outboundSamples.length};

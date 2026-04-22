@@ -247,8 +247,12 @@ service cloud.firestore {
     // `integrationCall` Cloud Functions (Admin SDK bypasses these rules). No
     // client access: all reads flow through `integrationCall`, which handles
     // auth + role gating before returning simulated data.
+    // Admins can read simulation data so the UI can subscribe to `simulation/*`
+    // collections directly (e.g. faxes inbox) when sim mode is on. Writes stay
+    // server-only — all mutations route through `integrationCall` simulators.
     match /simulation/{document=**} {
-      allow read, write: if false;
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // ───────────────────────── Subscriptions & billing ─────────────────────────

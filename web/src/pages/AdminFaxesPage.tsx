@@ -23,6 +23,8 @@ import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { formatDateTime } from '../lib/date-helpers';
 import { isAdminRole } from '../lib/roles';
+import { useSimulationMode } from '../hooks/useSimulationMode';
+import { faxes as faxesApi } from '../lib/integrations';
 
 type FaxStatus = 'pending' | 'processing' | 'needs_review' | 'completed' | 'failed';
 
@@ -142,12 +144,14 @@ const STATUS_BADGE: Record<FaxStatus, { label: string; className: string; icon: 
 
 export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
+  const { enabled: simulated } = useSimulationMode();
   const [faxes, setFaxes] = useState<InboundFax[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | FaxStatus>('all');
   const [selectedFaxSid, setSelectedFaxSid] = useState<string | null>(null);
   const [inlineDeleteTarget, setInlineDeleteTarget] = useState<InboundFax | null>(null);
   const [inlineDeleting, setInlineDeleting] = useState(false);
+  const [injecting, setInjecting] = useState(false);
 
   async function confirmInlineDelete() {
     if (!inlineDeleteTarget) return;
@@ -168,7 +172,8 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
   useEffect(() => {
     if (!user || !isAdminRole(userProfile?.role)) return;
     setLoading(true);
-    const q = query(collection(db, 'inbound-faxes'), orderBy('receivedAt', 'desc'), limit(200));
+    const collectionPath = simulated ? 'simulation/faxes/inbound' : 'inbound-faxes';
+    const q = query(collection(db, collectionPath), orderBy('receivedAt', 'desc'), limit(200));
     const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs.map((d) => ({ faxSid: d.id, ...(d.data() as Omit<InboundFax, 'faxSid'>) }));
       setFaxes(data);
@@ -178,7 +183,19 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
       setLoading(false);
     });
     return unsub;
-  }, [user, userProfile]);
+  }, [user, userProfile, simulated]);
+
+  async function handleInjectInbound() {
+    setInjecting(true);
+    try {
+      await faxesApi.injectInbound({}, { simulated: true });
+    } catch (err: any) {
+      // eslint-disable-next-line no-alert
+      alert(`Inject failed: ${err.message || err}`);
+    } finally {
+      setInjecting(false);
+    }
+  }
 
   if (authLoading) return <LoadingSpinner />;
   if (!user || !isAdminRole(userProfile?.role)) return <AccessDenied />;
@@ -232,6 +249,15 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
           { key: 'completed', label: 'Completed', count: counts.completed },
         ]}
       />
+
+      {simulated && (
+        <div className="flex justify-end">
+          <Button onClick={handleInjectInbound} loading={injecting} variant="secondary" size="sm">
+            <Sparkles className="h-4 w-4 mr-1.5" />
+            Simulate incoming fax
+          </Button>
+        </div>
+      )}
 
       {loading ? <LoadingSpinner /> : filtered.length === 0 ? (
         <EmptyState icon={Inbox} title="No faxes" description="Inbound faxes will appear here." />

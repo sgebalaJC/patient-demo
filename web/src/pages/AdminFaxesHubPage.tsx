@@ -69,7 +69,7 @@ export const AdminFaxesHubPage: React.FC<{ defaultTab?: Tab }> = ({ defaultTab =
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <div className="space-y-6">
       <PageHeader
         backTo="/admin"
         icon={FileText}

@@ -66,7 +66,7 @@ export const AdminPriorAuthPage: React.FC = () => {
   if (userProfile?.role !== 'admin') return <AccessDenied />;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <div className="space-y-6">
       <PageHeader
         backTo="/admin"
         icon={ClipboardCheck}
@@ -97,8 +97,8 @@ export const AdminPriorAuthPage: React.FC = () => {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-                tab === t ? 'bg-primary-600 text-white' : 'bg-surface-elevated text-secondary-700 hover:bg-primary-100'
+              className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
+                tab === t ? 'border-primary-600 text-primary-700 bg-primary-50' : 'border-transparent bg-surface-elevated text-secondary-700 hover:bg-primary-100'
               }`}
             >
               {t === 'open' && `Open (${counts.open})`}

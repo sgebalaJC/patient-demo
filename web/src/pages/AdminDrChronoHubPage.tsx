@@ -54,7 +54,7 @@ export const AdminDrChronoHubPage: React.FC = () => {
   const meta = TAB_META[tab];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <div className="space-y-6">
       <PageHeader
         backTo="/admin"
         icon={Stethoscope}

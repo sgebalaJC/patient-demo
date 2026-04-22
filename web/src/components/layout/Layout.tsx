@@ -20,7 +20,6 @@ export const Layout: React.FC = () => {
     setMobileOpen(false);
   }, [location.pathname]);
 
-  const isAdminRoute = location.pathname.startsWith('/admin');
   const isFullHeight = FULL_HEIGHT_ROUTES.some((r) => location.pathname.startsWith(r));
 
   return (
@@ -80,15 +79,13 @@ export const Layout: React.FC = () => {
         </div>
 
         <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          {isAdminRoute ? (
-            <Outlet />
-          ) : isFullHeight ? (
+          {isFullHeight ? (
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               <Outlet />
             </div>
           ) : (
             <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+              <div className="max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 lg:min-w-[1280px]">
                 <Outlet />
               </div>
             </div>

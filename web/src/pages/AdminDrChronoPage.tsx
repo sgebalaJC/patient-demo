@@ -89,10 +89,10 @@ export const AdminDrChronoPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setMode('name')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg ${
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg border ${
                 mode === 'name'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
+                  ? 'border-primary-600 text-primary-700 bg-primary-50'
+                  : 'border-transparent bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
               }`}
             >
               By name
@@ -100,10 +100,10 @@ export const AdminDrChronoPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setMode('id')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg ${
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg border ${
                 mode === 'id'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
+                  ? 'border-primary-600 text-primary-700 bg-primary-50'
+                  : 'border-transparent bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
               }`}
             >
               By patient ID
@@ -138,7 +138,7 @@ export const AdminDrChronoPage: React.FC = () => {
             <button
               type="submit"
               disabled={!canSearch || loading}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 border border-primary-600 text-primary-700 bg-primary-50 hover:bg-primary-100 text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Search className="h-4 w-4" />
               {loading ? 'Searching…' : 'Search'}

@@ -70,7 +70,7 @@ export const AdminPolicyLibraryPage: React.FC = () => {
   if (userProfile?.role !== 'admin') return <AccessDenied />;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-5">
+    <div className="space-y-5">
       <div className="flex items-start justify-between gap-3">
         <PageHeader
           backTo="/admin/prior-auth"

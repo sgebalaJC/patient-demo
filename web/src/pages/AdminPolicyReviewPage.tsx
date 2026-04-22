@@ -83,7 +83,7 @@ export const AdminPolicyReviewPage: React.FC = () => {
   const c = policy.extractedCriteria;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-5">
+    <div className="space-y-5">
       <PageHeader
         backTo="/admin/prior-auth/policies"
         icon={ClipboardCheck}

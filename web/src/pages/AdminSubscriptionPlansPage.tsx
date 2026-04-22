@@ -131,7 +131,7 @@ export const AdminSubscriptionPlansPage: React.FC = () => {
 
   return (
     <AdminGuard>
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+    <div className="space-y-6">
       <PageHeader
         backTo="/admin"
         icon={CreditCard}

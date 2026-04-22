@@ -197,7 +197,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
 
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     embedded ? <div className="space-y-6">{children}</div> : (
-      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">{children}</div>
+      <div className="space-y-6">{children}</div>
     );
 
   return (

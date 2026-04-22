@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addDoc, collection, limit, onSnapshot, orderBy, query, serverTimestamp, Timestamp,
 } from 'firebase/firestore';
-import { MessageCircle, Send, X, Volume2, VolumeX, Bell } from 'lucide-react';
+import { MessageCircle, Send, X, Volume2, VolumeX, Bell, Maximize2, Minimize2 } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDateTime } from '../../lib/date-helpers';
@@ -56,6 +56,7 @@ export const AdminChannelWidget: React.FC = () => {
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
 
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState<AdminChannelMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -220,9 +221,15 @@ export const AdminChannelWidget: React.FC = () => {
   if (!isAdmin) return null;
 
   return (
-    <div className="fixed bottom-2 right-4 z-50 flex flex-col items-end gap-2">
+    <div className="fixed bottom-1 right-1 z-50 flex flex-col items-end gap-2">
       {open && (
-        <div className="w-80 sm:w-96 h-[520px] bg-surface-card rounded-xl shadow-2xl border border-secondary-200 flex flex-col overflow-hidden">
+        <div
+          className={
+            expanded
+              ? 'fixed inset-2 z-50 bg-surface-card rounded-xl shadow-2xl border border-secondary-200 flex flex-col overflow-hidden'
+              : 'w-80 sm:w-96 h-[520px] bg-surface-card rounded-xl shadow-2xl border border-secondary-200 flex flex-col overflow-hidden'
+          }
+        >
           <div className="flex items-center justify-between px-4 py-3 border-b border-secondary-200 bg-surface-elevated">
             <div className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5 text-primary-600" />
@@ -235,6 +242,13 @@ export const AdminChannelWidget: React.FC = () => {
                 className="p-1.5 rounded hover:bg-primary-100 text-secondary-600"
               >
                 {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={() => setExpanded((v) => !v)}
+                title={expanded ? 'Collapse' : 'Expand'}
+                className="p-1.5 rounded hover:bg-primary-100 text-secondary-600"
+              >
+                {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </button>
               <button
                 onClick={() => setOpen(false)}

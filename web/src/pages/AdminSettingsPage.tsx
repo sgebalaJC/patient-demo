@@ -308,7 +308,8 @@ export const AdminSettingsPage: React.FC = () => {
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <p className="text-xs text-secondary-500">
                     Super-admin: seed the demo sandbox (50 patients, 50 appointments,
-                    50 refills) or wipe it clean.
+                    50 refills, 3 inbound faxes + 2 outbound with viewable PDFs).
+                    Idempotent — re-running replaces content in place.
                   </p>
                   <div className="flex items-center gap-2 shrink-0">
                     <Button

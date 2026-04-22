@@ -648,9 +648,23 @@ export const getFaxPdfUrl = onCall({timeoutSeconds: 30}, async (request) => {
   const {faxSid} = request.data as {faxSid: string};
   if (!faxSid) throw new HttpsError("invalid-argument", "faxSid required");
 
-  const snap = await db().collection("inbound-faxes").doc(faxSid).get();
-  if (!snap.exists) throw new HttpsError("not-found", "Fax not found");
-  const pdfPath = snap.data()?.pdfPath;
+  // Look up the fax in inbound-faxes (real) or simulation/faxes/* (sim).
+  // Sim faxSids are prefixed SIM-… so we can skip the real lookup for them.
+  let pdfPath: string | undefined;
+  if (faxSid.startsWith("SIM-")) {
+    const inSnap = await db().doc(`simulation/faxes/inbound/${faxSid}`).get();
+    if (inSnap.exists) {
+      pdfPath = inSnap.data()?.pdfPath;
+    } else {
+      const outSnap = await db().doc(`simulation/faxes/outbound/${faxSid}`).get();
+      if (!outSnap.exists) throw new HttpsError("not-found", "Fax not found");
+      pdfPath = outSnap.data()?.pdfPath;
+    }
+  } else {
+    const snap = await db().collection("inbound-faxes").doc(faxSid).get();
+    if (!snap.exists) throw new HttpsError("not-found", "Fax not found");
+    pdfPath = snap.data()?.pdfPath;
+  }
   if (!pdfPath) throw new HttpsError("failed-precondition", "No PDF stored for this fax");
 
   const [url] = await admin.storage().bucket().file(pdfPath).getSignedUrl({

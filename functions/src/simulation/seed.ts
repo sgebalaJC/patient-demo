@@ -167,5 +167,17 @@ export const clearSimulationData = onCall({timeoutSeconds: 120}, async (req) => 
     }
     cleared[p.replace("simulation/", "").replace("/", "_")] = total;
   }
+
+  // Also drop the seeded Storage PDFs so clear → seed → clear leaves no
+  // orphans in GCS.
+  try {
+    const bucket = admin.storage().bucket();
+    const [files] = await bucket.getFiles({prefix: "simulation/faxes/"});
+    if (files.length > 0) {
+      await Promise.all(files.map((f) => f.delete().catch(() => { /* tolerate */ })));
+      cleared["faxes_storage_objects"] = files.length;
+    }
+  } catch { /* bucket might not exist locally */ }
+
   return {ok: true, cleared};
 });

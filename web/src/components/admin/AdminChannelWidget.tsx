@@ -5,6 +5,7 @@ import {
 import { MessageCircle, Send, X, Volume2, VolumeX, Bell, Maximize2, Minimize2 } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
+import { isAdminRole } from '../../lib/roles';
 import { formatDateTime } from '../../lib/date-helpers';
 import { BRANDING } from '../../config/branding';
 
@@ -53,7 +54,7 @@ function playChime(): void {
 
 export const AdminChannelWidget: React.FC = () => {
   const { user, userProfile } = useAuth();
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
+  const isAdmin = isAdminRole(userProfile?.role);
 
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);

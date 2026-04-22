@@ -1027,7 +1027,6 @@ export async function handleAdminApi(
       // ── Athenahealth (generic pass-through) ──
       // Path: /admin-api/athena/<athena-path>[?...]
       // Only active when integrations/athena { enabled: true, status: active }.
-      // TODO(sim): wire an `simAthena` branch when the centralized sim layer lands.
       case "athena": {
         const athenaPath = parts.slice(1).join("/");
         if (!athenaPath) {
@@ -1047,7 +1046,6 @@ export async function handleAdminApi(
       // ── Elation Health (generic pass-through) ──
       // Path: /admin-api/elation/<elation-path>[?...]
       // Only active when integrations/elation { enabled: true, status: active }.
-      // TODO(sim): wire an `simElation` branch when the centralized sim layer lands.
       case "elation": {
         const elationPath = parts.slice(1).join("/");
         if (!elationPath) {
@@ -1067,7 +1065,6 @@ export async function handleAdminApi(
       // ── eClinicalWorks (FHIR R4 pass-through) ──
       // Path: /admin-api/ecw/<fhir-resource>[?...]
       // Only active when integrations/ecw { enabled: true, status: active }.
-      // TODO(sim): wire an `simEcw` branch when the centralized sim layer lands.
       case "ecw": {
         const ecwPath = parts.slice(1).join("/");
         if (!ecwPath) {

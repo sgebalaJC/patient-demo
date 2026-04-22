@@ -34,8 +34,9 @@ setGlobalOptions({region: "us-west1"});
 export {logClientError} from "./client-errors.js";
 
 // Simulation layer — single entry point for all external integrations with
-// per-session real-vs-simulated routing. See functions/src/simulation/index.ts.
-export {integrationCall, seedSimulationData, clearSimulationData} from "./simulation/index.js";
+// Sandbox seed/clear callables — sim/real routing itself lives on the
+// sidecar. See docs/SIMULATION.md.
+export {seedSimulationData, clearSimulationData} from "./simulation/index.js";
 
 // Appointment reminder cron jobs. Extracted from this file.
 export {calendarReminderScheduler, morningReminderScheduler} from "./reminders.js";

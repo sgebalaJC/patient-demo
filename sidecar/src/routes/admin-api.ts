@@ -66,11 +66,11 @@ import {
   getPriorAuth,
   listPriorAuthEvents,
   appendPriorAuthNote,
-  chartGapCheckStub,
   listPayers,
   getPayerPolicy,
   listTargetCpts,
 } from "./prior-auth.js";
+import { runChartGapCheck } from "./chart-gap-check.js";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -1373,7 +1373,12 @@ export async function handleAdminApi(
         if (method === "GET" && id && action === "events") return await listPriorAuthEvents(id, url);
         if (method === "GET" && id) return await getPriorAuth(id);
         if (method === "POST" && id && action === "notes") return await appendPriorAuthNote(id, request);
-        if (method === "POST" && id && action === "chart-gap-check") return await chartGapCheckStub(id);
+        if (method === "POST" && id && action === "chart-gap-check") return await runChartGapCheck(request);
+        break;
+      }
+      // Singular alias — the runChartGapCheck Cloud Function posts here.
+      case "prior-auth": {
+        if (method === "POST" && id === "chart-gap-check") return await runChartGapCheck(request);
         break;
       }
       case "payers": {

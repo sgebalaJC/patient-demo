@@ -77,7 +77,55 @@ interface FaxPdfSpec {
   faxSid: string;
 }
 
-async function renderFaxPdf(spec: FaxPdfSpec): Promise<Uint8Array> {
+// pdf-lib's StandardFonts are WinAnsi-only. Anything outside Windows-1252
+// (em dashes, arrows, curly quotes, bullets) throws at draw time. Normalize
+// the whole spec up front so adding new sample text can't crash the seed.
+function toWinAnsi(s: string): string {
+  return s
+    .replace(/[–—]/g, "-")       // en/em dash → hyphen
+    .replace(/[‘’‚]/g, "'") // curly + low single quotes
+    .replace(/[“”„]/g, "\"") // curly + low double quotes
+    .replace(/…/g, "...")              // ellipsis
+    .replace(/→/g, "->")               // right arrow
+    .replace(/[•●]/g, "*")        // bullet
+    .replace(/[^\x00-\xff]/g, "?");         // any remaining non-Latin-1
+}
+
+function sanitizeSpec(spec: FaxPdfSpec): FaxPdfSpec {
+  const mapStr = (v: string) => toWinAnsi(v);
+  return {
+    header: {
+      title: mapStr(spec.header.title),
+      addressLines: spec.header.addressLines.map(mapStr),
+      phone: mapStr(spec.header.phone),
+      tagline: mapStr(spec.header.tagline),
+    },
+    patient: {
+      name: mapStr(spec.patient.name),
+      dob: mapStr(spec.patient.dob),
+      id: mapStr(spec.patient.id),
+      age: spec.patient.age,
+      sex: mapStr(spec.patient.sex),
+      examDate: mapStr(spec.patient.examDate),
+      accession: mapStr(spec.patient.accession),
+      requestedBy: mapStr(spec.patient.requestedBy),
+      requestAddress: spec.patient.requestAddress.map(mapStr),
+    },
+    procedure: mapStr(spec.procedure),
+    comparison: mapStr(spec.comparison),
+    indications: mapStr(spec.indications),
+    findings: spec.findings.map((f) => ({heading: mapStr(f.heading), text: mapStr(f.text)})),
+    conclusion: spec.conclusion.map(mapStr),
+    dictatedBy: mapStr(spec.dictatedBy),
+    dictatedAt: mapStr(spec.dictatedAt),
+    pageCount: spec.pageCount,
+    faxHeaderTime: mapStr(spec.faxHeaderTime),
+    faxSid: mapStr(spec.faxSid),
+  };
+}
+
+async function renderFaxPdf(rawSpec: FaxPdfSpec): Promise<Uint8Array> {
+  const spec = sanitizeSpec(rawSpec);
   const pdfDoc = await PDFDocument.create();
   const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -90,7 +138,7 @@ async function renderFaxPdf(spec: FaxPdfSpec): Promise<Uint8Array> {
 
     // Thin fax-machine header strip (faded).
     page.drawText(
-      `${spec.faxHeaderTime}    Fax Services    → ${spec.patient.accession} ${spec.patient.requestedBy.split(",")[0].toUpperCase()} MD    pg ${pageIdx + 1} of ${spec.pageCount}`,
+      `${spec.faxHeaderTime}    Fax Services    -> ${spec.patient.accession} ${spec.patient.requestedBy.split(",")[0].toUpperCase()} MD    pg ${pageIdx + 1} of ${spec.pageCount}`,
       {x: margin, y, size: 7, font: regular, color: rgb(0.45, 0.45, 0.45)},
     );
     y -= 22;

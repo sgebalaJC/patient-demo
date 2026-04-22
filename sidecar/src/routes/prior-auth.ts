@@ -112,16 +112,6 @@ export async function appendPriorAuthNote(paId: string, request: Request): Promi
   return json({ ok: true, note });
 }
 
-export async function chartGapCheckStub(_paId: string): Promise<Response> {
-  return json(
-    {
-      error:
-        "Chart gap check runs as a Cloud Function (runChartGapCheck callable). Trigger it from the admin UI at /admin/prior-auth/:paId or have the admin click Run Gap Check.",
-    },
-    501,
-  );
-}
-
 export async function listPayers(): Promise<Response> {
   const snap = await getDb().collection("payers").limit(200).get();
   return json({

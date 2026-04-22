@@ -32,9 +32,13 @@ interface OutboundFax {
   faxSid: string;
   from: string;
   to: string;
-  pageCount: number;
+  subject: string | null;
+  pageCount: number | null;
+  fileCount: number;
   status: "queued" | "sending" | "delivered" | "failed";
-  sentAt: admin.firestore.Timestamp;
+  submittedBy: string;
+  submittedAt: admin.firestore.Timestamp;
+  completedAt: admin.firestore.Timestamp | null;
 }
 
 export async function get_our_number(): Promise<{number: string}> {
@@ -47,7 +51,7 @@ export async function list_inbound(ctx: SimContext): Promise<{results: InboundFa
 }
 
 export async function list_outbound(ctx: SimContext): Promise<{results: OutboundFax[]}> {
-  const snap = await ctx.db.collection(OUTBOUND).orderBy("sentAt", "desc").limit(200).get();
+  const snap = await ctx.db.collection(OUTBOUND).orderBy("submittedAt", "desc").limit(200).get();
   return {results: snap.docs.map((d) => d.data() as OutboundFax)};
 }
 
@@ -81,26 +85,34 @@ export async function inject_inbound(
 
 export async function send_fax(
   ctx: SimContext,
-  params: {to?: string; pdfBase64?: string; filename?: string; coverNote?: string},
-): Promise<{id: string; status: OutboundFax["status"]}> {
+  params: {to?: string; subject?: string; fileCount?: number},
+): Promise<{id: string; faxSid: string; status: OutboundFax["status"]}> {
   if (!params.to) throw new Error("to required");
   const faxSid = `SIM-OUT-${Date.now()}`;
   const doc: OutboundFax = {
     faxSid,
     from: SIM_FAX_NUMBER,
     to: params.to,
-    pageCount: 1,
+    subject: params.subject || null,
+    pageCount: null,
+    fileCount: params.fileCount || 1,
     status: "queued",
-    sentAt: admin.firestore.Timestamp.now(),
+    submittedBy: ctx.uid,
+    submittedAt: admin.firestore.Timestamp.now(),
+    completedAt: null,
   };
   await ctx.db.doc(`${OUTBOUND}/${faxSid}`).set(doc);
   setTimeout(() => {
     ctx.db
       .doc(`${OUTBOUND}/${faxSid}`)
-      .update({status: "delivered"})
+      .update({
+        status: "delivered",
+        pageCount: 2,
+        completedAt: admin.firestore.Timestamp.now(),
+      })
       .catch(() => {/* tolerate transient errors */});
   }, 2000);
-  return {id: faxSid, status: "queued"};
+  return {id: faxSid, faxSid, status: "queued"};
 }
 
 /** Idempotent seeder — called from `seedSimulationData`. */
@@ -160,17 +172,25 @@ export async function seedFaxes(db: admin.firestore.Firestore): Promise<{inbound
       faxSid: "SIM-OUT-1",
       from: SIM_FAX_NUMBER,
       to: "+14155552020",
+      subject: "Referral — sample",
       pageCount: 2,
+      fileCount: 1,
       status: "delivered",
-      sentAt: ts(now - 3 * 3600_000),
+      submittedBy: "sim-seed",
+      submittedAt: ts(now - 3 * 3600_000),
+      completedAt: ts(now - 3 * 3600_000 + 60_000),
     },
     {
       faxSid: "SIM-OUT-2",
       from: SIM_FAX_NUMBER,
       to: "+12125550250",
+      subject: null,
       pageCount: 1,
+      fileCount: 1,
       status: "delivered",
-      sentAt: ts(now - 48 * 3600_000),
+      submittedBy: "sim-seed",
+      submittedAt: ts(now - 48 * 3600_000),
+      completedAt: ts(now - 48 * 3600_000 + 45_000),
     },
   ];
   outboundSamples.forEach((f) => outboundBatch.set(db.doc(`${OUTBOUND}/${f.faxSid}`), f));

@@ -18,6 +18,8 @@ import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { formatDateTime } from '../lib/date-helpers';
 import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
 import { isAdminRole } from '../lib/roles';
+import { useSimulationMode } from '../hooks/useSimulationMode';
+import { faxes as faxesApi } from '../lib/integrations';
 
 interface OutboundFax {
   faxSid: string;
@@ -57,6 +59,7 @@ const TONE_ICON: Record<'pending' | 'success' | 'error', React.ComponentType<{ c
 export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { userProfile } = useAuth();
   const isAdmin = isAdminRole(userProfile?.role);
+  const { enabled: simulated } = useSimulationMode();
 
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
@@ -74,15 +77,16 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
 
   useEffect(() => {
     if (!isAdmin) return;
+    const collectionPath = simulated ? 'simulation/faxes/outbound' : 'outbound-faxes';
     const q = query(
-      collection(db, 'outbound-faxes'),
+      collection(db, collectionPath),
       orderBy('submittedAt', 'desc'),
       limit(25),
     );
     return onSnapshot(q, (snap) => {
       setRecent(snap.docs.map((d) => ({ ...(d.data() as OutboundFax) })));
     });
-  }, [isAdmin]);
+  }, [isAdmin, simulated]);
 
   const toNormalized = useMemo(() => {
     try { return to ? normalizePhoneNumber(to) : ''; } catch { return ''; }
@@ -114,6 +118,25 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
     setSubmitting(true);
     setSubmitError('');
     setSubmitOk('');
+
+    if (simulated) {
+      try {
+        const res = await faxesApi.sendFax(
+          { to: toNormalized, subject, fileCount: files.length } as any,
+          { simulated: true },
+        );
+        setSubmitOk(`Simulated fax queued — SID ${res.id.slice(0, 16)}… (delivers in ~2s)`);
+        setFiles([]);
+        setSubject('');
+        setTo('');
+        setCoverTo('');
+      } catch (err: any) {
+        setSubmitError(err?.message || 'Submit failed');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
 
     const batchId = crypto.randomUUID().replace(/-/g, '').slice(0, 24);
     const prefix = `admin/outbound-faxes/${batchId}/`;

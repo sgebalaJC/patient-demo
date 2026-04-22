@@ -59,7 +59,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   return (
-    <div className="border-t border-secondary-200 p-3">
+    <div className="p-3">
       {/* Pending files preview — image thumbnails for image/*, chip for others */}
       {pendingFiles.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">

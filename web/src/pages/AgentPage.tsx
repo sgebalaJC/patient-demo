@@ -6,6 +6,10 @@ import { AgentSkills } from '../components/agent/AgentSkills';
 import { AgentChannels } from '../components/agent/AgentChannels';
 import { AgentBackups } from '../components/agent/AgentBackups';
 import { AgentHealth } from '../components/agent/AgentHealth';
+import { DrChronoSetup } from '../components/agent/DrChronoSetup';
+import { AthenaSetup } from '../components/agent/AthenaSetup';
+import { ElationSetup } from '../components/agent/ElationSetup';
+import { EcwSetup } from '../components/agent/EcwSetup';
 import { sidecar } from '../lib/sidecar';
 import { useAuth } from '../hooks/useAuth';
 import { isSuperAdminEmail } from '../lib/roles';
@@ -17,17 +21,39 @@ import {
   Activity,
   Radio,
   Bot,
+  Plug,
 } from 'lucide-react';
 
-type Tab = 'chat' | 'skills' | 'channels' | 'backups' | 'health';
+type Tab = 'chat' | 'skills' | 'channels' | 'integrations' | 'backups' | 'health';
 
 const ALL_NAV_ITEMS: { key: Tab; label: string; icon: React.ElementType; superAdminOnly?: boolean }[] = [
   { key: 'chat', label: 'Chat', icon: MessageSquare },
   { key: 'skills', label: 'Skills', icon: Star },
   { key: 'channels', label: 'Channels', icon: Radio },
+  { key: 'integrations', label: 'Integrations', icon: Plug, superAdminOnly: true },
   { key: 'backups', label: 'Backups', icon: Archive, superAdminOnly: true },
   { key: 'health', label: 'Health', icon: Activity },
 ];
+
+const IntegrationsPanel: React.FC = () => (
+  <div className="flex-1 overflow-y-auto p-6">
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-secondary-900">EHR Integrations</h2>
+        <p className="text-sm text-secondary-500 mt-1">
+          Platform-level connections. Super-admin only — credentials are stored encrypted at rest and never
+          exposed to practice admins.
+        </p>
+      </div>
+      <div className="space-y-3">
+        <DrChronoSetup />
+        <AthenaSetup />
+        <ElationSetup />
+        <EcwSetup />
+      </div>
+    </div>
+  </div>
+);
 
 export const AgentPage: React.FC = () => {
   const { user } = useAuth();
@@ -108,6 +134,8 @@ export const AgentPage: React.FC = () => {
         return <AgentSkills />;
       case 'channels':
         return <AgentChannels />;
+      case 'integrations':
+        return isSuperAdmin ? <IntegrationsPanel /> : <AgentChat />;
       case 'backups':
         return isSuperAdmin ? <AgentBackups /> : <AgentChat />;
       case 'health':
@@ -156,7 +184,7 @@ export const AgentPage: React.FC = () => {
         </div>
 
         {/* Status indicator */}
-        <div className="px-4 min-h-[60px] flex items-center border-t border-secondary-200">
+        <div className="px-4 min-h-[60px] flex items-center">
           <div className="flex items-center gap-2 text-xs text-secondary-500">
             <span
               className={`h-2 w-2 rounded-full ${

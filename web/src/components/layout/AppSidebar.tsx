@@ -163,7 +163,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
           className={`flex items-center h-14 shrink-0 gap-2 ${
             collapsed ? 'px-4 md:px-0 md:justify-center' : 'px-4 justify-between'
           }`}
-          style={{ borderBottom: '1px solid var(--shell-border)' }}
         >
           {/* Logo + name — hidden on desktop when collapsed (kitagents pattern) */}
           <Link
@@ -246,7 +245,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
           <>
             <div
               className="shrink-0 h-14 flex items-center px-3"
-              style={{ borderTop: '1px solid var(--shell-border)' }}
             >
               <button
                 type="button"

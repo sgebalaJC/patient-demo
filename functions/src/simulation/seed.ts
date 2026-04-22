@@ -141,7 +141,12 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
       return fallback;
     }
   };
-  const faxes = await safeSeed("faxes", () => seedFaxes(db), {inbound: 0, outbound: 0});
+  const faxes = await safeSeed("faxes", () => seedFaxes(db), {
+    inbound: 0,
+    outbound: 0,
+    pdfsAttached: 0,
+    pdfsFailed: 0,
+  } as Awaited<ReturnType<typeof seedFaxes>>);
   const sms = await safeSeed("sms", () => seedSms(db), {outbound: 0, inbound: 0});
   const workspace = await safeSeed("workspace", () => seedWorkspace(db), {emails: 0, events: 0});
   return {
@@ -152,6 +157,10 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
       drchrono_refills: refills,
       faxes_inbound: faxes.inbound,
       faxes_outbound: faxes.outbound,
+      faxes_pdfs_attached: faxes.pdfsAttached,
+      faxes_pdfs_failed: faxes.pdfsFailed,
+      ...(faxes.firstPdfError ? {faxes_pdf_error: faxes.firstPdfError} : {}),
+      ...(faxes.bucket ? {faxes_bucket: faxes.bucket} : {}),
       sms_outbound: sms.outbound,
       sms_inbound: sms.inbound,
       workspace_emails: workspace.emails,

@@ -427,7 +427,14 @@ const SAMPLE_SENDERS = [
  * the same Storage paths on every run — re-seeding replaces content
  * in-place rather than accumulating.
  */
-export async function seedFaxes(db: admin.firestore.Firestore): Promise<{inbound: number; outbound: number}> {
+export async function seedFaxes(db: admin.firestore.Firestore): Promise<{
+  inbound: number;
+  outbound: number;
+  pdfsAttached: number;
+  pdfsFailed: number;
+  firstPdfError?: string;
+  bucket?: string;
+}> {
   const wipe = async (path: string) => {
     const snap = await db.collection(path).limit(500).get();
     if (snap.empty) return;
@@ -441,8 +448,15 @@ export async function seedFaxes(db: admin.firestore.Firestore): Promise<{inbound
   const now = Date.now();
   const ts = (ms: number) => admin.firestore.Timestamp.fromMillis(ms);
 
-  // Inbound — 3 samples with viewable PDFs (PDF upload is best-effort so
-  // the inbox still populates even if Storage is misconfigured on the fork).
+  let pdfsAttached = 0;
+  let pdfsFailed = 0;
+  let firstPdfError: string | undefined;
+  const bucketName = admin.storage().bucket().name;
+
+  // Inbound — 3 samples with viewable PDFs. Upload is best-effort: if it
+  // fails we still write the Firestore row (pdfPath=null) and surface the
+  // underlying Storage/IAM error in the seed result so the operator can
+  // diagnose without grepping Cloud Logging.
   const inSpecs = sampleSpecs();
   const inboundSamples: InboundFax[] = [];
   for (let i = 0; i < inSpecs.length; i++) {
@@ -452,6 +466,11 @@ export async function seedFaxes(db: admin.firestore.Firestore): Promise<{inbound
     const pdfBytes = await renderFaxPdf(spec);
     const pdfPath = `${INBOUND}/${faxSid}/original.pdf`;
     const uploaded = await uploadPdf(pdfPath, pdfBytes);
+    if (uploaded.ok) pdfsAttached++;
+    else {
+      pdfsFailed++;
+      if (!firstPdfError) firstPdfError = uploaded.error;
+    }
     inboundSamples.push({
       faxSid,
       from: SAMPLE_SENDERS[i % SAMPLE_SENDERS.length],
@@ -459,7 +478,7 @@ export async function seedFaxes(db: admin.firestore.Firestore): Promise<{inbound
       pageCount: spec.pageCount,
       status: i === 0 ? "needs_review" : i === 1 ? "completed" : "processing",
       receivedAt: ts(now - (2 + i * 6) * 3600_000),
-      pdfPath: uploaded ? pdfPath : null,
+      pdfPath: uploaded.ok ? pdfPath : null,
       attempts: 1,
     });
   }
@@ -477,6 +496,11 @@ export async function seedFaxes(db: admin.firestore.Firestore): Promise<{inbound
     const pdfBytes = await renderFaxPdf(spec);
     const pdfPath = `${OUTBOUND}/${faxSid}/original.pdf`;
     const uploaded = await uploadPdf(pdfPath, pdfBytes);
+    if (uploaded.ok) pdfsAttached++;
+    else {
+      pdfsFailed++;
+      if (!firstPdfError) firstPdfError = uploaded.error;
+    }
     outboundSamples.push({
       faxSid,
       from: SIM_FAX_NUMBER,
@@ -488,12 +512,19 @@ export async function seedFaxes(db: admin.firestore.Firestore): Promise<{inbound
       submittedBy: "sim-seed",
       submittedAt: ts(now - (3 + i * 45) * 3600_000),
       completedAt: ts(now - (3 + i * 45) * 3600_000 + 60_000),
-      pdfPath: uploaded ? pdfPath : null,
+      pdfPath: uploaded.ok ? pdfPath : null,
     });
   }
   const outboundBatch = db.batch();
   outboundSamples.forEach((f) => outboundBatch.set(db.doc(`${OUTBOUND}/${f.faxSid}`), f));
   await outboundBatch.commit();
 
-  return {inbound: inboundSamples.length, outbound: outboundSamples.length};
+  return {
+    inbound: inboundSamples.length,
+    outbound: outboundSamples.length,
+    pdfsAttached,
+    pdfsFailed,
+    firstPdfError,
+    bucket: bucketName,
+  };
 }

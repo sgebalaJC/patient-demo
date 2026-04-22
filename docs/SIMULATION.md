@@ -158,20 +158,36 @@ Then:
 
 ## Current coverage
 
-| Domain     | UI façade | Sidecar sim | Seed | Aurelia | CF interception |
-|------------|:--:|:--:|:--:|:--:|:--:|
-| DrChrono   | ✓  | ✓  | ✓  | ✓ | n/a |
-| Faxes      | ✓  | ✓  | ✓  | ✓ *(UI only today; agent skills pending)* | n/a |
-| SMS        | ✓  | ✓  | ✓  | ✓ *(via admin-api)* | ✓ *(welcome + reminders)* |
-| Workspace  | –  | –  | –  | – | – |
+| Domain         | UI façade | Sidecar sim | Seed | Aurelia | CF interception |
+|----------------|:--:|:--:|:--:|:--:|:--:|
+| DrChrono       | ✓  | ✓ (R+W) | ✓ | ✓ | n/a |
+| Athena         | —  | ✓ (R)   | — | ✓ | n/a |
+| Elation        | —  | ✓ (R)   | — | ✓ | n/a |
+| eCW            | —  | ✓ (R, FHIR) | — | ✓ | n/a |
+| NextGen        | —  | ✓ (R)   | — | ✓ | n/a |
+| Tebra          | —  | ✓ (R)   | — | ✓ | n/a |
+| Greenway       | —  | ✓ (R)   | — | ✓ | n/a |
+| Practice Fusion| —  | ✓ (R)   | — | ✓ | n/a |
+| Cerner         | —  | ✓ (R, FHIR) | — | ✓ | n/a |
+| Epic           | —  | ✓ (R, FHIR) | — | ✓ | n/a |
+| Faxes — inbound | ✓ | ✓ (sim+real reads/PATCH) | ✓ | ✓ | n/a |
+| Faxes — outbound| ✓ | ✓ (sim+real reads) / sim-only send | ✓ | ✓ | n/a |
+| SMS            | ✓  | ✓  | ✓  | ✓ | ✓ (reminders, welcome, phone OTP verify + login, appointment status) |
+| Gmail          | —  | ✓ (sim-only) | ✓ | ✓ | ✓ (`gmail-workspace.sendEmail`) |
+| Calendar       | —  | ✓ (sim-only) | ✓ | ✓ | n/a |
+| Transactional email (SMTP/nodemailer) | n/a | n/a | n/a | n/a | ✓ (`email.sendEmail` — welcome, refill status, appointment confirmation) |
 
-**CF interception** means that Cloud Functions which originate the
-outbound call (e.g. `sendReminderSMS`, welcome SMS in `createUserWithAuth`)
-check `system/settings.simulationMode` and route to the simulator
-instead of the real provider. Use `recordSimSms()` from
-`functions/src/simulation/simulators/messaging.ts` for new SMS call
-sites; it's fire-and-forget and swallows errors so real flows aren't
-broken.
+All EHRs read from the shared `simulation/drchrono/patients` pool,
+transformed to each vendor's native patient shape. Seeding DrChrono
+patients seeds every EHR at once.
+
+**CF interception** means Cloud Functions that originate outbound calls
+(SMS via Twilio, email via SMTP/Gmail) read `system/settings.simulationMode`
+and route to the simulator instead of the provider. Use
+`recordSimSms()` (`simulation/simulators/messaging.ts`) for SMS and
+`recordSimEmail()` (`simulation/simulators/workspace.ts`) for email —
+both fire-and-forget, tolerate write failures, and never disrupt the
+real flow.
 
 Real-path fax routes on the sidecar return 501 today — the real path
 still lives in the `sendOutboundFax` / `signalwireFaxWebhook` Cloud

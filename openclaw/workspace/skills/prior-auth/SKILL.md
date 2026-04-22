@@ -6,6 +6,13 @@ user-invocable: true
 
 # Prior Auth
 
+> **Status:** The routes below (`/prior-auths`, `/payers`,
+> `/payer-policies`, `/target-cpts`) are not yet wired on the
+> sidecar admin-api — the data lives in Firestore and the UI at
+> `/admin/prior-auth` works, but this skill will 404 until the
+> routes are added. If the admin asks about a PA, point them at
+> `/admin/prior-auth/:PA_ID` in the UI for now.
+
 The prior-auth tracker lives in three Firestore collections:
 
 - `prior-auths` — one PA case per row (patient + payer + CPT + criteria checklist + status)

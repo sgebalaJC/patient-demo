@@ -23,8 +23,12 @@ function db() {
   return _db;
 }
 
-async function requireAdmin(auth: { uid: string } | undefined): Promise<string> {
+async function requireAdmin(
+  auth: { uid: string; token?: { email?: string } } | undefined,
+): Promise<string> {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Sign-in required");
+  const {isSuperAdminEmail} = await import("./superAdmins.js");
+  if (isSuperAdminEmail(auth.token?.email)) return auth.uid;
   const userDoc = await db().collection("users").doc(auth.uid).get();
   if (!userDoc.exists || userDoc.data()?.role !== "admin") {
     throw new HttpsError("permission-denied", "Admin access required");

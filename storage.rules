@@ -85,6 +85,13 @@ service firebase.storage {
       allow delete: if isAdmin();
     }
 
+    // Simulation sandbox PDFs (sim mode only) — seeded by Cloud Function,
+    // read by admin UI via signed URL. Writes always server-only.
+    match /simulation/{allPaths=**} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // Deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

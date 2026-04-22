@@ -15,8 +15,14 @@ function db() {
   return admin.firestore();
 }
 
-async function requireAdmin(auth: {uid: string} | undefined): Promise<{uid: string; name: string}> {
+async function requireAdmin(
+  auth: {uid: string; token?: {email?: string}} | undefined,
+): Promise<{uid: string; name: string}> {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Sign-in required");
+  const {isSuperAdminEmail} = await import("../superAdmins.js");
+  if (isSuperAdminEmail(auth.token?.email)) {
+    return {uid: auth.uid, name: auth.token?.email || "Super Admin"};
+  }
   const userDoc = await db().collection("users").doc(auth.uid).get();
   const data = userDoc.data();
   if (data?.role !== "admin") throw new HttpsError("permission-denied", "Admin access required");

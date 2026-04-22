@@ -32,6 +32,21 @@ export async function sendEmail(opts: {
   html: string;
   text?: string;
 }): Promise<boolean> {
+  // Sim short-circuit: the global simulation flag routes transactional
+  // email to simulation/workspace/emails instead of SMTP. Admins see it
+  // in the sandbox; nothing leaves the tenant.
+  try {
+    const admin = await import("firebase-admin");
+    const snap = await admin.firestore().doc("system/settings").get();
+    if (snap.exists && snap.data()?.simulationMode === true) {
+      const {recordSimEmail} = await import("./simulation/simulators/workspace.js");
+      await recordSimEmail({to: opts.to, subject: opts.subject, body: opts.text || opts.html, kind: "transactional"});
+      return true;
+    }
+  } catch {
+    /* tolerate — fall through to real send */
+  }
+
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
     logger.info("Email skipped — SMTP_USER/SMTP_PASS not configured");
     return false;

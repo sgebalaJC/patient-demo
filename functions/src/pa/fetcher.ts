@@ -233,9 +233,12 @@ export const triggerPolicyRefresh = onCall(
   {region: "us-west1", memory: "1GiB", timeoutSeconds: 540, secrets: [slackAlertsWebhook]},
   async (req) => {
     if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Sign-in required");
-    const userDoc = await db().collection("users").doc(req.auth.uid).get();
-    if (userDoc.data()?.role !== "admin") {
-      throw new HttpsError("permission-denied", "Admin access required");
+    const {isSuperAdminEmail} = await import("../superAdmins.js");
+    if (!isSuperAdminEmail(req.auth.token?.email)) {
+      const userDoc = await db().collection("users").doc(req.auth.uid).get();
+      if (userDoc.data()?.role !== "admin") {
+        throw new HttpsError("permission-denied", "Admin access required");
+      }
     }
     const {payerIds, cptCodes} = (req.data ?? {}) as {
       payerIds?: string[];

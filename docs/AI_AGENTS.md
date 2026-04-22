@@ -36,6 +36,45 @@ Each customer runs its own host with OpenClaw + the sidecar. The reference deplo
 - **Backups** — create/restore sidecar workspace backups
 - **Health** — sidecar + gateway status, stats, version
 
+## Admin agent skills
+
+Skills live at `openclaw/workspace/skills/<name>/SKILL.md` and install to
+`/root/.openclaw/workspace/skills/` on the host. They are pure prompt
+guidance — the agent reads them at session start and calls the existing
+`admin-api` endpoints. Adding a skill does not require a sidecar
+rebuild.
+
+Current catalog (non-EHR):
+
+| Skill | Purpose | Writes? |
+|-------|---------|---------|
+| `patient-records` | Search / view / update patient profiles | Yes (deactivate gated) |
+| `appointments` | Read + update appointments, cancel gated | Yes (cancel gated) |
+| `scheduling` | Propose slots, book / reschedule via admin-api | Yes (create gated) |
+| `chart-summarization` | Compose a pre-visit or intake one-pager from existing data | No |
+| `intake-forms` | List, view, approve, send-back intake submissions | Yes |
+| `secure-messaging` | Patient messaging threads | Yes |
+| `prescription-refills` | Review + update refill requests | Yes |
+| `patient-documents` | List uploaded documents | No |
+| `inbound-faxes` / `outbound-faxes` | Process the fax pipeline | Yes |
+| `prior-auth` | Prior-auth workflow | Yes |
+| `admin-tasks` | Admin todo tracking | Yes |
+| `google-workspace` | Gmail / Calendar / Drive via `gog` CLI | Yes |
+| `github-pr` | Self-service PRs against this repo | Yes |
+
+EHR skills (`drchrono`, `nextgen`, `tebra`, `ecw`, `elation`,
+`greenway`, `pfusion`, `athena`) are always installed but fail-fast with
+403 when the matching integration is disabled — see the main CLAUDE.md
+for the pattern.
+
+### Skill write-gating
+
+Any skill that can affect a shared system (calendar, EHR, patient
+deactivation) MUST require the `--authorize` CLI flag, which adds the
+`X-Operator-Authorized: true` header the sidecar checks. The agent
+proposes, the admin approves, the write happens. Never wire a skill to
+auto-execute a gated endpoint.
+
 ## Slack → admin agent
 
 Connected via **Channels tab** in the admin UI. All logic is browser-side in `web/src/lib/slack.ts` — it reads/writes `openclaw.json` via the existing `/config PATCH` + `/restart` sidecar endpoints, so adding new channels needs no sidecar rebuild.

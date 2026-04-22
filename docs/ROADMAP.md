@@ -75,7 +75,9 @@ Leverage the existing AI agent infrastructure for smarter workflows.
 | Item | Description | Platform |
 |------|-------------|----------|
 | AI triage | Patient describes symptoms, agent suggests urgency and routes to appropriate care | Web + Mobile (support chat) |
-| Smart scheduling | AI suggests optimal appointment times based on provider availability and patient history | Web + Mobile |
+| ~~Chart / intake summarization~~ | ~~Admin-agent skill (`chart-summarization`) that composes a pre-visit or intake one-pager from existing admin-api data~~ | ~~Done (admin agent skill)~~ |
+| ~~Agent-assisted scheduling~~ | ~~Admin-agent skill (`scheduling`) proposes slots from busy-time feed and books via `POST /admin-api/appointments` (operator-authorized)~~ | ~~Done (admin agent skill)~~ |
+| Smart scheduling (next) | Fold patient history + provider preferences into slot ranking; patient-facing version on support chat | Web + Mobile |
 | Auto-coding | Suggest ICD/CPT codes from visit notes | Web (admin) |
 | Automated follow-ups | Post-visit check-in messages triggered by appointment type and time elapsed | Functions |
 

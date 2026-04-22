@@ -31,6 +31,9 @@ import {
   simFaxListOutbound,
   simFaxInjectInbound,
   simFaxSend,
+  simFaxGet,
+  simFaxPatch,
+  simFaxToDrChrono,
 } from "../sim/faxes.js";
 import {
   simSmsListInbound,
@@ -1088,10 +1091,14 @@ export async function handleAdminApi(
         if (method === "GET" && sub === "inbound") return await simFaxListInbound();
         if (method === "GET" && sub === "outbound") return await simFaxListOutbound();
         if (method === "POST" && sub === "inject-inbound") return await simFaxInjectInbound(request);
+        if (method === "POST" && sub === "to-drchrono") return await simFaxToDrChrono(request);
         if (method === "POST" && sub === "send") {
           const callerUid = request.headers.get("x-caller-uid") || "sidecar";
           return await simFaxSend(request, callerUid);
         }
+        // Single-fax ops: /admin-api/faxes/:faxSid
+        if (sub && method === "GET") return await simFaxGet(sub);
+        if (sub && method === "PATCH") return await simFaxPatch(sub, request);
         return error(`Unknown faxes action: ${method} ${sub}`, 404);
       }
 

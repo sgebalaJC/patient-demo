@@ -30,6 +30,70 @@ export async function simFaxListOutbound(): Promise<Response> {
   return json({ results: snap.docs.map((d) => d.data()) });
 }
 
+/** GET a single inbound fax row by sid. */
+export async function simFaxGet(faxSid: string): Promise<Response> {
+  const snap = await getDb().doc(`${INBOUND}/${faxSid}`).get();
+  if (!snap.exists) return json({ error: "Fax not found" }, 404);
+  return json(snap.data());
+}
+
+const ALLOWED_INBOUND_PATCH_FIELDS = [
+  "status",
+  "extracted",
+  "matchedPatient",
+  "drchronoDocumentId",
+  "aurelia",
+  "emailDraft",
+  "notes",
+];
+
+/** PATCH an inbound fax row. Mirrors the real fax-actions endpoints. */
+export async function simFaxPatch(faxSid: string, request: Request): Promise<Response> {
+  const ref = getDb().doc(`${INBOUND}/${faxSid}`);
+  const snap = await ref.get();
+  if (!snap.exists) return json({ error: "Fax not found" }, 404);
+  const body = (await request.clone().json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body) return json({ error: "Invalid body" }, 400);
+  const updates: Record<string, unknown> = {};
+  for (const key of ALLOWED_INBOUND_PATCH_FIELDS) {
+    if (key in body) updates[key] = body[key];
+  }
+  await ref.update(updates);
+  return json({ ...snap.data(), ...updates });
+}
+
+/** Attach an inbound fax to a DrChrono chart (sim: just mark it). */
+export async function simFaxToDrChrono(request: Request): Promise<Response> {
+  const body = (await request.clone().json().catch(() => null)) as {
+    faxSid?: string;
+    patient?: number;
+    description?: string;
+    metatags?: string[];
+  } | null;
+  if (!body?.faxSid || !body?.patient) {
+    return json({ error: "faxSid + patient required" }, 400);
+  }
+  const ref = getDb().doc(`${INBOUND}/${body.faxSid}`);
+  const snap = await ref.get();
+  if (!snap.exists) return json({ error: "Fax not found" }, 404);
+  // Deterministic fake DrChrono document id derived from the faxSid.
+  const drchronoDocumentId = 800000 + Math.abs(hash(body.faxSid)) % 100000;
+  await ref.update({
+    drchronoDocumentId,
+    matchedPatient: {
+      drchronoId: body.patient,
+      confidence: "exact",
+    },
+  });
+  return json({ ok: true, drchronoDocumentId, patient: body.patient });
+}
+
+function hash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return h;
+}
+
 const SAMPLE_SENDERS = [
   "+14155552010",
   "+12125550142",

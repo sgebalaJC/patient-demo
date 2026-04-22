@@ -13,7 +13,6 @@ import {
     Clock,
     User
 } from 'lucide-react';
-import { EmptyState } from '../components/ui/EmptyState';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { getRefillStatusColor, getThreadStatusColor, getPriorityBadgeColor } from '../lib/status-helpers';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -95,7 +94,7 @@ export const AdminDashboardPage: React.FC = () => {
 
     return (
         <AdminGuard>
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6 h-full min-h-[720px]">
             <div>
                 <h1 className="text-3xl font-bold text-secondary-900 flex items-center">
                     <Shield className="h-8 w-8 mr-3 text-primary-600" />
@@ -106,12 +105,12 @@ export const AdminDashboardPage: React.FC = () => {
                 </p>
             </div>
 
-            {/* Recent Activity Section */}
-            <div className="grid gap-6 grid-cols-1">
+            {/* Recent Activity Section — two stacked sections, each 50% of remaining height */}
+            <div className="grid gap-6 grid-cols-1 grid-rows-2 flex-1 min-h-0">
                 {/* Recent Messages */}
                 {features.messages && (
-                    <Card className="p-6">
-                        <div className="flex items-center justify-between mb-4">
+                    <Card className="p-6 flex flex-col min-h-0 overflow-hidden">
+                        <div className="flex items-center justify-between mb-4 shrink-0">
                             <h2 className="text-lg font-semibold text-secondary-900 flex items-center">
                                 <MessageSquare className="h-5 w-5 mr-2 text-primary-600" />
                                 Recent Messages
@@ -120,7 +119,7 @@ export const AdminDashboardPage: React.FC = () => {
                                 View all
                             </Link>
                         </div>
-                        <div className="space-y-3">
+                        <div className="space-y-3 flex-1 min-h-0 overflow-y-auto">
                             {recentMessages.length > 0 ? (
                                 recentMessages.map((thread) => {
                                     const isUnread = thread.unreadForAdmin;
@@ -167,10 +166,7 @@ export const AdminDashboardPage: React.FC = () => {
                                     );
                                 })
                             ) : (
-                                <EmptyState
-                                    title="No recent messages"
-                                    inline
-                                />
+                                <p className="text-sm text-secondary-400 text-center py-8">No recent messages</p>
                             )}
                         </div>
                     </Card>
@@ -178,8 +174,8 @@ export const AdminDashboardPage: React.FC = () => {
 
                 {/* Recent Refill Requests */}
                 {features.prescriptions && (
-                    <Card className="p-6">
-                        <div className="flex items-center justify-between mb-4">
+                    <Card className="p-6 flex flex-col min-h-0 overflow-hidden">
+                        <div className="flex items-center justify-between mb-4 shrink-0">
                             <h2 className="text-lg font-semibold text-secondary-900 flex items-center">
                                 <Pill className="h-5 w-5 mr-2 text-primary-600" />
                                 Recent Refill Requests
@@ -188,7 +184,7 @@ export const AdminDashboardPage: React.FC = () => {
                                 View all
                             </Link>
                         </div>
-                        <div className="space-y-3">
+                        <div className="space-y-3 flex-1 min-h-0 overflow-y-auto">
                             {recentRefills.length > 0 ? (
                                 recentRefills.map((refill) => {
                                     const patientName = patientNames[refill.patientId];
@@ -233,10 +229,7 @@ export const AdminDashboardPage: React.FC = () => {
                                     );
                                 })
                             ) : (
-                                <EmptyState
-                                    title="No recent refill requests"
-                                    inline
-                                />
+                                <p className="text-sm text-secondary-400 text-center py-8">No recent refill requests</p>
                             )}
                         </div>
                     </Card>

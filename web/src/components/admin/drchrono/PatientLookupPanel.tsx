@@ -5,6 +5,8 @@ import { Card } from '../../ui/Card';
 import { Input } from '../../ui/Input';
 import { Button } from '../../ui/Button';
 import { sidecar, type DrChronoLookupQuery, type DrChronoLookupResult } from '../../../lib/sidecar';
+import { integrationCall } from '../../../lib/integration-call';
+import { useSimulationMode } from '../../../hooks/useSimulationMode';
 import { UnifiedPatientCard } from './UnifiedPatientCard';
 import logger from '../../../lib/logger';
 
@@ -59,6 +61,7 @@ function describeQuery(q: DrChronoLookupQuery): string {
 
 export const PatientLookupPanel: React.FC = () => {
   const [params] = useSearchParams();
+  const { enabled: simulated } = useSimulationMode();
   const [input, setInput] = useState('');
   const [query, setQuery] = useState<DrChronoLookupQuery | null>(null);
   const [result, setResult] = useState<DrChronoLookupResult | null>(null);
@@ -91,7 +94,14 @@ export const PatientLookupPanel: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      const r = await sidecar.lookupDrChronoPatient(q);
+      const r = simulated
+        ? (await integrationCall<DrChronoLookupResult>({
+            integration: 'drchrono',
+            operation: 'patient_lookup',
+            params: q as unknown as Record<string, unknown>,
+            simulated: true,
+          })).data
+        : await sidecar.lookupDrChronoPatient(q);
       if (cancelledRef.current) return;
       setResult(r);
     } catch (err: any) {
@@ -138,10 +148,10 @@ export const PatientLookupPanel: React.FC = () => {
             </Button>
           </div>
           <p className="text-xs text-secondary-500">
-            Examples: <span className="font-mono">123456</span> (DrChrono ID),{' '}
-            <span className="font-mono">jane@example.com</span>,{' '}
-            <span className="font-mono">951-555-1234</span>,{' '}
-            <span className="font-mono">Doe, Jane</span>
+            Examples: <span className="font-mono">1001</span> (DrChrono ID),{' '}
+            <span className="font-mono">grace.chen1@example.com</span>,{' '}
+            <span className="font-mono">+15551000005</span>,{' '}
+            <span className="font-mono">Patel, Hiro</span>
           </p>
         </form>
       </Card>

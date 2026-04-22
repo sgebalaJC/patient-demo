@@ -1003,7 +1003,7 @@ export async function handleAdminApi(
           return error("DrChrono path required (e.g. /admin-api/drchrono/patients)", 400);
         }
         if (await isSimulationOn()) {
-          return await simDrChrono(method, drchronoPath, url.searchParams);
+          return await simDrChrono(method, drchronoPath, url.searchParams, request);
         }
         try {
           await assertDrChronoReady();

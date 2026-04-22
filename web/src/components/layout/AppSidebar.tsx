@@ -60,6 +60,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Intake Forms', href: '/admin/intake-forms', icon: FileText, featureFlag: 'patientIntake' },
   { label: 'Prior Auth', href: '/admin/prior-auth', icon: ClipboardCheck, matchPrefix: true },
   { label: 'Faxes', href: '/admin/faxes', icon: FileText },
+  { label: 'SMS', href: '/admin/sms', icon: MessageSquare },
   { label: 'Subscriptions', href: '/admin/subscription-plans', icon: CreditCard },
   { label: 'Platform Billing', href: '/admin/platform-subscription', icon: Zap },
   { label: 'Client Errors', href: '/admin/client-errors', icon: Bug, roles: ['super_admin'] },

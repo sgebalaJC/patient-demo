@@ -29,3 +29,17 @@ export async function assertAdmin(
     throw new Error('Admin privileges required');
   }
 }
+
+/**
+ * Assert caller is a super admin (email allowlist). Throws otherwise.
+ * Used for platform-level controls (integration credentials, client errors)
+ * that should not be accessible to practice admins.
+ */
+export function assertSuperAdmin(
+  auth: { uid: string; token?: { email?: string } } | undefined,
+): void {
+  if (!auth) throw new Error('Authentication required');
+  if (!isSuperAdminEmail(auth.token?.email)) {
+    throw new Error('Super admin privileges required');
+  }
+}

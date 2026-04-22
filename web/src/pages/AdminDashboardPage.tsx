@@ -94,23 +94,23 @@ export const AdminDashboardPage: React.FC = () => {
 
     return (
         <AdminGuard>
-        <div className="flex flex-col gap-6 h-full min-h-[720px]">
+        <div className="flex flex-col gap-4 h-full">
             <div>
                 <h1 className="text-3xl font-bold text-secondary-900 flex items-center">
                     <Shield className="h-8 w-8 mr-3 text-primary-600" />
                     Admin Dashboard
                 </h1>
-                <p className="text-secondary-600 mt-2">
+                <p className="text-secondary-600 mt-1">
                     Platform overview and management tools
                 </p>
             </div>
 
             {/* Recent Activity Section — two stacked sections, each 50% of remaining height */}
-            <div className="grid gap-6 grid-cols-1 grid-rows-2 flex-1 min-h-0">
+            <div className="grid gap-4 grid-cols-1 grid-rows-2 flex-1 min-h-0">
                 {/* Recent Messages */}
                 {features.messages && (
-                    <Card className="p-6 flex flex-col min-h-0 overflow-hidden">
-                        <div className="flex items-center justify-between mb-4 shrink-0">
+                    <Card className="p-4 flex flex-col min-h-0 overflow-hidden">
+                        <div className="flex items-center justify-between mb-3 shrink-0">
                             <h2 className="text-lg font-semibold text-secondary-900 flex items-center">
                                 <MessageSquare className="h-5 w-5 mr-2 text-primary-600" />
                                 Recent Messages
@@ -174,8 +174,8 @@ export const AdminDashboardPage: React.FC = () => {
 
                 {/* Recent Refill Requests */}
                 {features.prescriptions && (
-                    <Card className="p-6 flex flex-col min-h-0 overflow-hidden">
-                        <div className="flex items-center justify-between mb-4 shrink-0">
+                    <Card className="p-4 flex flex-col min-h-0 overflow-hidden">
+                        <div className="flex items-center justify-between mb-3 shrink-0">
                             <h2 className="text-lg font-semibold text-secondary-900 flex items-center">
                                 <Pill className="h-5 w-5 mr-2 text-primary-600" />
                                 Recent Refill Requests

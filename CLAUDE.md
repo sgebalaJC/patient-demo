@@ -133,6 +133,7 @@ Before first deploy to a new customer project:
 ## Detailed docs
 
 - **[`docs/AI_AGENTS.md`](docs/AI_AGENTS.md)** — agents, hosts, Slack channel, sidecar ops, health checks, session management, per-fork setup
+- **[`docs/SIMULATION.md`](docs/SIMULATION.md)** — sim/real middleware, one switch, how to add a new domain, detach path
 - **[`docs/DEMO_DEPLOY.md`](docs/DEMO_DEPLOY.md)** — demo deployment walkthrough
 - **[`docs/FORK_CHECKLIST.md`](docs/FORK_CHECKLIST.md)** — per-customer fork checklist
 

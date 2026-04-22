@@ -1,11 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../hooks/useAuth';
-import {
-  collection, query, orderBy, onSnapshot, limit,
-  Timestamp,
-} from 'firebase/firestore';
-import { db, functions } from '../lib/firebase';
+import { Timestamp } from 'firebase/firestore';
+import { functions } from '../lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import {
   Inbox, Send, Copy, FileText, AlertTriangle,
@@ -23,7 +20,7 @@ import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { formatDateTime } from '../lib/date-helpers';
 import { isAdminRole } from '../lib/roles';
-import { useSimulationMode } from '../hooks/useSimulationMode';
+import { useIntegrationCollection } from '../hooks/useIntegrationCollection';
 import { faxes as faxesApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
 
@@ -145,9 +142,14 @@ const STATUS_BADGE: Record<FaxStatus, { label: string; className: string; icon: 
 
 export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
-  const { enabled: simulated } = useSimulationMode();
-  const [faxes, setFaxes] = useState<InboundFax[]>([]);
-  const [loading, setLoading] = useState(true);
+  const isAdminUser = !!user && isAdminRole(userProfile?.role);
+  const { rows: faxes, loading, simulated } = useIntegrationCollection<InboundFax>({
+    enabled: isAdminUser,
+    real: 'inbound-faxes',
+    sim: 'simulation/faxes/inbound',
+    orderField: 'receivedAt',
+    mapDoc: (d) => ({ faxSid: d.id, ...(d.data() as Omit<InboundFax, 'faxSid'>) }),
+  });
   const [filter, setFilter] = useState<'all' | FaxStatus>('all');
   const [selectedFaxSid, setSelectedFaxSid] = useState<string | null>(null);
   const [inlineDeleteTarget, setInlineDeleteTarget] = useState<InboundFax | null>(null);
@@ -168,22 +170,6 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
       setInlineDeleting(false);
     }
   }
-
-  useEffect(() => {
-    if (!user || !isAdminRole(userProfile?.role)) return;
-    setLoading(true);
-    const collectionPath = simulated ? 'simulation/faxes/inbound' : 'inbound-faxes';
-    const q = query(collection(db, collectionPath), orderBy('receivedAt', 'desc'), limit(200));
-    const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map((d) => ({ faxSid: d.id, ...(d.data() as Omit<InboundFax, 'faxSid'>) }));
-      setFaxes(data);
-      setLoading(false);
-    }, (err) => {
-      console.error('Failed to load faxes', err);
-      setLoading(false);
-    });
-    return unsub;
-  }, [user, userProfile, simulated]);
 
   async function handleInjectInbound() {
     setInjecting(true);

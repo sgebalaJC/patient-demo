@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { collection, limit, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
+import React, { useState } from 'react';
+import { Timestamp } from 'firebase/firestore';
 import { MessageSquare, Send, Inbox, Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { useSimulationMode } from '../hooks/useSimulationMode';
+import { useIntegrationCollection } from '../hooks/useIntegrationCollection';
 import { isAdminRole } from '../lib/roles';
-import { db } from '../lib/firebase';
 import { sms as smsApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -33,37 +32,20 @@ function formatTime(ts: Timestamp | undefined): string {
 
 export const AdminSmsPage: React.FC = () => {
   const { user, userProfile, loading: authLoading } = useAuth();
-  const { enabled: simulated } = useSimulationMode();
+  const isAdminUser = !!user && isAdminRole(userProfile?.role);
   const [tab, setTab] = useState<'outbound' | 'inbound'>('outbound');
-  const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<SmsDoc[]>([]);
   const [injecting, setInjecting] = useState(false);
 
-  useEffect(() => {
-    if (!user || !isAdminRole(userProfile?.role)) return;
-    if (!simulated) {
-      // Real-path SMS not yet surfaced here.
-      setRows([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const path = tab === 'outbound' ? 'simulation/sms/outbound' : 'simulation/sms/inbound';
-    const orderField = tab === 'outbound' ? 'sentAt' : 'receivedAt';
-    const q = query(collection(db, path), orderBy(orderField, 'desc'), limit(200));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setRows(snap.docs.map((d) => ({ sid: d.id, ...(d.data() as Omit<SmsDoc, 'sid'>) })));
-        setLoading(false);
-      },
-      (err) => {
-        console.error('SMS subscribe failed', err);
-        setLoading(false);
-      },
-    );
-    return unsub;
-  }, [user, userProfile, simulated, tab]);
+  // Real-mode SMS logs aren't surfaced yet — we only subscribe when sim is on.
+  // The hook still returns a clean empty result, and the page below handles it.
+  const { rows, loading, simulated } = useIntegrationCollection<SmsDoc>({
+    enabled: isAdminUser,
+    simOnly: true, // real-mode Twilio logs aren't surfaced here yet
+    real: tab === 'outbound' ? 'sms-outbound' : 'sms-inbound',
+    sim: tab === 'outbound' ? 'simulation/sms/outbound' : 'simulation/sms/inbound',
+    orderField: tab === 'outbound' ? 'sentAt' : 'receivedAt',
+    mapDoc: (d) => ({ sid: d.id, ...(d.data() as Omit<SmsDoc, 'sid'>) }),
+  });
 
   async function handleInject() {
     setInjecting(true);

@@ -1,9 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { db, functions, storage } from '../lib/firebase';
-import {
-  collection, onSnapshot, orderBy, query, limit, Timestamp,
-} from 'firebase/firestore';
+import { functions, storage } from '../lib/firebase';
+import { Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, deleteObject } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import {
@@ -19,6 +17,7 @@ import { formatDateTime } from '../lib/date-helpers';
 import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
 import { isAdminRole } from '../lib/roles';
 import { useSimulationMode } from '../hooks/useSimulationMode';
+import { useIntegrationCollection } from '../hooks/useIntegrationCollection';
 import { faxes as faxesApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
 
@@ -72,22 +71,16 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
   const [coverIncluded, setCoverIncluded] = useState(true);
   const [coverTo, setCoverTo] = useState('');
 
-  const [recent, setRecent] = useState<OutboundFax[]>([]);
+  const { rows: recent } = useIntegrationCollection<OutboundFax>({
+    enabled: isAdmin,
+    real: 'outbound-faxes',
+    sim: 'simulation/faxes/outbound',
+    orderField: 'submittedAt',
+    limit: 25,
+    mapDoc: (d) => ({ ...(d.data() as OutboundFax) }),
+  });
   const [deleteTarget, setDeleteTarget] = useState<OutboundFax | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    const collectionPath = simulated ? 'simulation/faxes/outbound' : 'outbound-faxes';
-    const q = query(
-      collection(db, collectionPath),
-      orderBy('submittedAt', 'desc'),
-      limit(25),
-    );
-    return onSnapshot(q, (snap) => {
-      setRecent(snap.docs.map((d) => ({ ...(d.data() as OutboundFax) })));
-    });
-  }, [isAdmin, simulated]);
 
   const toNormalized = useMemo(() => {
     try { return to ? normalizePhoneNumber(to) : ''; } catch { return ''; }

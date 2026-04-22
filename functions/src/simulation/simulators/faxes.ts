@@ -451,7 +451,14 @@ export async function seedFaxes(db: admin.firestore.Firestore): Promise<{
   let pdfsAttached = 0;
   let pdfsFailed = 0;
   let firstPdfError: string | undefined;
-  const bucketName = admin.storage().bucket().name;
+  // Storage may not be initialized on the project (no default bucket). Guard
+  // the lookup so the whole fax seed doesn't die before the Firestore writes.
+  let bucketName: string | undefined;
+  try {
+    bucketName = admin.storage().bucket().name;
+  } catch (err: any) {
+    firstPdfError = `bucket lookup: ${err?.message || String(err)}`;
+  }
 
   // Inbound — 3 samples with viewable PDFs. Upload is best-effort: if it
   // fails we still write the Firestore row (pdfPath=null) and surface the

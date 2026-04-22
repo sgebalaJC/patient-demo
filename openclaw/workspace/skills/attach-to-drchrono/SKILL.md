@@ -46,8 +46,13 @@ loop back to Step 1.
 
 ## Step 3 — Upload
 
+In sim mode the sidecar exposes this at `POST /admin-api/faxes/to-drchrono`.
+In real mode the actual upload still runs through the Cloud Functions
+callable `attachFaxToDrChrono` — the sidecar path is not wired up yet.
+Payload shape is the same either way:
+
 ```bash
-admin-api POST /drchrono-attach '{
+admin-api POST /faxes/to-drchrono '{
   "patient": 12345678,
   "description": "Lab results — CBC panel — 2026-04-14",
   "localPath": "/root/.openclaw/workspace/uploads/cbc_panel.pdf",

@@ -22,6 +22,12 @@ admin-api GET /appointments?status=completed&limit=10
 admin-api GET /appointments/upcoming
 ```
 
+## Open slots on a date
+
+```bash
+admin-api GET /appointments/slots?date=2026-04-25
+```
+
 ## By patient
 
 ```bash
@@ -32,6 +38,12 @@ admin-api GET /appointments/patient/PATIENT_ID
 
 ```bash
 admin-api GET /appointments/APPOINTMENT_ID
+```
+
+## Create (requires authorization)
+
+```bash
+admin-api --authorize POST /appointments '{"patientId":"PID","appointmentDate":"2026-04-25T20:30:00.000Z","duration":30,"appointmentType":"follow-up"}'
 ```
 
 ## Update

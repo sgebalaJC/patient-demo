@@ -104,7 +104,9 @@ Allowed PATCH fields: `status`, `extracted`, `matchedPatient`,
    to disambiguate, set `matchedPatient.confidence` to `none` or
    `ambiguous` and STOP — do not upload.
 5. **Upload to the EHR** (only on confident match) — use
-   `/admin-api/faxes/to-drchrono`:
+   `/admin-api/faxes/to-drchrono` (sim-only at this layer today; real
+   uploads still route through the Cloud Functions callable
+   `attachFaxToDrChrono`). Payload shape is the same:
    ```bash
    admin-api POST /admin-api/faxes/to-drchrono '{
      "faxSid": "FAX_SID",

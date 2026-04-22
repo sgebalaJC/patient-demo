@@ -1,25 +1,12 @@
 ---
 name: admin-tasks
-description: Manage admin todos, notifications, and specialist referral requests
+description: Manage admin notifications and specialist referral requests
 user-invocable: true
 ---
 
 # Admin Tasks
 
-Manage todos, notifications, and specialist requests via the `admin-api` CLI.
-
----
-
-## Todos
-
-```bash
-admin-api GET /todos
-admin-api GET /todos?filter=upcoming
-admin-api GET /todos?filter=overdue
-admin-api POST /todos '{"title":"Call Dr. Smith","scheduledDateTime":"2026-04-14T10:00:00Z"}'
-admin-api PATCH /todos/TODO_ID '{"isCompleted":true}'
-admin-api DELETE /todos/TODO_ID
-```
+Manage notifications and specialist requests via the `admin-api` CLI.
 
 ---
 

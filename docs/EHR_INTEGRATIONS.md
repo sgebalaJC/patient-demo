@@ -103,11 +103,15 @@ To remove all EHR integrations from a customer fork:
 
 ## Outstanding TODOs
 
-### Verification (highest priority)
+### Verification (deferred — real-provider path unexercised)
 
-- [ ] **Browser-verify end-to-end** — sign in as super admin at `/admin/agent → Integrations`, walk through save-creds / authorize / toggle / disconnect for at least one EHR. Builds are green but no OAuth round-trip has been exercised against a live vendor.
-- [ ] **Exercise Athena preview sandbox** — Basic-auth token exchange + practiceId URL prefix make Athena the farthest from the DrChrono reference. Worth a dedicated smoke test.
-- [ ] **Confirm the split-doc model** end-to-end — save credentials, verify `clientSecret` lands in `integrations/{id}/private/credentials` and not in the public doc; verify the super-admin browser network tab never fetches the private subdoc.
+Demo runs in simulation mode (the sidecar router's sim branch precedes `assertReady`, so no clientSecret / Secret Manager / token lookup is needed to use the integrations tab for sim-mode work). The real OAuth path is deployed and IAM-wired but has never completed a live round-trip. Do these before pointing the demo at any real customer practice:
+
+- [ ] **Browser-verify end-to-end** — sign in as super admin at `/admin/agent → Integrations`, walk through save-creds → authorize → toggle → disconnect for at least one EHR. Pick DrChrono first (simplest spec).
+- [ ] **Exercise Athena preview sandbox** — Basic-auth token exchange + practiceId URL prefix make Athena the farthest from the DrChrono reference.
+- [ ] **Confirm the split-doc model** — after save, verify `clientSecret` lands in Secret Manager (`ehr_drchrono_client_secret`), NOT the public doc or private subdoc. After authorize, verify `accessToken`/`refreshToken` land in `integrations/{id}/private/credentials`. Verify the super-admin browser network tab never requests the private subdoc.
+- [ ] **Confirm disconnect cleanup** — disconnect removes public doc + private subdoc + SM secret in one callable. Pre-refactor `deleteDoc` path would have orphaned the private subdoc + SM secret.
+- [ ] **If simulation mode gets turned off** and no real integration is configured — agent EHR calls currently fail with 403 (`integration is disabled` or `not configured`). That's correct. If you want a softer fallback (e.g. Aurelia surfaces "EHR not connected" rather than a raw 403), add a mode check in the skill error handler.
 
 ### Deferred hardening
 

@@ -46,6 +46,10 @@ export default {
         '2xl': '1rem',
         '3xl': '1.5rem',
       },
+      boxShadow: {
+        soft: '0 1px 2px rgba(28,26,21,.06), 0 8px 24px rgba(28,26,21,.08)',
+        elevated: '0 2px 4px rgba(28,26,21,.06), 0 16px 40px rgba(28,26,21,.12)',
+      },
     },
   },
   plugins: [],

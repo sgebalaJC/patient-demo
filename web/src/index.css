@@ -210,13 +210,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   }
 
   .card {
-    @apply rounded-2xl border transition-all duration-300;
+    @apply rounded-2xl border shadow-soft transition-all duration-300;
     background: var(--surface-card);
     border-color: var(--secondary-200);
   }
 
   .card:hover {
-    @apply shadow-md;
+    @apply shadow-elevated;
+  }
+
+  /* Invert the silhouette logo on dark bg so it reads as white-on-dark */
+  [data-theme="dark"] .brand-logo {
+    filter: invert(1);
   }
 
   /* Dark theme card enhancements — glass effect + glow */

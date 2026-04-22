@@ -40,7 +40,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
     <img
       src={src}
       alt={BRANDING.logos.alt}
-      className={`${sizeMap[size]} w-auto ${className}`}
+      className={`${sizeMap[size]} w-auto brand-logo ${className}`}
     />
   );
 };
@@ -53,7 +53,7 @@ export const BrandTextLogo: React.FC<{ className?: string }> = ({
     <img
       src={src}
       alt={BRANDING.logos.alt}
-      className={`h-10 w-auto ${className}`}
+      className={`h-10 w-auto brand-logo ${className}`}
     />
   );
 };

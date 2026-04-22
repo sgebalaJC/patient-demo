@@ -1121,9 +1121,10 @@ export async function handleAdminApi(
 
       // ── Faxes ──
       // Path: /admin-api/faxes/<action>
-      // In sim mode reads/writes `simulation/faxes/*`. No real path yet —
-      // the UI's real fax flow continues to go directly to SignalWire via
-      // the sendOutboundFax Cloud Function until that's migrated here.
+      // Reads + PATCH work in both modes (sim → simulation/faxes/*,
+      // real → inbound-faxes / outbound-faxes). Send + to-drchrono are
+      // sim-only for now; real path still lives in the sendOutboundFax
+      // / attachFaxToDrChrono Cloud Functions until fully migrated.
       case "faxes": {
         const sub = parts[1];
         const sim = await isSimulationOn();

@@ -9,15 +9,4 @@
  *
  * See `docs/SIMULATION.md` for the full story.
  */
-import * as admin from "firebase-admin";
-
-/** Context passed to simulator ops. Retained because a few simulator
- *  modules still reference it; most ops are dead exports now but pruning
- *  them is a separate cleanup. */
-export interface SimContext {
-  uid: string;
-  role: "patient" | "admin";
-  db: admin.firestore.Firestore;
-}
-
 export {seedSimulationData, clearSimulationData} from "./seed.js";

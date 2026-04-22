@@ -1,15 +1,14 @@
 /**
- * Fax simulator — reads/writes Firestore `simulation/faxes/*` + Cloud
- * Storage `simulation/faxes/{direction}/{faxSid}/original.pdf`. Seed data
- * mirrors the real inbound-faxes/outbound-faxes shape exactly, so the UI
- * can simply subscribe to the sim collection path in sim mode.
+ * Fax seed + PDF renderer. Runtime sim ops (list/send/inject) live on
+ * the sidecar at `sidecar/src/sim/faxes.ts`; this module exists only
+ * to supply the deterministic seeded rows + synthetic PDF content for
+ * the admin sandbox.
  *
- * Real counterpart: signalwireFaxWebhook (inbound) + sendFax (outbound) +
- * `integrations/signalwire.faxNumber` (our number).
+ * Shapes mirror the real inbound-faxes/outbound-faxes collections so
+ * the UI can swap collection paths transparently.
  */
 import * as admin from "firebase-admin";
 import {PDFDocument, StandardFonts, rgb} from "pdf-lib";
-import {SimContext} from "../index.js";
 
 /** Reserved US "555" range, never routable. */
 export const SIM_FAX_NUMBER = "+15559990000";
@@ -41,20 +40,6 @@ interface OutboundFax {
   submittedBy: string;
   submittedAt: admin.firestore.Timestamp;
   completedAt: admin.firestore.Timestamp | null;
-}
-
-export async function get_our_number(): Promise<{number: string}> {
-  return {number: SIM_FAX_NUMBER};
-}
-
-export async function list_inbound(ctx: SimContext): Promise<{results: InboundFax[]}> {
-  const snap = await ctx.db.collection(INBOUND).orderBy("receivedAt", "desc").limit(200).get();
-  return {results: snap.docs.map((d) => d.data() as InboundFax)};
-}
-
-export async function list_outbound(ctx: SimContext): Promise<{results: OutboundFax[]}> {
-  const snap = await ctx.db.collection(OUTBOUND).orderBy("submittedAt", "desc").limit(200).get();
-  return {results: snap.docs.map((d) => d.data() as OutboundFax)};
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -413,17 +398,20 @@ function outboundSpecs(): FaxPdfSpec[] {
   ];
 }
 
-async function uploadPdf(path: string, bytes: Uint8Array): Promise<boolean> {
+type UploadResult = {ok: true} | {ok: false; error: string};
+
+async function uploadPdf(path: string, bytes: Uint8Array): Promise<UploadResult> {
   try {
     const file = admin.storage().bucket().file(path);
     await file.save(Buffer.from(bytes), {
       metadata: {contentType: "application/pdf"},
       resumable: false,
     });
-    return true;
+    return {ok: true};
   } catch (err: any) {
-    console.error(`[sim-fax] uploadPdf failed for ${path}:`, err?.message || err);
-    return false;
+    const msg = err?.message || String(err);
+    console.error(`[sim-fax] uploadPdf failed for ${path}:`, msg);
+    return {ok: false, error: msg};
   }
 }
 
@@ -433,68 +421,6 @@ const SAMPLE_SENDERS = [
   "+13105551177",
   "+16175550199",
 ];
-
-export async function inject_inbound(
-  ctx: SimContext,
-  params: {from?: string; pages?: number} = {},
-): Promise<{id: string}> {
-  const faxSid = `SIM-${Date.now()}`;
-  const spec = sampleSpecs()[Math.floor(Math.random() * sampleSpecs().length)];
-  spec.faxSid = faxSid;
-  const pdfBytes = await renderFaxPdf(spec);
-  const pdfPath = `${INBOUND}/${faxSid}/original.pdf`;
-  await uploadPdf(pdfPath, pdfBytes);
-  const doc: InboundFax = {
-    faxSid,
-    from: params.from || SAMPLE_SENDERS[Math.floor(Math.random() * SAMPLE_SENDERS.length)],
-    to: SIM_FAX_NUMBER,
-    pageCount: params.pages || spec.pageCount,
-    status: "needs_review",
-    receivedAt: admin.firestore.Timestamp.now(),
-    pdfPath,
-    attempts: 0,
-  };
-  await ctx.db.doc(`${INBOUND}/${faxSid}`).set(doc);
-  return {id: faxSid};
-}
-
-export async function send_fax(
-  ctx: SimContext,
-  params: {to?: string; subject?: string; fileCount?: number},
-): Promise<{id: string; faxSid: string; status: OutboundFax["status"]}> {
-  if (!params.to) throw new Error("to required");
-  const faxSid = `SIM-OUT-${Date.now()}`;
-  const spec = outboundSpecs()[0];
-  spec.faxSid = faxSid;
-  if (params.subject) spec.procedure = params.subject;
-  const pdfBytes = await renderFaxPdf(spec);
-  const pdfPath = `${OUTBOUND}/${faxSid}/original.pdf`;
-  await uploadPdf(pdfPath, pdfBytes);
-  const doc: OutboundFax & {pdfPath: string} = {
-    faxSid,
-    from: SIM_FAX_NUMBER,
-    to: params.to,
-    subject: params.subject || null,
-    pageCount: spec.pageCount,
-    fileCount: params.fileCount || 1,
-    status: "queued",
-    submittedBy: ctx.uid,
-    submittedAt: admin.firestore.Timestamp.now(),
-    completedAt: null,
-    pdfPath,
-  };
-  await ctx.db.doc(`${OUTBOUND}/${faxSid}`).set(doc);
-  setTimeout(() => {
-    ctx.db
-      .doc(`${OUTBOUND}/${faxSid}`)
-      .update({
-        status: "delivered",
-        completedAt: admin.firestore.Timestamp.now(),
-      })
-      .catch(() => {/* tolerate */});
-  }, 2000);
-  return {id: faxSid, faxSid, status: "queued"};
-}
 
 /**
  * Idempotent seeder. Uses deterministic faxSids so the same PDFs land in

@@ -148,7 +148,7 @@ export const AgentPage: React.FC = () => {
         </div>
 
         {/* Status indicator */}
-        <div className="px-4 pt-3 border-t border-secondary-200">
+        <div className="px-4 py-3 border-t border-secondary-200">
           <div className="flex items-center gap-2 text-xs text-secondary-500">
             <span
               className={`h-2 w-2 rounded-full ${

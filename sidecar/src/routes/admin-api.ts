@@ -17,8 +17,13 @@ import { getDb } from "../lib/firebase.js";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { proxyDrChrono, assertDrChronoReady } from "../lib/drchrono.js";
 import { proxyAthena, assertAthenaReady } from "../lib/athena.js";
+import { proxyElation, assertElationReady } from "../lib/elation.js";
+import { proxyEcw, assertEcwReady } from "../lib/ecw.js";
 import { isSimulationOn } from "../sim/index.js";
 import { simDrChrono } from "../sim/drchrono.js";
+import { simAthena } from "../sim/athena.js";
+import { simElation } from "../sim/elation.js";
+import { simEcw } from "../sim/ecw.js";
 import {
   simFaxGetOurNumber,
   simFaxListInbound,
@@ -1018,7 +1023,7 @@ export async function handleAdminApi(
           return error("Athena path required (e.g. /admin-api/athena/patients)", 400);
         }
         if (await isSimulationOn()) {
-          return error("Athena sim not yet implemented", 501);
+          return await simAthena(method, athenaPath, url.searchParams);
         }
         try {
           await assertAthenaReady();
@@ -1026,6 +1031,46 @@ export async function handleAdminApi(
           return error(err.message, 403);
         }
         return await proxyAthena(method, athenaPath, url.searchParams, request);
+      }
+
+      // ── Elation Health (generic pass-through) ──
+      // Path: /admin-api/elation/<elation-path>[?...]
+      // Only active when integrations/elation { enabled: true, status: active }.
+      // TODO(sim): wire an `simElation` branch when the centralized sim layer lands.
+      case "elation": {
+        const elationPath = parts.slice(1).join("/");
+        if (!elationPath) {
+          return error("Elation path required (e.g. /admin-api/elation/patients)", 400);
+        }
+        if (await isSimulationOn()) {
+          return await simElation(method, elationPath, url.searchParams);
+        }
+        try {
+          await assertElationReady();
+        } catch (err: any) {
+          return error(err.message, 403);
+        }
+        return await proxyElation(method, elationPath, url.searchParams, request);
+      }
+
+      // ── eClinicalWorks (FHIR R4 pass-through) ──
+      // Path: /admin-api/ecw/<fhir-resource>[?...]
+      // Only active when integrations/ecw { enabled: true, status: active }.
+      // TODO(sim): wire an `simEcw` branch when the centralized sim layer lands.
+      case "ecw": {
+        const ecwPath = parts.slice(1).join("/");
+        if (!ecwPath) {
+          return error("eCW path required (e.g. /admin-api/ecw/Patient)", 400);
+        }
+        if (await isSimulationOn()) {
+          return await simEcw(method, ecwPath, url.searchParams);
+        }
+        try {
+          await assertEcwReady();
+        } catch (err: any) {
+          return error(err.message, 403);
+        }
+        return await proxyEcw(method, ecwPath, url.searchParams, request);
       }
 
       // ── Faxes ──
@@ -1100,6 +1145,8 @@ export async function handleAdminApi(
             "PATCH  /admin-api/specialist-requests/:id",
             "*      /admin-api/drchrono/<path>  (when integration enabled)",
             "*      /admin-api/athena/<path>    (when integration enabled)",
+            "*      /admin-api/elation/<path>   (when integration enabled)",
+            "*      /admin-api/ecw/<path>       (when integration enabled)",
           ],
         }, 404);
     }

@@ -130,7 +130,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
         {(sending || pendingCount > 0) && !streamingContent && (
           <div className="flex justify-start">
             <div className="bg-surface-card border border-secondary-200 rounded-xl px-4 py-2.5 rounded-bl-sm flex items-center gap-2">
-              <LoadingSpinner size="sm" />
+              <LoadingSpinner size="sm" className="p-0" />
               {pendingCount > 0 && (
                 <span className="text-xs text-secondary-400">+{pendingCount} queued</span>
               )}

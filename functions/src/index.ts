@@ -3112,6 +3112,22 @@ export {
   athenaSetEnabled,
 } from "./athena.js";
 
+// ─── Elation Health integration ─────────────────────────────────────
+export {
+  elationSaveCredentials,
+  elationAuthorize,
+  elationCallback,
+  elationSetEnabled,
+} from "./elation.js";
+
+// ─── eClinicalWorks (SMART-on-FHIR) integration ─────────────────────
+export {
+  ecwSaveCredentials,
+  ecwAuthorize,
+  ecwCallback,
+  ecwSetEnabled,
+} from "./ecw.js";
+
 // ─── Super-admin impersonation ───────────────────────────────────────
 /**
  * impersonateUser — super-admin-only callable.

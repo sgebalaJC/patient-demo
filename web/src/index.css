@@ -146,34 +146,19 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 @layer base {
   * {
-    @apply border-secondary-200;
+    @apply border-secondary-100;
   }
   body {
     @apply text-secondary-900 antialiased font-sans;
     font-feature-settings: "rlig" 1, "calt" 1;
-    background: linear-gradient(170deg, var(--gradient-start) 0%, var(--gradient-end) 40%, var(--gradient-start) 100%);
-    background-attachment: fixed;
+    background: var(--gradient-start);
     min-height: 100vh;
-  }
-  /* Subtle primary-colored glow at top of page */
-  body::before {
-    content: '';
-    position: fixed;
-    top: -20%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 120%;
-    height: 60%;
-    background: radial-gradient(ellipse, rgba(var(--glow-color), 0.06) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
   }
   #root {
     position: relative;
-    z-index: 1;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight;
+    @apply tracking-tight text-secondary-950;
     letter-spacing: -0.02em;
   }
 }
@@ -210,9 +195,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   }
 
   .card {
-    @apply rounded-2xl border shadow-soft transition-all duration-300;
+    @apply rounded-xl border shadow-soft transition-all duration-300;
     background: var(--surface-card);
-    border-color: var(--secondary-200);
+    border-color: var(--secondary-100);
   }
 
   .card:hover {

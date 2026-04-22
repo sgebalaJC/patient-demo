@@ -58,4 +58,5 @@ export const cernerSaveCredentials = ehr.saveCredentials;
 export const cernerAuthorize = ehr.authorize;
 export const cernerCallback = ehr.callback;
 export const cernerSetEnabled = ehr.setEnabled;
+export const cernerDisconnect = ehr.disconnect;
 export const getCernerAccessToken = ehr.getAccessToken;

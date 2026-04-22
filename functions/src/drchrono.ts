@@ -23,4 +23,5 @@ export const drchronoSaveCredentials = ehr.saveCredentials;
 export const drchronoAuthorize = ehr.authorize;
 export const drchronoCallback = ehr.callback;
 export const drchronoSetEnabled = ehr.setEnabled;
+export const drchronoDisconnect = ehr.disconnect;
 export const getDrChronoAccessToken = ehr.getAccessToken;

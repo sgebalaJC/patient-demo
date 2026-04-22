@@ -175,11 +175,14 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
     const ref = db().doc(spec.configDoc);
     const existing = await ref.get();
     const existingData = existing.data() ?? {};
-    const existingPriv = await loadPrivateCreds(spec.configDoc);
+    // Fetch the currently-stored clientSecret from SM so we can detect
+    // "unchanged" and skip burning a Secret Manager version (they count
+    // against the 10k-per-secret limit).
+    const existingSecret = await getEhrClientSecret(spec.provider);
 
     let credsChanged = !existing.exists
       || existingData.clientId !== clientId
-      || existingPriv.clientSecret !== clientSecret;
+      || existingSecret !== clientSecret;
     for (const key of credsChangeKeys) {
       if (existingData[key] !== (extra as any)[key]) credsChanged = true;
     }
@@ -196,8 +199,6 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
 
     if (existing.exists && !credsChanged) {
       await ref.set(publicBase, { merge: true });
-      // Secret may have been re-entered even if unchanged — keep it fresh.
-      await privateCredsRef(spec.configDoc).set({ clientSecret }, { merge: true });
     } else {
       await ref.set({
         ...publicBase,
@@ -207,9 +208,12 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
         grantedScope: admin.firestore.FieldValue.delete(),
         connectedAt: admin.firestore.FieldValue.delete(),
       }, { merge: true });
-      // Replace the entire private doc — any stale tokens are deleted because
-      // credentials changed.
-      await privateCredsRef(spec.configDoc).set({ clientSecret });
+      // Clear stale tokens; credentials changed or are brand new.
+      await privateCredsRef(spec.configDoc).set({});
+      // Write the (possibly new) clientSecret to Secret Manager.
+      if (clientSecret) {
+        await setEhrClientSecret(spec.provider, clientSecret);
+      }
     }
 
     logger.info(`[${spec.provider}] credentials saved`, { uid });
@@ -280,13 +284,13 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
       const snap = await ref.get();
       if (!snap.exists) throw new Error(`${spec.provider} credentials not configured`);
       const cfg = snap.data()!;
-      const priv = await loadPrivateCreds(spec.configDoc);
       const clientId = cfg.clientId as string | undefined;
       const redirectUriStored = (cfg.redirectUri as string) || redirectUri();
       const tokenUrl = spec.resolveTokenUrl(cfg);
       if (!clientId) throw new Error("clientId missing");
+      const clientSecret = await getEhrClientSecret(spec.provider);
 
-      const { headers, bodyExtras } = tokenExchangeAuth({ ...cfg, clientSecret: priv.clientSecret });
+      const { headers, bodyExtras } = tokenExchangeAuth({ ...cfg, clientSecret });
       const tokenRes = await fetch(tokenUrl, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded", ...headers },
@@ -340,6 +344,25 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
     return { ok: true, enabled };
   });
 
+  // ─── disconnect ────────────────────────────────────────────────────
+  // Removes the public doc, the private token subdoc, and the Secret
+  // Manager clientSecret. Replaces the old browser-side
+  // `deleteDoc(integrations/{id})` path — that left the private subdoc
+  // and SM secret orphaned.
+  const disconnect = onCall({}, async (request: CallableRequest<any>) => {
+    assertSuperAdmin(request.auth);
+    const ref = db().doc(spec.configDoc);
+    await Promise.all([
+      privateCredsRef(spec.configDoc).delete().catch(() => {}),
+      deleteEhrClientSecret(spec.provider).catch((err) => {
+        logger.warn(`[${spec.provider}] failed to delete SM secret`, { message: err.message });
+      }),
+    ]);
+    await ref.delete().catch(() => {});
+    logger.info(`[${spec.provider}] disconnected`, { uid: request.auth!.uid });
+    return { ok: true };
+  });
+
   // ─── getAccessToken (server-side helper) ───────────────────────────
   async function getAccessToken(): Promise<string> {
     const ref = db().doc(spec.configDoc);
@@ -355,7 +378,8 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
     if (expMs - Date.now() >= 5 * 60 * 1000) return priv.accessToken;
 
     if (!priv.refreshToken) throw new Error(`${spec.provider} refresh credentials missing`);
-    const merged = { ...cfg, clientSecret: priv.clientSecret };
+    const clientSecret = await getEhrClientSecret(spec.provider);
+    const merged = { ...cfg, clientSecret };
     const { headers, bodyExtras } = tokenExchangeAuth(merged);
     const tokenUrl = spec.resolveTokenUrl(merged);
     const tokenRes = await fetch(tokenUrl, {
@@ -383,5 +407,5 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
     return tok.access_token;
   }
 
-  return { saveCredentials, authorize, callback, setEnabled, getAccessToken };
+  return { saveCredentials, authorize, callback, setEnabled, disconnect, getAccessToken };
 }

@@ -16,24 +16,24 @@
 
 import { getDb } from "./firebase.js";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
+import { getEhrClientSecret } from "./secret-manager.js";
 
 export interface BaseEhrConfig {
   enabled?: boolean;
   status?: string;
   clientId?: string;
-  /** Populated by the factory at load time by merging the private subdoc. */
+  /** Populated by the factory at load time from Secret Manager. */
   clientSecret?: string;
-  /** Populated by the factory at load time by merging the private subdoc. */
+  /** Populated by the factory at load time from the private subdoc. */
   accessToken?: string;
-  /** Populated by the factory at load time by merging the private subdoc. */
+  /** Populated by the factory at load time from the private subdoc. */
   refreshToken?: string;
-  /** Populated by the factory at load time by merging the private subdoc. */
+  /** Populated by the factory at load time from the private subdoc. */
   tokenExpiresAt?: Timestamp;
   scope?: string;
 }
 
 interface PrivateCredentials {
-  clientSecret?: string;
   accessToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: Timestamp;
@@ -81,14 +81,16 @@ export function makeEhrProvider<C extends BaseEhrConfig>(spec: EhrProviderSpec<C
 
   async function loadConfig(): Promise<C> {
     const db = getDb();
-    const [publicSnap, privateSnap] = await Promise.all([
+    const [publicSnap, privateSnap, clientSecret] = await Promise.all([
       db.doc(spec.configDoc).get(),
       db.doc(privateCredsPath).get(),
+      // Provider id is the last segment of `integrations/<id>`.
+      getEhrClientSecret(spec.configDoc.split("/").pop() || ""),
     ]);
     if (!publicSnap.exists) throw new Error(`${spec.providerName} not configured`);
     const pub = publicSnap.data() as Record<string, unknown>;
     const priv = (privateSnap.exists ? (privateSnap.data() as PrivateCredentials) : {}) ?? {};
-    return { ...pub, ...priv } as C;
+    return { ...pub, ...priv, clientSecret } as C;
   }
 
   async function assertReady(): Promise<void> {

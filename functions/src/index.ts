@@ -3128,6 +3128,7 @@ export {
   drchronoAuthorize,
   drchronoCallback,
   drchronoSetEnabled,
+  drchronoDisconnect,
 } from "./drchrono.js";
 
 // ─── Athenahealth integration ───────────────────────────────────────
@@ -3136,6 +3137,7 @@ export {
   athenaAuthorize,
   athenaCallback,
   athenaSetEnabled,
+  athenaDisconnect,
 } from "./athena.js";
 
 // ─── Elation Health integration ─────────────────────────────────────
@@ -3144,6 +3146,7 @@ export {
   elationAuthorize,
   elationCallback,
   elationSetEnabled,
+  elationDisconnect,
 } from "./elation.js";
 
 // ─── eClinicalWorks (SMART-on-FHIR) integration ─────────────────────
@@ -3152,6 +3155,7 @@ export {
   ecwAuthorize,
   ecwCallback,
   ecwSetEnabled,
+  ecwDisconnect,
 } from "./ecw.js";
 
 // ─── NextGen Healthcare integration ─────────────────────────────────
@@ -3160,6 +3164,7 @@ export {
   nextgenAuthorize,
   nextgenCallback,
   nextgenSetEnabled,
+  nextgenDisconnect,
 } from "./nextgen.js";
 
 // ─── Tebra (Kareo) integration ──────────────────────────────────────
@@ -3168,6 +3173,7 @@ export {
   tebraAuthorize,
   tebraCallback,
   tebraSetEnabled,
+  tebraDisconnect,
 } from "./tebra.js";
 
 // ─── Greenway Health integration ────────────────────────────────────
@@ -3176,6 +3182,7 @@ export {
   greenwayAuthorize,
   greenwayCallback,
   greenwaySetEnabled,
+  greenwayDisconnect,
 } from "./greenway.js";
 
 // ─── Practice Fusion integration ────────────────────────────────────
@@ -3184,6 +3191,7 @@ export {
   pfusionAuthorize,
   pfusionCallback,
   pfusionSetEnabled,
+  pfusionDisconnect,
 } from "./pfusion.js";
 
 // ─── Cerner / Oracle Health (SMART-on-FHIR) integration ─────────────
@@ -3192,6 +3200,7 @@ export {
   cernerAuthorize,
   cernerCallback,
   cernerSetEnabled,
+  cernerDisconnect,
 } from "./cerner.js";
 
 // ─── Epic (SMART-on-FHIR) integration ───────────────────────────────
@@ -3200,6 +3209,7 @@ export {
   epicAuthorize,
   epicCallback,
   epicSetEnabled,
+  epicDisconnect,
 } from "./epic.js";
 
 // ─── Super-admin impersonation ───────────────────────────────────────

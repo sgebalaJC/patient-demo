@@ -26,4 +26,5 @@ export const elationSaveCredentials = ehr.saveCredentials;
 export const elationAuthorize = ehr.authorize;
 export const elationCallback = ehr.callback;
 export const elationSetEnabled = ehr.setEnabled;
+export const elationDisconnect = ehr.disconnect;
 export const getElationAccessToken = ehr.getAccessToken;

@@ -63,4 +63,5 @@ export const epicSaveCredentials = ehr.saveCredentials;
 export const epicAuthorize = ehr.authorize;
 export const epicCallback = ehr.callback;
 export const epicSetEnabled = ehr.setEnabled;
+export const epicDisconnect = ehr.disconnect;
 export const getEpicAccessToken = ehr.getAccessToken;

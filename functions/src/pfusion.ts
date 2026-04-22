@@ -29,4 +29,5 @@ export const pfusionSaveCredentials = ehr.saveCredentials;
 export const pfusionAuthorize = ehr.authorize;
 export const pfusionCallback = ehr.callback;
 export const pfusionSetEnabled = ehr.setEnabled;
+export const pfusionDisconnect = ehr.disconnect;
 export const getPfusionAccessToken = ehr.getAccessToken;

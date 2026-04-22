@@ -73,4 +73,5 @@ export const ecwSaveCredentials = ehr.saveCredentials;
 export const ecwAuthorize = ehr.authorize;
 export const ecwCallback = ehr.callback;
 export const ecwSetEnabled = ehr.setEnabled;
+export const ecwDisconnect = ehr.disconnect;
 export const getEcwAccessToken = ehr.getAccessToken;

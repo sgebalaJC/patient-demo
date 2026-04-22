@@ -38,22 +38,26 @@ All sim variants read from the shared `simulation/drchrono/patients` pool and re
 
 ## Data model
 
-Split-doc per provider:
+Three stores per provider, each holding what it's best at:
 
-- **Public doc** `integrations/{provider}` — non-secret metadata. Held fields:
+- **GCP Secret Manager** — `clientSecret` only (at `ehr_<provider>_client_secret`). Static OAuth app secret, rotates at most a few times a year. Access-audited, IAM-gated, versioned. The Functions SA needs `roles/secretmanager.admin`; the sidecar SA needs `roles/secretmanager.secretAccessor`.
+
+- **Private Firestore subdoc** `integrations/{provider}/private/credentials` — `accessToken`, `refreshToken`, `tokenExpiresAt`. Tokens rotate every 5–60 min under load — too frequent for Secret Manager (version limit + pricing), so they stay in Firestore where writes are cheap. Rule: `allow read, write: if false` — **all client reads blocked**, including the super admin.
+
+- **Public Firestore doc** `integrations/{provider}` — non-secret metadata:
   - `provider`, `enabled`, `status` (`"not-authorized"` | `"active"`)
   - `clientId`, `redirectUri`
   - Vendor extras: `practiceId` (Athena), `sandbox`/`preview` flags, `fhirBase`/`authUrl`/`tokenUrl` (SMART providers), `scope`, `grantedScope`, `practiceSubdomain` (DrChrono)
   - `connectedAt`, `updatedAt`, `connectedBy`
   - Rule: `isSuperAdmin()` read/delete; writes denied (Admin SDK bypasses rules).
 
-- **Private subdoc** `integrations/{provider}/private/credentials` — secrets only.
-  - `clientSecret`, `accessToken`, `refreshToken`, `tokenExpiresAt`
-  - Rule: `allow read, write: if false` — **all client reads blocked**, including the super admin. Only Admin SDK (Functions + sidecar) touches it.
+Rationale: a compromised super-admin browser session (XSS, malicious extension, credential theft) cannot exfiltrate OAuth tokens (private subdoc is ALL-DENY) or the long-lived client secret (lives in Secret Manager, no browser code path fetches it). The browser's worst case is reading public metadata.
 
-Rationale: a compromised super-admin browser session (XSS, malicious extension, credential theft) cannot exfiltrate OAuth tokens because no browser code path exists that reads the private subdoc.
+Factories merge all three at read time: `loadConfig` in `ehr-provider.ts` (sidecar) and the equivalent in `ehr-oauth.ts` (Functions) fetch public doc + private subdoc + Secret Manager in parallel and return a merged config object.
 
-Factories merge both docs at read time (`loadConfig` in `ehr-provider.ts`, `loadPrivateCreds` in `ehr-oauth.ts`) and route writes to the right doc.
+### Disconnect flow
+
+Disconnecting an integration deletes all three stores. The `<provider>Disconnect` callable (super-admin only) removes the public doc, the private subdoc, and the SM secret in one go. Direct `deleteDoc` from the browser is no longer used (would orphan the subdoc + SM secret).
 
 ## Security posture
 
@@ -107,8 +111,31 @@ To remove all EHR integrations from a customer fork:
 
 ### Deferred hardening
 
-- [ ] **Secret Manager instead of Firestore** — push `clientSecret` to GCP Secret Manager via `firebase functions:secrets:set`, store only a secret-name reference in Firestore. Removes Firestore as a secrets store entirely. Cost: a Functions redeploy on each credential change.
+- [x] ~~Secret Manager for `clientSecret`~~ — done; see "Data model" above. Tokens stay in Firestore (rotation frequency incompatible with SM's version model).
 - [ ] **Token rotation on long-lived refresh tokens** — providers that never rotate refresh tokens (DrChrono, some SMART deployments) accumulate long-lived credentials. Consider a scheduled `refreshAndRotate` job that force-refreshes tokens monthly.
+
+## Per-fork setup
+
+Before first use of integrations in a new customer fork:
+
+```bash
+# 1. Enable Secret Manager on the project
+gcloud services enable secretmanager.googleapis.com --project=<PROJECT_ID>
+
+# 2. Grant the Functions SA admin (create / addVersion / delete)
+gcloud projects add-iam-policy-binding <PROJECT_ID> \
+  --member=serviceAccount:<PROJECT_NUMBER>-compute@developer.gserviceaccount.com \
+  --role=roles/secretmanager.admin
+
+# 3. Grant the sidecar SA accessor (read only).
+# If the sidecar uses the same compute SA (default), step 2 covers it.
+# Otherwise:
+gcloud projects add-iam-policy-binding <PROJECT_ID> \
+  --member=serviceAccount:<sidecar-sa>@<PROJECT_ID>.iam.gserviceaccount.com \
+  --role=roles/secretmanager.secretAccessor
+```
+
+Without these, `saveCredentials` fails with `PERMISSION_DENIED` and token refresh in the sidecar fails the same way.
 
 ### Next-tier providers (optional, ~30 min each)
 

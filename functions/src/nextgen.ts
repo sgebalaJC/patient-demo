@@ -28,4 +28,5 @@ export const nextgenSaveCredentials = ehr.saveCredentials;
 export const nextgenAuthorize = ehr.authorize;
 export const nextgenCallback = ehr.callback;
 export const nextgenSetEnabled = ehr.setEnabled;
+export const nextgenDisconnect = ehr.disconnect;
 export const getNextGenAccessToken = ehr.getAccessToken;

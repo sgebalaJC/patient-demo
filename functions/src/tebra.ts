@@ -29,4 +29,5 @@ export const tebraSaveCredentials = ehr.saveCredentials;
 export const tebraAuthorize = ehr.authorize;
 export const tebraCallback = ehr.callback;
 export const tebraSetEnabled = ehr.setEnabled;
+export const tebraDisconnect = ehr.disconnect;
 export const getTebraAccessToken = ehr.getAccessToken;

@@ -8,8 +8,10 @@
  */
 
 import { httpsCallable } from 'firebase/functions';
-import { doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db, functions } from '../firebase';
+
+// `doc` is still used by `getIntegrationStatus`.
 
 export interface IntegrationStatus {
   provider: string;
@@ -83,5 +85,10 @@ export async function setIntegrationEnabled(
 }
 
 export async function disconnectIntegration(providerId: string): Promise<void> {
-  await deleteDoc(doc(db, 'integrations', providerId));
+  // Route through a callable so the Cloud Function can clean up all three
+  // stores (public doc, private subdoc, Secret Manager). A browser-side
+  // deleteDoc would leave the private subdoc + SM secret orphaned.
+  const fnName = `${providerId}Disconnect`;
+  const fn = httpsCallable<Record<string, never>, { ok: boolean }>(functions, fnName);
+  await fn({});
 }

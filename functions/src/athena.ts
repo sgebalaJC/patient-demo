@@ -42,4 +42,5 @@ export const athenaSaveCredentials = ehr.saveCredentials;
 export const athenaAuthorize = ehr.authorize;
 export const athenaCallback = ehr.callback;
 export const athenaSetEnabled = ehr.setEnabled;
+export const athenaDisconnect = ehr.disconnect;
 export const getAthenaAccessToken = ehr.getAccessToken;

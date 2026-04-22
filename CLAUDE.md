@@ -129,6 +129,14 @@ Before first deploy to a new customer project:
    ```
    Without this, `createCustomToken` throws `Permission 'iam.serviceAccounts.signBlob' denied`.
 5. **AI agent workspace tokens** — rewrite `{{PLACEHOLDER}}` tokens in `openclaw/**/*.md` and `openclaw/openclaw.json`. See [`docs/AI_AGENTS.md`](docs/AI_AGENTS.md) for the full placeholder list.
+6. **Secret Manager for EHR integrations** — enable the API + grant IAM. Without this, the Integrations admin tab can save clientId but `saveCredentials` will fail on `clientSecret`:
+   ```bash
+   gcloud services enable secretmanager.googleapis.com --project=<PROJECT_ID>
+   gcloud projects add-iam-policy-binding <PROJECT_ID> \
+     --member=serviceAccount:<PROJECT_NUMBER>-compute@developer.gserviceaccount.com \
+     --role=roles/secretmanager.admin
+   ```
+   Sidecar SA needs `roles/secretmanager.secretAccessor` (or `admin` via the default compute SA). See [`docs/EHR_INTEGRATIONS.md`](docs/EHR_INTEGRATIONS.md#per-fork-setup) for details.
 
 ## Detailed docs
 

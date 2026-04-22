@@ -25,4 +25,5 @@ export const greenwaySaveCredentials = ehr.saveCredentials;
 export const greenwayAuthorize = ehr.authorize;
 export const greenwayCallback = ehr.callback;
 export const greenwaySetEnabled = ehr.setEnabled;
+export const greenwayDisconnect = ehr.disconnect;
 export const getGreenwayAccessToken = ehr.getAccessToken;

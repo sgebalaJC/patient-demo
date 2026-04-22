@@ -1,49 +1,23 @@
 /**
  * Chart gap-check endpoint. Invoked by the `runChartGapCheck` Cloud
  * Function with a list of criteria; returns per-criterion
- * `{met, evidence, chartRef?, confidence?}` by asking an LLM to match
- * the criteria against a short patient chart context pulled from
- * Firestore.
+ * `{met, evidence, chartRef?, confidence?}` by asking the local
+ * OpenClaw agent to match the criteria against a short patient chart
+ * context pulled from Firestore.
  *
- * If ANTHROPIC_API_KEY is not provisioned on the sidecar, returns
- * `met: null` for every criterion with a clear "key not configured"
- * evidence string so the caller can surface the gap instead of failing.
+ * Piggybacks on the existing gateway pipeline (`/webhook/web-chat` at
+ * 127.0.0.1:GATEWAY_PORT) — same LLM routing, budget tracking, and
+ * auth the chat feature uses. No separate Anthropic key.
+ *
+ * If the gateway is unreachable or returns an error, returns
+ * `met: null` for every criterion with a clear evidence string so the
+ * caller surfaces the gap instead of failing.
  */
+import { readFileSync } from "fs";
+import { CONFIG_PATH, GATEWAY_URL } from "../lib/paths.js";
 import { getDb } from "../lib/firebase.js";
-import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 
-const ANTHROPIC_MODEL = "claude-3-5-sonnet-latest";
-const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MAX_CHART_BYTES = 12_000;
-
-const secretClient = new SecretManagerServiceClient({
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS
-    || "/root/.openclaw/credentials/google-sa-key.json",
-});
-
-let _anthropicKeyCache: { value: string | null; expiresAt: number } | null = null;
-
-async function getAnthropicKey(): Promise<string | null> {
-  const now = Date.now();
-  if (_anthropicKeyCache && _anthropicKeyCache.expiresAt > now) return _anthropicKeyCache.value;
-  if (process.env.ANTHROPIC_API_KEY) {
-    _anthropicKeyCache = { value: process.env.ANTHROPIC_API_KEY, expiresAt: now + 600_000 };
-    return _anthropicKeyCache.value;
-  }
-  const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
-  if (!projectId) return null;
-  try {
-    const [ver] = await secretClient.accessSecretVersion({
-      name: `projects/${projectId}/secrets/ANTHROPIC_API_KEY/versions/latest`,
-    });
-    const value = ver.payload?.data?.toString("utf8") ?? null;
-    _anthropicKeyCache = { value, expiresAt: now + 600_000 };
-    return value;
-  } catch {
-    _anthropicKeyCache = { value: null, expiresAt: now + 60_000 };
-    return null;
-  }
-}
 
 interface CriterionIn {
   criterionId: string;
@@ -71,11 +45,19 @@ function json(data: unknown, status = 200): Response {
   return Response.json(data, { status });
 }
 
+function loadGatewayToken(): string | null {
+  try {
+    const config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+    return config?.gateway?.auth?.token ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchPatientContext(patientId: string): Promise<string> {
   const db = getDb();
   const parts: string[] = [];
 
-  // Basic demographics + meta from users/{id}.
   const userSnap = await db.collection("users").doc(patientId).get();
   if (userSnap.exists) {
     const u = userSnap.data() as any;
@@ -90,7 +72,6 @@ async function fetchPatientContext(patientId: string): Promise<string> {
     }
   }
 
-  // Latest intake form.
   const formSnap = await db
     .collection("patient-intake-forms")
     .where("patientId", "==", patientId)
@@ -109,7 +90,6 @@ async function fetchPatientContext(patientId: string): Promise<string> {
     }
   }
 
-  // Recent refills — proxy for current meds.
   const refillSnap = await db
     .collection("prescription-refills")
     .where("patientId", "==", patientId)
@@ -124,7 +104,6 @@ async function fetchPatientContext(patientId: string): Promise<string> {
     });
   }
 
-  // Recent admin-visible messages (last 10, trimmed).
   const msgSnap = await db
     .collection("thread-messages")
     .where("patientId", "==", patientId)
@@ -146,12 +125,12 @@ function buildPrompt(req: GapCheckRequest, chart: string): string {
   const criteriaBlock = req.criteria
     .map((c, i) => `${i + 1}. [${c.criterionId}] (${c.category || "general"}) ${c.description}`)
     .join("\n");
-  return `You are evaluating whether a patient's chart supports the prior-authorization criteria below.
+  return `You are evaluating whether a patient's chart supports the prior-authorization criteria below. Do NOT chat — return only the JSON object.
 
-For each criterion, decide whether the chart evidence supports it:
-  - "yes"      → chart clearly documents this
-  - "no"       → chart clearly contradicts this or lacks documentation
-  - "unknown"  → not enough info in the chart
+For each criterion, decide based on chart evidence:
+  - true     → chart clearly documents this
+  - false    → chart clearly contradicts this or lacks documentation
+  - null     → not enough info in the chart
 Never guess past what's documented.
 
 Return a JSON object exactly matching this schema:
@@ -159,10 +138,10 @@ Return a JSON object exactly matching this schema:
   "results": [
     {
       "criterionId": "<id>",
-      "met": true | false | null,      // true = yes, false = no, null = unknown
+      "met": true | false | null,
       "evidence": "<one sentence summarizing chart text that supports your call, or 'Not documented' if unknown>",
       "chartRef": "<short pointer to where you found it, e.g. 'intake:symptom_duration' — optional>",
-      "confidence": 0.0                // 0.0 to 1.0 — how sure are you
+      "confidence": 0.0
     }
   ]
 }
@@ -176,7 +155,7 @@ ${criteriaBlock}
 CHART CONTEXT:
 ${chart || "(no chart data available)"}
 
-Respond with ONLY the JSON object, no prose.`;
+Respond with ONLY the JSON object. No prose, no code fences.`;
 }
 
 function fallbackResults(req: GapCheckRequest, reason: string): CriterionOut[] {
@@ -188,46 +167,75 @@ function fallbackResults(req: GapCheckRequest, reason: string): CriterionOut[] {
   }));
 }
 
-async function callAnthropic(apiKey: string, prompt: string): Promise<string> {
-  const res = await fetch(ANTHROPIC_URL, {
+/**
+ * POST to the local OpenClaw gateway's web-chat webhook and collect the
+ * streamed reply into a single string. Uses a dedicated sessionId per
+ * request so the chart-gap-check reasoning doesn't pollute the agent's
+ * regular chat history.
+ */
+async function callGateway(token: string, prompt: string, sessionId: string): Promise<string> {
+  const res = await fetch(`${GATEWAY_URL}/webhook/web-chat`, {
     method: "POST",
     headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
+      "Content-Type": "application/json",
+      "X-Webhook-Secret": token,
+      Accept: "text/event-stream",
     },
     body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 2048,
-      messages: [{ role: "user", content: prompt }],
+      sessionId,
+      body: prompt,
+      timestamp: new Date().toISOString(),
     }),
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(120_000),
   });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`);
+
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gateway ${res.status}: ${detail.slice(0, 200)}`);
   }
-  const data = (await res.json()) as { content: Array<{ type: string; text?: string }> };
-  const text = data.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text || "")
-    .join("");
-  return text.trim();
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const chunks: string[] = [];
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const evt = JSON.parse(payload) as { chunk?: string; done?: boolean };
+        if (typeof evt.chunk === "string") chunks.push(evt.chunk);
+        if (evt.done) return chunks.join("");
+      } catch { /* tolerate malformed events */ }
+    }
+  }
+  return chunks.join("");
 }
 
 function parseModelOutput(text: string, req: GapCheckRequest): CriterionOut[] {
-  // Strip code fences if present.
-  const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  // Agent may add conversational preamble — find the first JSON object.
+  const trimmed = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  const candidate = firstBrace >= 0 && lastBrace > firstBrace
+    ? trimmed.slice(firstBrace, lastBrace + 1)
+    : trimmed;
+
   let parsed: { results?: CriterionOut[] };
   try {
-    parsed = JSON.parse(cleaned) as { results?: CriterionOut[] };
+    parsed = JSON.parse(candidate) as { results?: CriterionOut[] };
   } catch {
-    return fallbackResults(req, "Model returned non-JSON output — please retry.");
+    return fallbackResults(req, "Agent returned non-JSON output — please retry.");
   }
   if (!parsed.results || !Array.isArray(parsed.results)) {
-    return fallbackResults(req, "Model response missing `results` array.");
+    return fallbackResults(req, "Agent response missing `results` array.");
   }
-  // Keep only criteria the caller asked about; normalize shape.
   const byId = new Map<string, CriterionOut>();
   for (const r of parsed.results) {
     if (!r || typeof r.criterionId !== "string") continue;
@@ -246,14 +254,14 @@ function parseModelOutput(text: string, req: GapCheckRequest): CriterionOut[] {
       byId.get(c.criterionId) || {
         criterionId: c.criterionId,
         met: null,
-        evidence: "Criterion omitted from model response.",
+        evidence: "Criterion omitted from agent response.",
         confidence: 0,
       },
   );
 }
 
 /**
- * Main entry. Expects the exact shape the runChartGapCheck CF POSTs.
+ * Main entry. Expects the exact shape the runChartGapCheck CF posts.
  */
 export async function runChartGapCheck(request: Request): Promise<Response> {
   const body = (await request.clone().json().catch(() => null)) as GapCheckRequest | null;
@@ -264,12 +272,12 @@ export async function runChartGapCheck(request: Request): Promise<Response> {
     return json({ results: [] });
   }
 
-  const apiKey = await getAnthropicKey();
-  if (!apiKey) {
+  const token = loadGatewayToken();
+  if (!token) {
     return json({
       results: fallbackResults(
         body,
-        "Auto-gap-check unavailable — add ANTHROPIC_API_KEY secret on the sidecar host. Coordinator can fill criteria manually.",
+        "Gap check unavailable — OpenClaw gateway not configured on this host. Coordinator can fill criteria manually.",
       ),
     });
   }
@@ -284,12 +292,13 @@ export async function runChartGapCheck(request: Request): Promise<Response> {
   }
 
   const prompt = buildPrompt(body, chart);
+  const sessionId = `chart-gap-check-${body.paId}-${Date.now()}`;
   let text: string;
   try {
-    text = await callAnthropic(apiKey, prompt);
+    text = await callGateway(token, prompt, sessionId);
   } catch (err: any) {
     return json({
-      results: fallbackResults(body, `Model call failed: ${err?.message || err}`),
+      results: fallbackResults(body, `Gateway call failed: ${err?.message || err}`),
     });
   }
 

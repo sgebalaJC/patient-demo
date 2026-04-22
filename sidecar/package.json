@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@google-cloud/secret-manager": "^6.1.1",
-    "firebase-admin": "^13.0.0"
+    "firebase-admin": "^13.0.0",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "@types/bun": "latest",

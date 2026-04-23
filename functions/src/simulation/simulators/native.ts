@@ -137,6 +137,7 @@ async function seedUsers(
     phoneNumber: "+15550000001",
     isActive: true,
     phoneVerified: true,
+    emailVerified: true,
     createdAt: ts(-60),
     updatedAt: ts(-1),
   });
@@ -164,6 +165,7 @@ async function seedUsers(
       gender: r() < 0.5 ? "female" : "male",
       isActive: r() < 0.9,
       phoneVerified: r() < 0.7,
+      emailVerified: true,
       allergies: [],
       medicalHistory: [],
       assignedDoctors: [],

@@ -550,7 +550,8 @@ Write results back via PATCH /admin-api/faxes/${fax.faxSid}. Include: \`extracte
               <Button
                 onClick={handleProcessWithAurelia}
                 disabled={!!busy || !pdfUrl}
-                className="!bg-primary-600 hover:!bg-primary-700"
+                variant="secondary"
+                className="!border-primary-600 !text-primary-700 hover:!bg-primary-50"
               >
                 <Sparkles className="w-4 h-4 mr-1.5" />
                 {busy === 'Process' ? 'Opening…' : 'Extract & Match'}

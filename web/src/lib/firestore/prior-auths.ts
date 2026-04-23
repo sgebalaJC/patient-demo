@@ -10,9 +10,18 @@ import {
   serverTimestamp,
   getDoc,
   getDocs,
+  collection,
   Unsubscribe,
 } from 'firebase/firestore';
+import { db } from '../firebase';
 import { collections } from './base';
+
+// In simulation mode, prior-auth seed data lives at simulation/native/prior-auths.
+// Resolve the right collection ref so the detail page subscribes to the same
+// docs the list page reads.
+function priorAuthsRef(simulated: boolean) {
+  return simulated ? collection(db, 'simulation/native/prior-auths') : collections.priorAuths;
+}
 import type {
   PriorAuth,
   PriorAuthStatus,
@@ -43,9 +52,10 @@ export function subscribeToPriorAuth(
   paId: string,
   onChange: (pa: PriorAuth | null) => void,
   onError: (err: Error) => void,
+  simulated = false,
 ): Unsubscribe {
   return onSnapshot(
-    doc(collections.priorAuths, paId),
+    doc(priorAuthsRef(simulated), paId),
     (snap) => onChange(snap.exists() ? ({ id: snap.id, ...(snap.data() as Omit<PriorAuth, 'id'>) }) : null),
     (err) => onError(err as Error),
   );
@@ -55,8 +65,14 @@ export function subscribeToPriorAuth(
 // tweaks, attachments). Status transitions go through the callable so the
 // state machine is enforced server-side.
 
-export async function appendNote(paId: string, authorId: string, authorName: string, text: string): Promise<void> {
-  await updateDoc(doc(collections.priorAuths, paId), {
+export async function appendNote(
+  paId: string,
+  authorId: string,
+  authorName: string,
+  text: string,
+  simulated = false,
+): Promise<void> {
+  await updateDoc(doc(priorAuthsRef(simulated), paId), {
     notes: arrayUnion({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       authorId,
@@ -68,8 +84,12 @@ export async function appendNote(paId: string, authorId: string, authorName: str
   });
 }
 
-export async function updateChecklist(paId: string, checklist: CriteriaChecklistItem[]): Promise<void> {
-  await updateDoc(doc(collections.priorAuths, paId), {
+export async function updateChecklist(
+  paId: string,
+  checklist: CriteriaChecklistItem[],
+  simulated = false,
+): Promise<void> {
+  await updateDoc(doc(priorAuthsRef(simulated), paId), {
     criteriaChecklist: checklist,
     updatedAt: serverTimestamp(),
   });

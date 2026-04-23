@@ -10,6 +10,7 @@ import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../hooks/useAuth';
+import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
 import { subscribeToPriorAuth, appendNote, updateChecklist } from '../lib/firestore/prior-auths';
 import { PaStatusBadge } from '../components/prior-auth/StatusBadge';
@@ -32,6 +33,7 @@ export const AdminPriorAuthDetailPage: React.FC = () => {
   const { paId } = useParams();
   const navigate = useNavigate();
   const { user, userProfile } = useAuth();
+  const { enabled: simulated } = useSimulationMode();
   const [pa, setPa] = useState<PriorAuth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,14 +54,15 @@ export const AdminPriorAuthDetailPage: React.FC = () => {
         setError(err.message);
         setLoading(false);
       },
+      simulated,
     );
     return unsub;
-  }, [paId]);
+  }, [paId, simulated]);
 
   async function addNote(): Promise<void> {
     if (!paId || !user || !userProfile || !noteText.trim()) return;
     const name = [userProfile.firstName, userProfile.lastName].filter(Boolean).join(' ').trim() || userProfile.email || 'Admin';
-    await appendNote(paId, user.uid, name, noteText.trim());
+    await appendNote(paId, user.uid, name, noteText.trim(), simulated);
     setNoteText('');
   }
 
@@ -92,13 +95,13 @@ export const AdminPriorAuthDetailPage: React.FC = () => {
   async function toggleCriterion(idx: number, value: boolean | null): Promise<void> {
     if (!pa || !paId) return;
     const next = pa.criteriaChecklist.map((c, i) => (i === idx ? { ...c, met: value, manuallyOverridden: true } : c));
-    await updateChecklist(paId, next);
+    await updateChecklist(paId, next, simulated);
   }
 
   async function setEvidence(idx: number, evidence: string): Promise<void> {
     if (!pa || !paId) return;
     const next = pa.criteriaChecklist.map((c, i) => (i === idx ? { ...c, evidence } : c));
-    await updateChecklist(paId, next);
+    await updateChecklist(paId, next, simulated);
   }
 
   if (!isAdminRole(userProfile?.role)) return <AccessDenied />;

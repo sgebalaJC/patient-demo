@@ -652,8 +652,10 @@ export const getFaxPdfUrl = onCall({timeoutSeconds: 30}, async (request) => {
   const {faxSid} = request.data as {faxSid: string};
   if (!faxSid) throw new HttpsError("invalid-argument", "faxSid required");
 
-  // Look up the fax in inbound-faxes (real) or simulation/faxes/* (sim).
-  // Sim faxSids are prefixed SIM-… so we can skip the real lookup for them.
+  // Look up the fax in inbound-faxes / outbound-faxes (real) or
+  // simulation/faxes/* (sim). Sim faxSids are prefixed SIM-… so we can skip
+  // the real lookup for them. Outbound docs store the GCS path under
+  // `mergedPath` (the merged + cover-page PDF) rather than `pdfPath`.
   let pdfPath: string | undefined;
   if (faxSid.startsWith("SIM-")) {
     const inSnap = await db().doc(`simulation/faxes/inbound/${faxSid}`).get();
@@ -662,18 +664,31 @@ export const getFaxPdfUrl = onCall({timeoutSeconds: 30}, async (request) => {
     } else {
       const outSnap = await db().doc(`simulation/faxes/outbound/${faxSid}`).get();
       if (!outSnap.exists) throw new HttpsError("not-found", "Fax not found");
-      pdfPath = outSnap.data()?.pdfPath;
+      const data = outSnap.data() || {};
+      pdfPath = data.pdfPath || data.mergedPath;
     }
   } else {
-    const snap = await db().collection("inbound-faxes").doc(faxSid).get();
-    if (!snap.exists) throw new HttpsError("not-found", "Fax not found");
-    pdfPath = snap.data()?.pdfPath;
+    const inSnap = await db().collection("inbound-faxes").doc(faxSid).get();
+    if (inSnap.exists) {
+      pdfPath = inSnap.data()?.pdfPath;
+    } else {
+      const outSnap = await db().collection("outbound-faxes").doc(faxSid).get();
+      if (!outSnap.exists) throw new HttpsError("not-found", "Fax not found");
+      const data = outSnap.data() || {};
+      pdfPath = data.pdfPath || data.mergedPath;
+    }
   }
   if (!pdfPath) throw new HttpsError("failed-precondition", "No PDF stored for this fax");
 
+  // Force inline disposition + application/pdf so the browser previews the
+  // file in-place. Without this, GCS sometimes returns Content-Disposition:
+  // attachment, which makes Chrome show its dark "Open" prompt instead of
+  // rendering the PDF inside our <iframe>.
   const [url] = await admin.storage().bucket().file(pdfPath).getSignedUrl({
     action: "read",
     expires: Date.now() + 15 * 60 * 1000, // 15 min
+    responseDisposition: "inline",
+    responseType: "application/pdf",
   });
   return {url};
 });

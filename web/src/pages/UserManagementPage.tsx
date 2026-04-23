@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -68,8 +69,12 @@ export const UserManagementPage: React.FC = () => {
 
   // Search state — Firestore can't LIKE, so search mode falls back to the
   // fetch-all + client-filter path (userOperations.getAllUsers with a query).
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchInput, setSearchInput] = useState('');
+  // Initial value comes from `?search=` so deep-links from other pages
+  // (e.g. SMS rows linking to a matched patient) land on a filtered view.
+  const [routeParams] = useSearchParams();
+  const initialSearch = routeParams.get('search') || '';
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [searchInput, setSearchInput] = useState(initialSearch);
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
 

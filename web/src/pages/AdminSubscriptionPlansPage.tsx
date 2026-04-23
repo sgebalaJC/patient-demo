@@ -9,7 +9,9 @@ import { Modal } from '../components/ui/Modal';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useAuth } from '../hooks/useAuth';
-import { isAdminRole } from '../lib/roles';
+import { isAdminRole, isSuperAdminRole } from '../lib/roles';
+import { AccessDenied } from '../components/ui/AccessDenied';
+import { BRANDING } from '../config/branding';
 import { subscriptionOperations } from '../lib/firestore/subscriptions';
 import type { SubscriptionPlan } from '../types';
 import { CreditCard, Plus, Trash2, Save } from 'lucide-react';
@@ -126,6 +128,12 @@ export const AdminSubscriptionPlansPage: React.FC = () => {
     features.splice(index, 1);
     setDraft({ ...draft, features });
   };
+
+  // In demo forks, restrict subscription-plan management to super-admins so
+  // a logged-in test admin can't accidentally edit demo plans for everyone.
+  if (BRANDING.isDemo && !isSuperAdminRole(userProfile?.role)) {
+    return <AdminGuard><AccessDenied /></AdminGuard>;
+  }
 
   if (loading) return <AdminGuard><LoadingSpinner /></AdminGuard>;
 

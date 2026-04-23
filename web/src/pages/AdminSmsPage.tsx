@@ -1,11 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Timestamp } from 'firebase/firestore';
-import { MessageSquare, Send, Inbox, Sparkles, RefreshCw } from 'lucide-react';
+import { MessageSquare, Send, Inbox, Sparkles, RefreshCw, UserCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { usePagedCollection } from '../hooks/usePagedCollection';
 import { isAdminRole } from '../lib/roles';
 import { sms as smsApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
+import { findUsersByPhones } from '../lib/firestore/users';
+import type { User } from '../types';
+import logger from '../lib/logger';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -56,6 +60,23 @@ export const AdminSmsPage: React.FC = () => {
     mapDoc: (d) => ({ sid: d.id, ...(d.data() as Omit<SmsDoc, 'sid'>) }),
   });
   const { rows, loading, simulated } = paged;
+
+  // For inbound rows, attribute each `from` phone to a known patient if we can.
+  // Batched lookup per page; honors sim mode so seeded inbound matches seeded
+  // patients. Map keyed by e.164 phone string.
+  const [matchedByPhone, setMatchedByPhone] = useState<Map<string, User>>(new Map());
+  useEffect(() => {
+    if (tab !== 'inbound' || rows.length === 0) {
+      setMatchedByPhone(new Map());
+      return;
+    }
+    let cancelled = false;
+    const phones = rows.map((r) => (r.from || '').trim()).filter(Boolean);
+    findUsersByPhones(phones, simulated)
+      .then((m) => { if (!cancelled) setMatchedByPhone(m); })
+      .catch((err) => { logger.error('SMS user-match failed', err); });
+    return () => { cancelled = true; };
+  }, [tab, rows, simulated]);
 
   async function handleInject() {
     setInjecting(true);
@@ -197,33 +218,53 @@ export const AdminSmsPage: React.FC = () => {
       ) : (
         <Card className="p-0 overflow-hidden">
           <ul className="divide-y divide-secondary-100">
-            {rows.map((row) => (
-              <li key={row.sid} className="p-4 flex items-start gap-3">
-                <div className="mt-0.5">
-                  {tab === 'outbound' ? (
-                    <Send className="h-4 w-4 text-primary-600" />
-                  ) : (
-                    <Inbox className="h-4 w-4 text-green-600" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs text-secondary-500">
-                      {tab === 'outbound' ? `to ${row.to}` : `from ${row.from}`}
-                    </span>
-                    <span className="text-xs text-secondary-400 shrink-0">
-                      {formatTime(tab === 'outbound' ? row.sentAt : row.receivedAt)}
-                    </span>
+            {rows.map((row) => {
+              const matched = tab === 'inbound'
+                ? matchedByPhone.get((row.from || '').trim())
+                : undefined;
+              const matchedName = matched
+                ? `${matched.firstName ?? ''} ${matched.lastName ?? ''}`.trim() || matched.email || ''
+                : '';
+              return (
+                <li key={row.sid} className="p-4 flex items-start gap-3">
+                  <div className="mt-0.5">
+                    {tab === 'outbound' ? (
+                      <Send className="h-4 w-4 text-primary-600" />
+                    ) : (
+                      <Inbox className="h-4 w-4 text-green-600" />
+                    )}
                   </div>
-                  <p className="text-sm text-secondary-800 mt-1 whitespace-pre-wrap">{row.body}</p>
-                  {row.kind && (
-                    <span className="inline-block mt-2 text-[10px] uppercase tracking-wide text-secondary-500 bg-secondary-100 rounded px-1.5 py-0.5">
-                      {row.kind}
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className="font-mono text-xs text-secondary-500">
+                          {tab === 'outbound' ? `to ${row.to}` : `from ${row.from}`}
+                        </span>
+                        {matched && matchedName && (
+                          <Link
+                            to={`/admin/users?search=${encodeURIComponent(matched.lastName || matchedName)}`}
+                            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 hover:bg-primary-100"
+                            title="Open patient record"
+                          >
+                            <UserCircle className="h-3 w-3" />
+                            {matchedName}
+                          </Link>
+                        )}
+                      </div>
+                      <span className="text-xs text-secondary-400 shrink-0">
+                        {formatTime(tab === 'outbound' ? row.sentAt : row.receivedAt)}
+                      </span>
+                    </div>
+                    <p className="text-sm text-secondary-800 mt-1 whitespace-pre-wrap">{row.body}</p>
+                    {row.kind && (
+                      <span className="inline-block mt-2 text-[10px] uppercase tracking-wide text-secondary-500 bg-secondary-100 rounded px-1.5 py-0.5">
+                        {row.kind}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
           <div className="p-3 border-t border-secondary-100">
             <PaginationBar

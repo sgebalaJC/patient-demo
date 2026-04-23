@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { functions, storage } from '../lib/firebase';
 import { Timestamp } from 'firebase/firestore';
@@ -83,6 +83,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
   const recent = paged.rows;
   const [deleteTarget, setDeleteTarget] = useState<OutboundFax | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [previewFax, setPreviewFax] = useState<OutboundFax | null>(null);
 
   const toNormalized = useMemo(() => {
     try { return to ? normalizePhoneNumber(to) : ''; } catch { return ''; }
@@ -379,7 +380,11 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
                   const tone = statusTone(fax.status);
                   const Icon = TONE_ICON[tone];
                   return (
-                    <tr key={fax.faxSid} className="border-b border-secondary-100 last:border-0">
+                    <tr
+                      key={fax.faxSid}
+                      onClick={() => setPreviewFax(fax)}
+                      className="border-b border-secondary-100 last:border-0 cursor-pointer hover:bg-secondary-50"
+                    >
                       <td className="py-3 pr-4">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${TONE_CLASS[tone]}`}>
                           <Icon className="h-3 w-3" />
@@ -403,7 +408,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
                       </td>
                       <td className="py-3 pr-2 text-right">
                         <button
-                          onClick={() => setDeleteTarget(fax)}
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(fax); }}
                           title="Delete this row + cleanup PDFs"
                           className="p-1.5 rounded text-secondary-400 hover:text-rose-600 hover:bg-rose-50"
                           aria-label="Delete outbound fax"
@@ -446,6 +451,95 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
         confirmLabel={deleting ? 'Deleting…' : 'Delete'}
         variant="danger"
       />
+
+      {previewFax && (
+        <OutboundFaxDrawer fax={previewFax} onClose={() => setPreviewFax(null)} />
+      )}
+    </div>
+  );
+};
+
+// =============================================================================
+// Outbound preview drawer — fetches a signed URL for the merged PDF and
+// renders it inline alongside the submission metadata.
+// =============================================================================
+
+const OutboundFaxDrawer: React.FC<{ fax: OutboundFax; onClose: () => void }> = ({ fax, onClose }) => {
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const fn = httpsCallable(functions, 'getFaxPdfUrl');
+        const res = (await fn({ faxSid: fax.faxSid })).data as { url: string };
+        if (!cancelled) setPdfUrl(res.url);
+      } catch (err: any) {
+        if (!cancelled) setLoadError(err?.message || 'Failed to load PDF');
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [fax.faxSid]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex justify-end" onClick={onClose}>
+      <div
+        className="w-full max-w-3xl bg-surface-card overflow-y-auto shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-secondary-50/95 backdrop-blur border-b border-secondary-200 px-6 py-4 z-10 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-secondary-900 truncate">
+              Fax {fax.faxSid.slice(0, 16)}…
+            </h2>
+            <p className="text-xs text-secondary-500 mt-0.5">
+              To {formatPhoneDisplay(fax.to)} • {fax.pageCount ?? '?'} pages • Status: {fax.status}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-secondary-100 rounded-lg" aria-label="Close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <Card className="p-4">
+            <h3 className="text-sm font-semibold text-secondary-900 mb-2">Submission</h3>
+            <dl className="grid grid-cols-[140px_1fr] gap-y-1.5 text-sm">
+              <dt className="text-secondary-500">Subject</dt>
+              <dd className="text-secondary-900">{fax.subject || <span className="text-secondary-400">—</span>}</dd>
+              <dt className="text-secondary-500">Submitted</dt>
+              <dd className="text-secondary-900">{fax.submittedAt ? formatDateTime(fax.submittedAt.toDate()) : '—'}</dd>
+              <dt className="text-secondary-500">Completed</dt>
+              <dd className="text-secondary-900">{fax.completedAt ? formatDateTime(fax.completedAt.toDate()) : '—'}</dd>
+              <dt className="text-secondary-500">From</dt>
+              <dd className="text-secondary-900 font-mono text-xs">{fax.from || '—'}</dd>
+              <dt className="text-secondary-500">Files</dt>
+              <dd className="text-secondary-900">{fax.fileCount ?? '—'}</dd>
+              {(fax.errorCode || fax.errorMessage) && (
+                <>
+                  <dt className="text-secondary-500">Error</dt>
+                  <dd className="text-rose-600">{fax.errorMessage || `Code ${fax.errorCode}`}</dd>
+                </>
+              )}
+            </dl>
+          </Card>
+
+          <Card className="p-4">
+            <h3 className="text-sm font-semibold text-secondary-900 mb-2">Merged PDF</h3>
+            {loadError && (
+              <p className="text-sm text-rose-600">{loadError}</p>
+            )}
+            {!loadError && !pdfUrl && (
+              <p className="text-sm text-secondary-500">Loading preview…</p>
+            )}
+            {pdfUrl && (
+              <iframe src={pdfUrl} title="Outbound fax PDF" className="w-full h-[700px] rounded border border-secondary-200" />
+            )}
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };

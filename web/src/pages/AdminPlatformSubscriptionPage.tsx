@@ -18,6 +18,9 @@ import { Input } from '../components/ui/Input';
 import { XCircle } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AdminGuard } from '../components/ui/AdminGuard';
+import { AccessDenied } from '../components/ui/AccessDenied';
+import { useAuth } from '../hooks/useAuth';
+import { isSuperAdminRole } from '../lib/roles';
 import { usePlatformSubscription } from '../hooks/usePlatformSubscription';
 import { platformStripe } from '../lib/platformStripe';
 import {
@@ -76,6 +79,7 @@ function progressBarColor(pct: number): string {
 export const AdminPlatformSubscriptionPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const status = searchParams.get('status');
+  const { userProfile } = useAuth();
 
   const {
     subscription,
@@ -187,6 +191,12 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
 
   const renewDate = formatDate(subscription.currentPeriodEnd);
   const cancelDate = formatDate(subscription.cancelAt ?? null);
+
+  // In demo forks, only super-admins can see platform billing — practice
+  // admins on a shared demo shouldn't see the platform vendor's bill.
+  if (BRANDING.isDemo && !isSuperAdminRole(userProfile?.role)) {
+    return <AdminGuard><AccessDenied /></AdminGuard>;
+  }
 
   return (
     <AdminGuard>

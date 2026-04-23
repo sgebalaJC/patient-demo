@@ -17,6 +17,7 @@ import {
   QueryDocumentSnapshot,
   getCountFromServer,
   collection,
+  where,
   CollectionReference,
 } from 'firebase/firestore';
 import { collections } from './base';
@@ -27,6 +28,38 @@ import logger from "../logger";
 
 export type UserSortField = 'lastName' | 'createdAt';
 export type SortDirection = 'asc' | 'desc';
+
+/**
+ * Look up users whose `phoneNumber` exactly matches one of the given numbers.
+ * Used to attribute inbound SMS / fax replies to a known patient. Honors
+ * simulation mode so seeded inbound messages can match seeded patients.
+ *
+ * Firestore caps `where … in […]` at 30 values per query, so we batch.
+ * Returns a Map keyed by the normalized phone (e.164) for O(1) lookup.
+ */
+export async function findUsersByPhones(
+  phones: string[],
+  simulated = false,
+): Promise<Map<string, User>> {
+  const result = new Map<string, User>();
+  const distinct = Array.from(new Set(phones.filter(Boolean)));
+  if (distinct.length === 0) return result;
+  const usersRef = simulated
+    ? (collection(db, 'simulation/native/users') as CollectionReference)
+    : collections.users;
+  for (let i = 0; i < distinct.length; i += 30) {
+    const chunk = distinct.slice(i, i + 30);
+    const snap = await getDocs(query(usersRef, where('phoneNumber', 'in', chunk)));
+    snap.docs.forEach((d) => {
+      const data = d.data() as User;
+      const phone = (data.phoneNumber || '').trim();
+      if (phone && !result.has(phone)) {
+        result.set(phone, { ...data, id: d.id });
+      }
+    });
+  }
+  return result;
+}
 
 
 

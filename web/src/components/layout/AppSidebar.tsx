@@ -37,6 +37,12 @@ interface NavItem {
   featureFlag?: keyof ReturnType<typeof useFeatures>['features'];
   featureKey?: 'userManagement';
   matchPrefix?: boolean;
+  /**
+   * In demo forks (BRANDING.isDemo), hide this item from regular admins —
+   * super-admins still see it. In real customer forks, the flag is a no-op
+   * and the item is visible to all admins.
+   */
+  demoSuperAdminOnly?: boolean;
 }
 
 const PATIENT_NAV_ITEMS: NavItem[] = [
@@ -61,8 +67,8 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'Prior Auth', href: '/admin/prior-auth', icon: ClipboardCheck, matchPrefix: true },
   { label: 'Faxes', href: '/admin/faxes', icon: FileText },
   { label: 'SMS', href: '/admin/sms', icon: MessageSquare },
-  { label: 'Subscriptions', href: '/admin/subscription-plans', icon: CreditCard },
-  { label: 'Platform Billing', href: '/admin/platform-subscription', icon: Zap },
+  { label: 'Subscriptions', href: '/admin/subscription-plans', icon: CreditCard, demoSuperAdminOnly: true },
+  { label: 'Platform Billing', href: '/admin/platform-subscription', icon: Zap, demoSuperAdminOnly: true },
   { label: 'Client Errors', href: '/admin/client-errors', icon: Bug, roles: ['super_admin'] },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
@@ -120,6 +126,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
     if (item.roles && !item.roles.includes(role)) return false;
     if (item.featureFlag && !features[item.featureFlag]) return false;
     if (item.featureKey === 'userManagement' && !features.userManagement) return false;
+    if (item.demoSuperAdminOnly && BRANDING.isDemo && role !== 'super_admin') return false;
     return true;
   });
 

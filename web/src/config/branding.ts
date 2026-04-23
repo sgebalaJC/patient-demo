@@ -102,6 +102,13 @@ export interface Branding {
   patientAgent: BrandingAgent;
   /** Platform vendor (you) — the entity the practice pays to run the system */
   platformVendor: BrandingPlatformVendor;
+  /**
+   * True when this fork is the public demo (not a real customer deployment).
+   * Hides admin features that don't make sense in a shared demo — e.g.
+   * Subscriptions and Platform Billing — from non-super-admins. Real
+   * customer forks leave this false (or omit it entirely).
+   */
+  isDemo?: boolean;
 }
 
 export const BRANDING: Branding = {
@@ -155,6 +162,7 @@ export const BRANDING: Branding = {
     supportEmail: 'billing@patientportal.example',
     billingDescriptor: 'PATIENT PORTAL',
   },
+  isDemo: true,
 };
 
 /** Legacy alias — prefer `BRANDING` in new code. */

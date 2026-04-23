@@ -358,6 +358,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Admin SMS — outbound writes go through sidecar messaging/send; inbound
+    // writes come from /webhooks/twilio/inbound-sms (HMAC-verified). Clients
+    // only read for the SMS admin page.
+    match /sms-outbound/{sid} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
+    match /sms-inbound/{sid} {
+      allow read, list: if isAdmin();
+      allow write: if false;
+    }
+
     // Outbound batch staging doc — admin creates when starting a batch so
     // the Storage rule can match uploads against it. Cloud Functions reads
     // the listed paths during sendOutboundFax.

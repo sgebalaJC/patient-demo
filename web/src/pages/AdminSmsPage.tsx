@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Timestamp } from 'firebase/firestore';
 import { MessageSquare, Send, Inbox, Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -13,6 +13,7 @@ import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { formatDateTime } from '../lib/date-helpers';
+import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
 
 interface SmsDoc {
   sid: string;
@@ -35,12 +36,18 @@ export const AdminSmsPage: React.FC = () => {
   const isAdminUser = !!user && isAdminRole(userProfile?.role);
   const [tab, setTab] = useState<'outbound' | 'inbound'>('outbound');
   const [injecting, setInjecting] = useState(false);
+  const [composeTo, setComposeTo] = useState('');
+  const [composeBody, setComposeBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  // Real-mode SMS logs aren't surfaced yet — we only subscribe when sim is on.
-  // The hook still returns a clean empty result, and the page below handles it.
+  const composeToNormalized = useMemo(() => {
+    try { return composeTo ? normalizePhoneNumber(composeTo) : ''; } catch { return ''; }
+  }, [composeTo]);
+  const canSend = !!composeToNormalized && composeBody.trim().length > 0 && !sending;
+
   const { rows, loading, simulated } = useIntegrationCollection<SmsDoc>({
     enabled: isAdminUser,
-    simOnly: true, // real-mode Twilio logs aren't surfaced here yet
     real: tab === 'outbound' ? 'sms-outbound' : 'sms-inbound',
     sim: tab === 'outbound' ? 'simulation/sms/outbound' : 'simulation/sms/inbound',
     orderField: tab === 'outbound' ? 'sentAt' : 'receivedAt',
@@ -58,6 +65,32 @@ export const AdminSmsPage: React.FC = () => {
     }
   }
 
+  async function handleSend() {
+    if (!canSend) return;
+    setSending(true);
+    setSendStatus(null);
+    try {
+      const res = await smsApi.sendSMS({
+        to: composeToNormalized,
+        body: composeBody.trim(),
+        kind: 'manual',
+      });
+      setSendStatus({
+        kind: 'ok',
+        text: simulated
+          ? `Simulated SMS recorded — SID ${res.sid.slice(0, 12)}…`
+          : `SMS sent (${res.status}) — SID ${res.sid.slice(0, 12)}…`,
+      });
+      setComposeTo('');
+      setComposeBody('');
+      setTab('outbound');
+    } catch (err: any) {
+      setSendStatus({ kind: 'err', text: err?.message || 'Send failed' });
+    } finally {
+      setSending(false);
+    }
+  }
+
   if (authLoading) return <LoadingSpinner />;
   if (!user || !isAdminRole(userProfile?.role)) return <AccessDenied />;
 
@@ -69,8 +102,61 @@ export const AdminSmsPage: React.FC = () => {
         title="SMS"
         subtitle={simulated
           ? 'Simulated SMS history — reminders, welcome messages, and patient replies land here.'
-          : 'Real SMS history is not yet wired here. Turn on simulation mode to see the sandbox.'}
+          : 'Outbound admin messages + inbound replies captured from Twilio.'}
       />
+
+      <Card className="p-6 space-y-3">
+        <div className="flex items-center gap-2">
+          <Send className="h-4 w-4 text-primary-600" />
+          <h2 className="text-sm font-semibold text-secondary-900">Send SMS</h2>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-secondary-700 mb-1">Recipient phone</label>
+          <input
+            type="tel"
+            value={composeTo}
+            onChange={(e) => setComposeTo(e.target.value)}
+            placeholder="(555) 123-4567"
+            className="input w-full"
+          />
+          {composeToNormalized && (
+            <p className="text-xs text-secondary-500 mt-1">
+              Normalized: {formatPhoneDisplay(composeToNormalized)} ({composeToNormalized})
+            </p>
+          )}
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-secondary-700 mb-1">Message</label>
+          <textarea
+            value={composeBody}
+            onChange={(e) => setComposeBody(e.target.value)}
+            maxLength={1600}
+            rows={3}
+            placeholder="Short message to send via SMS…"
+            className="input w-full font-normal"
+          />
+          <p className="text-xs text-secondary-500 mt-1">
+            {composeBody.length}/1600 · {Math.max(1, Math.ceil(composeBody.length / 160))} segment{composeBody.length > 160 ? 's' : ''}
+          </p>
+        </div>
+        {sendStatus && (
+          <div
+            className={`rounded-md border p-2 text-xs ${
+              sendStatus.kind === 'ok'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-rose-200 bg-rose-50 text-rose-700'
+            }`}
+          >
+            {sendStatus.text}
+          </div>
+        )}
+        <div className="flex justify-end">
+          <Button onClick={handleSend} loading={sending} disabled={!canSend} size="sm">
+            <Send className="h-4 w-4 mr-1.5" />
+            {simulated ? 'Send (simulated)' : 'Send SMS'}
+          </Button>
+        </div>
+      </Card>
 
       <FilterTabs
         activeKey={tab}
@@ -96,7 +182,9 @@ export const AdminSmsPage: React.FC = () => {
         <Card className="p-8 text-center text-sm text-secondary-400">
           {simulated
             ? 'No SMS yet. Seed demo data or trigger a welcome SMS to populate.'
-            : 'Enable simulation mode to view the sandbox.'}
+            : tab === 'outbound'
+              ? 'No outbound SMS yet. Send one above.'
+              : 'No inbound SMS yet. Register the Twilio Messaging Webhook on your number.'}
         </Card>
       ) : (
         <Card className="p-0 overflow-hidden">

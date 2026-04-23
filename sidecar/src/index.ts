@@ -10,6 +10,7 @@
 
 import { validateAuth, type AuthResult } from "./lib/auth.js";
 import { handleChat } from "./routes/chat.js";
+import { inboundSmsWebhook } from "./real/messaging.js";
 import { readFile, writeFileTo, deleteFilePath, listFiles } from "./routes/files.js";
 import { handleStatus, handleRestart } from "./routes/container.js";
 import { handleStats } from "./routes/stats.js";
@@ -100,6 +101,13 @@ const server = Bun.serve({
     // Health check — no auth required
     if (path === "/healthz" && method === "GET") {
       return respond(Response.json({ ok: true, service: "patient-sidecar", version: "1.1.0" }));
+    }
+
+    // Twilio inbound SMS webhook — public, HMAC-verified inside the handler.
+    // No CORS headers (Twilio server-side, not a browser). Must be BEFORE
+    // the auth gate below.
+    if (path === "/webhooks/twilio/inbound-sms") {
+      return await inboundSmsWebhook(request);
     }
 
     // Rate limit

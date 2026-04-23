@@ -61,6 +61,7 @@ import {
   simSmsSend,
   simSmsInjectInbound,
 } from "../sim/messaging.js";
+import { realSmsSend } from "../real/messaging.js";
 import {
   listPriorAuths,
   getPriorAuth,
@@ -1349,18 +1350,24 @@ export async function handleAdminApi(
 
       // ── Messaging (SMS) ──
       // Path: /admin-api/messaging/<action>
-      // Sim-only for now; real Twilio path stays on Cloud Functions until
-      // migrated. Used by welcome SMS, reminders, and the admin-visible
-      // SMS history panel.
+      // Sim mode → simulation/sms/* sandbox. Real mode → Twilio REST +
+      // sms-outbound/sms-inbound. inject-inbound is a sim-only helper.
       case "messaging": {
-        if (!(await isSimulationOn())) {
-          return error("Messaging admin-api is currently sim-only; real path is on Cloud Functions", 501);
-        }
         const sub = parts[1];
-        if (method === "GET" && sub === "outbound") return await simSmsListOutbound();
-        if (method === "GET" && sub === "inbound") return await simSmsListInbound();
-        if (method === "POST" && sub === "send") return await simSmsSend(request);
-        if (method === "POST" && sub === "inject-inbound") return await simSmsInjectInbound(request);
+        const sim = await isSimulationOn();
+        if (method === "GET" && sub === "outbound") {
+          return await simSmsListOutbound(); // real-mode history uses the Firestore subscription directly
+        }
+        if (method === "GET" && sub === "inbound") {
+          return await simSmsListInbound();
+        }
+        if (method === "POST" && sub === "send") {
+          return sim ? await simSmsSend(request) : await realSmsSend(request);
+        }
+        if (method === "POST" && sub === "inject-inbound") {
+          if (!sim) return error("inject-inbound is sim-only", 400);
+          return await simSmsInjectInbound(request);
+        }
         return error(`Unknown messaging action: ${method} ${sub}`, 404);
       }
 

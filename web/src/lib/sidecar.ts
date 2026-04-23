@@ -414,7 +414,7 @@ class SidecarClient {
 
   /** Unified patient lookup — aggregates name/email/phone/id into a single
    *  result shape ready for the admin UI. Requires integrations/drchrono
-   *  enabled and the sidecar /admin-api/drchrono-patient-lookup endpoint. */
+   *  enabled and the sidecar /admin-api/drchrono/patient-lookup endpoint. */
   async lookupDrChronoPatient(query: DrChronoLookupQuery): Promise<DrChronoLookupResult> {
     const qs = new URLSearchParams();
     if (query.firstName) qs.set('firstName', query.firstName);
@@ -424,7 +424,7 @@ class SidecarClient {
     if (query.drchronoId !== undefined && query.drchronoId !== null && query.drchronoId !== '') {
       qs.set('drchronoId', String(query.drchronoId));
     }
-    return this.request(`/admin-api/drchrono-patient-lookup?${qs}`);
+    return this.request(`/admin-api/drchrono/patient-lookup?${qs}`);
   }
 
   async getDrChronoPatientDetails(drchronoId: number): Promise<DrChronoPatientDetails> {

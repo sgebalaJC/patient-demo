@@ -46,11 +46,12 @@ export const AdminSmsPage: React.FC = () => {
   }, [composeTo]);
   const canSend = !!composeToNormalized && composeBody.trim().length > 0 && !sending;
 
-  const { rows, loading, simulated } = useIntegrationCollection<SmsDoc>({
+  const { rows, loading, simulated, hasMore, loadMore } = useIntegrationCollection<SmsDoc>({
     enabled: isAdminUser,
     real: tab === 'outbound' ? 'sms-outbound' : 'sms-inbound',
     sim: tab === 'outbound' ? 'simulation/sms/outbound' : 'simulation/sms/inbound',
     orderField: tab === 'outbound' ? 'sentAt' : 'receivedAt',
+    pageSize: 50,
     mapDoc: (d) => ({ sid: d.id, ...(d.data() as Omit<SmsDoc, 'sid'>) }),
   });
 
@@ -217,6 +218,13 @@ export const AdminSmsPage: React.FC = () => {
               </li>
             ))}
           </ul>
+          {hasMore && (
+            <div className="p-3 text-center border-t border-secondary-100">
+              <Button variant="secondary" size="sm" onClick={loadMore}>
+                Load more
+              </Button>
+            </div>
+          )}
         </Card>
       )}
     </div>

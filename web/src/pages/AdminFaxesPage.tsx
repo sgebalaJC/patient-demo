@@ -143,11 +143,12 @@ const STATUS_BADGE: Record<FaxStatus, { label: string; className: string; icon: 
 export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
   const isAdminUser = !!user && isAdminRole(userProfile?.role);
-  const { rows: faxes, loading, simulated } = useIntegrationCollection<InboundFax>({
+  const { rows: faxes, loading, simulated, hasMore, loadMore } = useIntegrationCollection<InboundFax>({
     enabled: isAdminUser,
     real: 'inbound-faxes',
     sim: 'simulation/faxes/inbound',
     orderField: 'receivedAt',
+    pageSize: 50,
     mapDoc: (d) => ({ faxSid: d.id, ...(d.data() as Omit<InboundFax, 'faxSid'>) }),
   });
   const [filter, setFilter] = useState<'all' | FaxStatus>('all');
@@ -306,6 +307,13 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
               </tbody>
             </table>
           </div>
+          {hasMore && (
+            <div className="p-3 text-center border-t border-secondary-200">
+              <Button variant="secondary" size="sm" onClick={loadMore}>
+                Load more
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 

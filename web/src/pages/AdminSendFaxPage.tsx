@@ -71,12 +71,12 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
   const [coverIncluded, setCoverIncluded] = useState(true);
   const [coverTo, setCoverTo] = useState('');
 
-  const { rows: recent } = useIntegrationCollection<OutboundFax>({
+  const { rows: recent, hasMore: recentHasMore, loadMore: recentLoadMore } = useIntegrationCollection<OutboundFax>({
     enabled: isAdmin,
     real: 'outbound-faxes',
     sim: 'simulation/faxes/outbound',
     orderField: 'submittedAt',
-    limit: 25,
+    pageSize: 25,
     mapDoc: (d) => ({ ...(d.data() as OutboundFax) }),
   });
   const [deleteTarget, setDeleteTarget] = useState<OutboundFax | null>(null);
@@ -411,6 +411,13 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {recentHasMore && (
+          <div className="mt-3 text-center">
+            <Button variant="secondary" size="sm" onClick={recentLoadMore}>
+              Load more
+            </Button>
           </div>
         )}
       </Card>

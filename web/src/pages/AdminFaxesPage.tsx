@@ -18,6 +18,8 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { StatsGrid } from '../components/ui/StatsGrid';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
+import { PaginationBar } from '../components/ui/PaginationBar';
+import { usePagination } from '../hooks/usePagination';
 import { formatDateTime } from '../lib/date-helpers';
 import { isAdminRole } from '../lib/roles';
 import { useIntegrationCollection } from '../hooks/useIntegrationCollection';
@@ -143,12 +145,11 @@ const STATUS_BADGE: Record<FaxStatus, { label: string; className: string; icon: 
 export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
   const isAdminUser = !!user && isAdminRole(userProfile?.role);
-  const { rows: faxes, loading, simulated, hasMore, loadMore } = useIntegrationCollection<InboundFax>({
+  const { rows: faxes, loading, simulated } = useIntegrationCollection<InboundFax>({
     enabled: isAdminUser,
     real: 'inbound-faxes',
     sim: 'simulation/faxes/inbound',
     orderField: 'receivedAt',
-    pageSize: 50,
     mapDoc: (d) => ({ faxSid: d.id, ...(d.data() as Omit<InboundFax, 'faxSid'>) }),
   });
   const [filter, setFilter] = useState<'all' | FaxStatus>('all');
@@ -197,6 +198,15 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
 
   const filtered = filter === 'all' ? faxes : faxes.filter((f) => f.status === filter);
   const selected = faxes.find((f) => f.faxSid === selectedFaxSid) || null;
+
+  const [pagState, pagControls] = usePagination({ initialPageSize: 25 });
+  useEffect(() => { pagControls.setTotalItems(filtered.length); }, [filtered.length, pagControls]);
+  useEffect(() => { pagControls.goToPage(1); }, [filter, pagControls]);
+  const pagedFaxes = filtered.slice(
+    (pagState.currentPage - 1) * pagState.pageSize,
+    pagState.currentPage * pagState.pageSize,
+  );
+  const faxesHasMore = pagState.currentPage * pagState.pageSize < filtered.length;
 
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     embedded ? <div className="space-y-6">{children}</div> : (
@@ -263,7 +273,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
                 </tr>
               </thead>
               <tbody className="divide-y divide-secondary-200/60">
-                {filtered.map((f) => {
+                {pagedFaxes.map((f) => {
                   const badge = STATUS_BADGE[f.status];
                   const Icon = badge.icon;
                   return (
@@ -307,13 +317,17 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
               </tbody>
             </table>
           </div>
-          {hasMore && (
-            <div className="p-3 text-center border-t border-secondary-200">
-              <Button variant="secondary" size="sm" onClick={loadMore}>
-                Load more
-              </Button>
-            </div>
-          )}
+          <div className="p-3 border-t border-secondary-200">
+            <PaginationBar
+              currentPage={pagState.currentPage}
+              pageSize={pagState.pageSize}
+              totalItems={filtered.length}
+              hasMore={faxesHasMore}
+              onPreviousPage={pagControls.prevPage}
+              onNextPage={pagControls.nextPage}
+              label="faxes"
+            />
+          </div>
         </Card>
       )}
 

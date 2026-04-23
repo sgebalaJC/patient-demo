@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection,
   query,
@@ -36,12 +36,8 @@ export interface UseIntegrationCollectionOptions<T> {
   orderField: string;
   /** Direction, default 'desc'. */
   orderDir?: OrderByDirection;
-  /** Initial rows and load-more step size. Default 50. */
-  pageSize?: number;
-  /** Hard ceiling on total rows fetched (safety cap). Default 2000. */
-  maxRows?: number;
-  /** Legacy one-shot limit (no load-more). When provided, overrides pageSize
-   *  and disables loadMore. Prefer `pageSize`. */
+  /** Subscription cap — matches the house pattern (fetch chunk, slice
+   *  client-side via usePagination + PaginationBar). Default 1000. */
   limit?: number;
   /** Called when the subscribing admin doesn't have access (e.g. rule denies). Optional. */
   onError?: (err: unknown) => void;
@@ -60,10 +56,6 @@ export interface UseIntegrationCollectionResult<T> {
   loading: boolean;
   /** True when the current rows come from the sandbox. */
   simulated: boolean;
-  /** True when the subscription is at capacity (more rows likely exist server-side). */
-  hasMore: boolean;
-  /** Bump the limit by `pageSize`. No-op when a fixed `limit` was supplied. */
-  loadMore: () => void;
 }
 
 export function useIntegrationCollection<T>(
@@ -71,14 +63,9 @@ export function useIntegrationCollection<T>(
 ): UseIntegrationCollectionResult<T> {
   const {
     real, sim, orderField, orderDir = 'desc',
-    pageSize = 50, maxRows = 2000, limit: fixedLimit,
-    onError, mapDoc, enabled = true, simOnly = false,
+    limit = 1000, onError, mapDoc, enabled = true, simOnly = false,
   } = opts;
   const { enabled: simulated } = useSimulationMode();
-  // Fixed-limit mode disables the load-more ceiling; otherwise we grow from
-  // pageSize in pageSize-sized steps (clamped by maxRows).
-  const baseLimit = fixedLimit ?? pageSize;
-  const [currentLimit, setCurrentLimit] = useState<number>(baseLimit);
   const [rows, setRows] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(enabled);
   const onErrorRef = useRef(onError);
@@ -91,13 +78,6 @@ export function useIntegrationCollection<T>(
     return sim || `simulation/${real}`;
   }, [simulated, real, sim]);
 
-  // Reset the paginated window when the collection path or filters change —
-  // otherwise a user who loaded 150 outbound rows would still see a 150-row
-  // limit after flipping to the Inbound tab.
-  useEffect(() => {
-    setCurrentLimit(baseLimit);
-  }, [path, orderField, orderDir, baseLimit]);
-
   useEffect(() => {
     if (!enabled || (simOnly && !simulated)) {
       setRows([]);
@@ -105,7 +85,7 @@ export function useIntegrationCollection<T>(
       return;
     }
     setLoading(true);
-    const q = query(collection(db, path), orderBy(orderField, orderDir), fLimit(currentLimit));
+    const q = query(collection(db, path), orderBy(orderField, orderDir), fLimit(limit));
     const unsub = onSnapshot(
       q,
       (snap) => {
@@ -119,17 +99,7 @@ export function useIntegrationCollection<T>(
       },
     );
     return unsub;
-  }, [enabled, simOnly, simulated, path, orderField, orderDir, currentLimit]);
+  }, [enabled, simOnly, simulated, path, orderField, orderDir, limit]);
 
-  const loadMore = useCallback(() => {
-    if (fixedLimit !== undefined) return;
-    setCurrentLimit((n) => Math.min(n + pageSize, maxRows));
-  }, [fixedLimit, pageSize, maxRows]);
-
-  // Heuristic: if the snapshot is packed to the current limit AND we haven't
-  // hit maxRows yet, assume more rows exist server-side. False positives
-  // disappear on the next load (snap returns fewer than currentLimit).
-  const hasMore = fixedLimit === undefined && rows.length >= currentLimit && currentLimit < maxRows;
-
-  return { rows, loading, simulated, hasMore, loadMore };
+  return { rows, loading, simulated };
 }

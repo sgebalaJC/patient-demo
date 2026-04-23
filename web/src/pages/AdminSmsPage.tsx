@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Timestamp } from 'firebase/firestore';
 import { MessageSquare, Send, Inbox, Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -12,6 +12,8 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { FilterTabs } from '../components/ui/FilterTabs';
+import { PaginationBar } from '../components/ui/PaginationBar';
+import { usePagination } from '../hooks/usePagination';
 import { formatDateTime } from '../lib/date-helpers';
 import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
 
@@ -46,14 +48,22 @@ export const AdminSmsPage: React.FC = () => {
   }, [composeTo]);
   const canSend = !!composeToNormalized && composeBody.trim().length > 0 && !sending;
 
-  const { rows, loading, simulated, hasMore, loadMore } = useIntegrationCollection<SmsDoc>({
+  const { rows, loading, simulated } = useIntegrationCollection<SmsDoc>({
     enabled: isAdminUser,
     real: tab === 'outbound' ? 'sms-outbound' : 'sms-inbound',
     sim: tab === 'outbound' ? 'simulation/sms/outbound' : 'simulation/sms/inbound',
     orderField: tab === 'outbound' ? 'sentAt' : 'receivedAt',
-    pageSize: 50,
     mapDoc: (d) => ({ sid: d.id, ...(d.data() as Omit<SmsDoc, 'sid'>) }),
   });
+
+  const [pagState, pagControls] = usePagination({ initialPageSize: 25 });
+  useEffect(() => { pagControls.setTotalItems(rows.length); }, [rows.length, pagControls]);
+  useEffect(() => { pagControls.goToPage(1); }, [tab, pagControls]);
+  const pagedRows = rows.slice(
+    (pagState.currentPage - 1) * pagState.pageSize,
+    pagState.currentPage * pagState.pageSize,
+  );
+  const hasMore = pagState.currentPage * pagState.pageSize < rows.length;
 
   async function handleInject() {
     setInjecting(true);
@@ -190,7 +200,7 @@ export const AdminSmsPage: React.FC = () => {
       ) : (
         <Card className="p-0 overflow-hidden">
           <ul className="divide-y divide-secondary-100">
-            {rows.map((row) => (
+            {pagedRows.map((row) => (
               <li key={row.sid} className="p-4 flex items-start gap-3">
                 <div className="mt-0.5">
                   {tab === 'outbound' ? (
@@ -218,13 +228,17 @@ export const AdminSmsPage: React.FC = () => {
               </li>
             ))}
           </ul>
-          {hasMore && (
-            <div className="p-3 text-center border-t border-secondary-100">
-              <Button variant="secondary" size="sm" onClick={loadMore}>
-                Load more
-              </Button>
-            </div>
-          )}
+          <div className="p-3 border-t border-secondary-100">
+            <PaginationBar
+              currentPage={pagState.currentPage}
+              pageSize={pagState.pageSize}
+              totalItems={rows.length}
+              hasMore={hasMore}
+              onPreviousPage={pagControls.prevPage}
+              onNextPage={pagControls.nextPage}
+              label="messages"
+            />
+          </div>
         </Card>
       )}
     </div>

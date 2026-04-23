@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { functions, storage } from '../lib/firebase';
 import { Timestamp } from 'firebase/firestore';
@@ -13,6 +13,8 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
+import { PaginationBar } from '../components/ui/PaginationBar';
+import { usePagination } from '../hooks/usePagination';
 import { formatDateTime } from '../lib/date-helpers';
 import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
 import { isAdminRole } from '../lib/roles';
@@ -71,14 +73,21 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
   const [coverIncluded, setCoverIncluded] = useState(true);
   const [coverTo, setCoverTo] = useState('');
 
-  const { rows: recent, hasMore: recentHasMore, loadMore: recentLoadMore } = useIntegrationCollection<OutboundFax>({
+  const { rows: recent } = useIntegrationCollection<OutboundFax>({
     enabled: isAdmin,
     real: 'outbound-faxes',
     sim: 'simulation/faxes/outbound',
     orderField: 'submittedAt',
-    pageSize: 25,
     mapDoc: (d) => ({ ...(d.data() as OutboundFax) }),
   });
+
+  const [pagState, pagControls] = usePagination({ initialPageSize: 10 });
+  useEffect(() => { pagControls.setTotalItems(recent.length); }, [recent.length, pagControls]);
+  const pagedRecent = recent.slice(
+    (pagState.currentPage - 1) * pagState.pageSize,
+    pagState.currentPage * pagState.pageSize,
+  );
+  const recentHasMore = pagState.currentPage * pagState.pageSize < recent.length;
   const [deleteTarget, setDeleteTarget] = useState<OutboundFax | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -370,7 +379,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
                 </tr>
               </thead>
               <tbody>
-                {recent.map((fax) => {
+                {pagedRecent.map((fax) => {
                   const tone = statusTone(fax.status);
                   const Icon = TONE_ICON[tone];
                   return (
@@ -413,11 +422,17 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
             </table>
           </div>
         )}
-        {recentHasMore && (
-          <div className="mt-3 text-center">
-            <Button variant="secondary" size="sm" onClick={recentLoadMore}>
-              Load more
-            </Button>
+        {recent.length > 0 && (
+          <div className="mt-3">
+            <PaginationBar
+              currentPage={pagState.currentPage}
+              pageSize={pagState.pageSize}
+              totalItems={recent.length}
+              hasMore={recentHasMore}
+              onPreviousPage={pagControls.prevPage}
+              onNextPage={pagControls.nextPage}
+              label="faxes"
+            />
           </div>
         )}
       </Card>

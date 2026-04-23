@@ -472,6 +472,7 @@ const OutboundFaxDrawer: React.FC<{ fax: OutboundFax; onClose: () => void }> = (
 
   useEffect(() => {
     let cancelled = false;
+    let revokeUrl: string | null = null;
     setLoading(true);
     setLoadError(null);
     setPdfUrl(null);
@@ -479,14 +480,26 @@ const OutboundFaxDrawer: React.FC<{ fax: OutboundFax; onClose: () => void }> = (
       try {
         const fn = httpsCallable(functions, 'getFaxPdfUrl');
         const res = (await fn({ faxSid: fax.faxSid })).data as { url: string };
-        if (!cancelled) setPdfUrl(res.url);
+        // Re-host as a same-origin blob URL — Chrome refuses to render
+        // cross-origin PDFs inline in <iframe> (shows the dark "Open"
+        // prompt instead). A blob: URL inherits the app's origin so the
+        // built-in PDF viewer renders it inline.
+        const r = await fetch(res.url);
+        if (!r.ok) throw new Error(`PDF fetch ${r.status}`);
+        const blob = await r.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        revokeUrl = blobUrl;
+        if (!cancelled) setPdfUrl(blobUrl);
       } catch (err: any) {
         if (!cancelled) setLoadError(err?.message || 'Failed to load PDF');
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (revokeUrl) URL.revokeObjectURL(revokeUrl);
+    };
   }, [fax.faxSid]);
 
   return (

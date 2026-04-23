@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -25,13 +25,13 @@ import {
     CheckCircle2,
     KeyRound,
     Eye,
+    RefreshCw,
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithCustomToken } from 'firebase/auth';
 import { functions, auth } from '../lib/firebase';
 import { sendInviteLink } from '../lib/firebase';
 import { isSuperAdminRole } from '../lib/roles';
-import { useAppSettings } from '../contexts/AppSettingsContext';
 import { UserForm } from '../components/admin/UserForm';
 import { PatientDocumentManagement } from '../components/admin/PatientDocumentManagement';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -44,14 +44,13 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { Modal } from '../components/ui/Modal';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { formatDate } from '../lib/date-helpers';
-import { DocumentSnapshot } from 'firebase/firestore';
+import { usePagedCollection } from '../hooks/usePagedCollection';
+import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import logger from '../lib/logger';
 import { alert as modalAlert } from '../lib/modals';
 export const UserManagementPage: React.FC = () => {
   const { userProfile } = useAuth();
-  const { settings: appSettings } = useAppSettings();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const isAdminUser = isAdminRole(userProfile?.role);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
@@ -61,21 +60,16 @@ export const UserManagementPage: React.FC = () => {
   const [resendingInviteFor, setResendingInviteFor] = useState<string | null>(null);
   const [resendInviteFlash, setResendInviteFlash] = useState<{ uid: string; ok: boolean } | null>(null);
 
-  // Pagination state (cursor-based) — page size from app settings
-  const pageSize = appSettings.paginationSize;
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [firstDoc, setFirstDoc] = useState<DocumentSnapshot | null>(null);
-  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
-
   // Sort state
   const [sortBy, setSortBy] = useState<UserSortField>('lastName');
   const [sortDir, setSortDir] = useState<SortDirection>('asc');
 
-  // Search state
+  // Search state — Firestore can't LIKE, so search mode falls back to the
+  // fetch-all + client-filter path (userOperations.getAllUsers with a query).
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   // Delete user state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -93,20 +87,58 @@ export const UserManagementPage: React.FC = () => {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSaved, setPasswordSaved] = useState(false);
 
-  // Fetch stats once on mount
-  useEffect(() => {
-    if (isAdminRole(userProfile?.role)) {
+  const paged = usePagedCollection<User>({
+    enabled: isAdminUser && !searchQuery,
+    real: 'users',
+    orderField: sortBy,
+    orderDir: sortDir,
+    pageSize: 25,
+    mapDoc: (d) => ({ ...(d.data() as User), id: d.id }),
+  });
 
-    }
-  }, [userProfile]);
+  const countsPredicates = useMemo(() => ({ all: [] as [string, '==', string][] }), []);
+  const { counts, refresh: refreshCounts } = useCollectionCounts({
+    enabled: isAdminUser,
+    real: 'users',
+    predicates: countsPredicates,
+  });
 
-  // Fetch users when search, sort, page size, or page 1 reset
+  // Search mode: fall back to the existing fetch-all + client-filter path.
   useEffect(() => {
-    if (isAdminRole(userProfile?.role)) {
-      fetchUsers('first');
+    if (!isAdminUser || !searchQuery) { setSearchResults([]); return; }
+    let cancelled = false;
+    setSearchLoading(true);
+    userOperations.getAllUsers(500, 1, searchQuery, sortBy, sortDir).then((res) => {
+      if (cancelled) return;
+      if (res.success && res.data) setSearchResults(res.data.users);
+      else setSearchResults([]);
+    }).catch((err) => {
+      if (!cancelled) logger.error('user search failed', err);
+    }).finally(() => {
+      if (!cancelled) setSearchLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [isAdminUser, searchQuery, sortBy, sortDir]);
+
+  const users = searchQuery ? searchResults : paged.rows;
+  const loading = searchQuery ? searchLoading : paged.loading;
+  const totalItems = searchQuery ? searchResults.length : counts.all;
+
+  const refreshAll = () => {
+    if (searchQuery) {
+      // Re-run search: setting to same value doesn't re-fire effect, so bump via identity.
+      setSearchQuery(searchQuery);
+      // trigger via state — force by clearing+restoring
+      setSearchResults([]);
+      setSearchLoading(true);
+      userOperations.getAllUsers(500, 1, searchQuery, sortBy, sortDir).then((res) => {
+        if (res.success && res.data) setSearchResults(res.data.users);
+      }).finally(() => setSearchLoading(false));
+    } else {
+      paged.refresh();
+      refreshCounts();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile, searchQuery, sortBy, sortDir, pageSize]);
+  };
 
   const handleResendInvite = async (user: User) => {
     if (!user.email) return;
@@ -123,37 +155,6 @@ export const UserManagementPage: React.FC = () => {
       setTimeout(() => setResendInviteFlash(null), 4000);
     }
   };
-
-  const fetchUsers = useCallback(async (direction: 'first' | 'next' | 'prev' = 'first') => {
-    if (!userProfile) return;
-
-    setLoading(true);
-    try {
-      const cursorDoc = direction === 'next' ? lastDoc : direction === 'prev' ? firstDoc : null;
-      const newPage = direction === 'next' ? currentPage + 1 : direction === 'prev' ? Math.max(1, currentPage - 1) : 1;
-
-      const response = await userOperations.getAllUsers(
-        pageSize, newPage, searchQuery, sortBy, sortDir, cursorDoc, direction
-      );
-
-      if (response.success && response.data) {
-        setUsers(response.data.users);
-        setTotalItems(response.data.total);
-        setHasMore(response.data.hasMore);
-        setFirstDoc(response.data.firstDoc);
-        setLastDoc(response.data.lastDoc);
-        setCurrentPage(newPage);
-      } else {
-        setUsers([]);
-        setTotalItems(0);
-      }
-    } catch (error) {
-      setUsers([]);
-      setTotalItems(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [userProfile, searchQuery, sortBy, sortDir, lastDoc, firstDoc, currentPage]);
 
   const handleAddUser = () => {
     setEditingUser(null);
@@ -202,7 +203,7 @@ export const UserManagementPage: React.FC = () => {
   };
 
   const handleFormSuccess = () => {
-    fetchUsers('first');
+    refreshAll();
     setIsFormOpen(false);
     setEditingUser(null);
   };
@@ -246,8 +247,8 @@ export const UserManagementPage: React.FC = () => {
         setShowDeleteModal(false);
         setUserToDelete(null);
         setDeleteConfirmText('');
-        fetchUsers('first');
-  
+        refreshAll();
+
       } else {
         setDeleteError(result.data.error || 'Failed to delete user');
       }
@@ -322,7 +323,7 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (loading && users.length === 0 && paged.page === 1 && !searchQuery) {
     return <AdminGuard><LoadingSpinner /></AdminGuard>;
   }
 
@@ -372,6 +373,9 @@ export const UserManagementPage: React.FC = () => {
               Reset
             </Button>
           )}
+          <Button onClick={refreshAll} loading={loading} variant="secondary" size="sm" className="flex items-center">
+            <RefreshCw className="h-4 w-4 mr-2" /> Refresh
+          </Button>
         </div>
 
         {/* Sort controls */}
@@ -573,15 +577,17 @@ export const UserManagementPage: React.FC = () => {
               ))}
             </div>
 
-            <PaginationBar
-              currentPage={currentPage}
-              pageSize={pageSize}
-              totalItems={totalItems}
-              hasMore={hasMore}
-              onPreviousPage={() => fetchUsers('prev')}
-              onNextPage={() => fetchUsers('next')}
-              label="users"
-            />
+            {!searchQuery && (
+              <PaginationBar
+                currentPage={paged.page}
+                pageSize={paged.pageSize}
+                totalItems={(paged.page - 1) * paged.pageSize + paged.rows.length + (paged.hasNext ? 1 : 0)}
+                hasMore={paged.hasNext}
+                onPreviousPage={paged.prev}
+                onNextPage={paged.next}
+                label="users"
+              />
+            )}
           </>
         )}
       </div>

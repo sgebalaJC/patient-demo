@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { PageHeader } from '../components/ui/PageHeader';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -467,19 +468,24 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
 const OutboundFaxDrawer: React.FC<{ fax: OutboundFax; onClose: () => void }> = ({ fax, onClose }) => {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+    setLoading(true);
+    setLoadError(null);
+    setPdfUrl(null);
+    (async () => {
       try {
         const fn = httpsCallable(functions, 'getFaxPdfUrl');
         const res = (await fn({ faxSid: fax.faxSid })).data as { url: string };
         if (!cancelled) setPdfUrl(res.url);
       } catch (err: any) {
         if (!cancelled) setLoadError(err?.message || 'Failed to load PDF');
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    }
-    load();
+    })();
     return () => { cancelled = true; };
   }, [fax.faxSid]);
 
@@ -528,13 +534,18 @@ const OutboundFaxDrawer: React.FC<{ fax: OutboundFax; onClose: () => void }> = (
 
           <Card className="p-4">
             <h3 className="text-sm font-semibold text-secondary-900 mb-2">Merged PDF</h3>
-            {loadError && (
-              <p className="text-sm text-rose-600">{loadError}</p>
+            {loading && (
+              <div className="flex items-center justify-center h-[700px] text-secondary-500 text-sm gap-2 border border-secondary-200 rounded">
+                <LoadingSpinner size="md" />
+                Loading PDF…
+              </div>
             )}
-            {!loadError && !pdfUrl && (
-              <p className="text-sm text-secondary-500">Loading preview…</p>
+            {!loading && loadError && (
+              <div className="flex items-center justify-center h-[700px] text-rose-600 text-sm border border-rose-200 rounded">
+                {loadError}
+              </div>
             )}
-            {pdfUrl && (
+            {!loading && !loadError && pdfUrl && (
               <iframe src={pdfUrl} title="Outbound fax PDF" className="w-full h-[700px] rounded border border-secondary-200" />
             )}
           </Card>

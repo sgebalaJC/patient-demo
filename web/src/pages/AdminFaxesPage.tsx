@@ -375,6 +375,8 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
 const FaxDetailDrawer: React.FC<{ fax: InboundFax; onClose: () => void }> = ({ fax, onClose }) => {
   const navigate = useNavigate();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     to: fax.emailDraft?.to || '',
     subject: fax.emailDraft?.subject || '',
@@ -397,17 +399,22 @@ const FaxDetailDrawer: React.FC<{ fax: InboundFax; onClose: () => void }> = ({ f
 
   useEffect(() => {
     let cancelled = false;
-    async function loadPdf() {
-      if (!fax.pdfPath) return;
+    setPdfUrl(null);
+    setPdfError(null);
+    if (!fax.pdfPath) return;
+    setPdfLoading(true);
+    (async () => {
       try {
         const fn = httpsCallable(functions, 'getFaxPdfUrl');
         const res = (await fn({ faxSid: fax.faxSid })).data as { url: string };
         if (!cancelled) setPdfUrl(res.url);
       } catch (err: any) {
         console.error('getFaxPdfUrl failed', err);
+        if (!cancelled) setPdfError(err?.message || 'Failed to load PDF');
+      } finally {
+        if (!cancelled) setPdfLoading(false);
       }
-    }
-    loadPdf();
+    })();
     return () => { cancelled = true; };
   }, [fax.faxSid, fax.pdfPath]);
 
@@ -672,9 +679,22 @@ Write results back via PATCH /admin-api/faxes/${fax.faxSid}. Include: \`extracte
           </Card>
 
           {/* PDF preview */}
-          {pdfUrl && (
+          {(pdfLoading || pdfUrl || pdfError) && (
             <Card className="p-2">
-              <iframe src={pdfUrl} title="Fax PDF" className="w-full h-[600px] rounded" />
+              {pdfLoading && (
+                <div className="flex items-center justify-center h-[600px] text-secondary-500 text-sm gap-2">
+                  <LoadingSpinner size="md" />
+                  Loading PDF…
+                </div>
+              )}
+              {!pdfLoading && pdfError && (
+                <div className="flex items-center justify-center h-[600px] text-rose-600 text-sm">
+                  {pdfError}
+                </div>
+              )}
+              {!pdfLoading && pdfUrl && (
+                <iframe src={pdfUrl} title="Fax PDF" className="w-full h-[600px] rounded" />
+              )}
             </Card>
           )}
 

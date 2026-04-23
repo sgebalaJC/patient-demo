@@ -375,19 +375,52 @@ async function seedPriorAuths(
   return PA_COUNT;
 }
 
-// Tiny stub PDF (single empty page) — embedded so seeded documents have a
-// real downloadable file without requiring Storage uploads. Browsers + the
-// PatientDocumentManagement preview render it as a blank page; that's enough
-// to demonstrate the "open patient document" flow.
-const STUB_PDF_DATA_URL =
-  "data:application/pdf;base64," +
-  "JVBERi0xLjQKJeLjz9MKMyAwIG9iago8PC9UeXBlIC9QYWdlIC9QYXJlbnQgMSAwIFIgL1Jlc291cmNlcyA8PD4+IC9NZWRpYUJveCBbMCAwIDYxMiA3OTJdIC9Db250ZW50cyBbXSA+PgplbmRvYmoKMSAwIG9iago8PC9UeXBlIC9QYWdlcyAvS2lkcyBbMyAwIFJdIC9Db3VudCAxPj4KZW5kb2JqCjIgMCBvYmoKPDwvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMSAwIFI+PgplbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMTI4IDAwMDAwIG4gCjAwMDAwMDAxNzcgMDAwMDAgbiAKMDAwMDAwMDAxNSAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNCAvUm9vdCAyIDAgUj4+CnN0YXJ0eHJlZgoyMjUKJSVFT0YK";
+/**
+ * Generate a card-shaped SVG placeholder for a seeded patient document. We
+ * render demographic text directly so the preview shows something visibly
+ * tied to the patient (vs an empty PDF). SVG data URLs render inline in the
+ * existing <img> preview path — Chrome blocks `data:application/pdf` in
+ * iframes, so we deliberately avoid PDFs for sim docs.
+ */
+function svgDocDataUrl(opts: {
+  title: string;
+  patientName: string;
+  dob: string;
+  subtitle: string;
+  accent: string;
+}): string {
+  const escape = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+  <rect width="640" height="400" rx="16" ry="16" fill="#ffffff" stroke="#d4d4d8" stroke-width="2"/>
+  <rect x="0" y="0" width="640" height="64" rx="16" ry="16" fill="${opts.accent}"/>
+  <rect x="0" y="32" width="640" height="32" fill="${opts.accent}"/>
+  <text x="24" y="42" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700" fill="#ffffff">${escape(opts.title)}</text>
+  <text x="24" y="124" font-family="Inter, Arial, sans-serif" font-size="14" fill="#71717a">PATIENT</text>
+  <text x="24" y="150" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="600" fill="#18181b">${escape(opts.patientName)}</text>
+  <text x="24" y="200" font-family="Inter, Arial, sans-serif" font-size="14" fill="#71717a">DATE OF BIRTH</text>
+  <text x="24" y="226" font-family="Inter, Arial, sans-serif" font-size="18" fill="#18181b">${escape(opts.dob)}</text>
+  <text x="24" y="276" font-family="Inter, Arial, sans-serif" font-size="14" fill="#71717a">DETAILS</text>
+  <text x="24" y="302" font-family="Inter, Arial, sans-serif" font-size="16" fill="#18181b">${escape(opts.subtitle)}</text>
+  <text x="24" y="370" font-family="Inter, Arial, sans-serif" font-size="11" fill="#a1a1aa">SIMULATED DOCUMENT — DEMO ENVIRONMENT</text>
+</svg>`;
+  return "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
+}
 
-const DOC_TEMPLATES: Array<{ type: string; fileName: string; description: string }> = [
-  { type: "drivers_license",       fileName: "drivers_license.pdf",       description: "California Driver's License" },
-  { type: "insurance_card_front",  fileName: "insurance_card_front.pdf",  description: "Insurance card — front" },
-  { type: "insurance_card_back",   fileName: "insurance_card_back.pdf",   description: "Insurance card — back" },
-  { type: "lab_results",           fileName: "lab_panel_2026.pdf",        description: "CBC + metabolic panel" },
+interface DocTemplate {
+  type: string;
+  fileName: string;
+  description: string;
+  title: string;
+  subtitle: string;
+  accent: string;
+}
+
+const DOC_TEMPLATES: DocTemplate[] = [
+  { type: "drivers_license",      fileName: "drivers_license.svg",      description: "California Driver's License", title: "DRIVER'S LICENSE",     subtitle: "DL D1234567 · Class C · Exp 2029-08-14", accent: "#2563eb" },
+  { type: "insurance_card_front", fileName: "insurance_card_front.svg", description: "Insurance card — front",      title: "MEMBER ID — FRONT",   subtitle: "Anthem PPO · Member M00012345 · Group GRP-7821", accent: "#0d9488" },
+  { type: "insurance_card_back",  fileName: "insurance_card_back.svg",  description: "Insurance card — back",       title: "MEMBER ID — BACK",    subtitle: "RxBin 003858 · RxPCN A4 · Member services 1-800-555-0199", accent: "#0d9488" },
+  { type: "lab_results",          fileName: "lab_panel_2026.svg",       description: "CBC + metabolic panel",       title: "LAB RESULTS",          subtitle: "CBC + CMP · Quest Diagnostics · Collected 2026-04-08", accent: "#9333ea" },
 ];
 
 async function seedPatientDocuments(
@@ -400,21 +433,25 @@ async function seedPatientDocuments(
   const batch = db.batch();
   let count = 0;
   for (const p of patients) {
-    // Most patients get the 3 ID/insurance docs; some get a lab result too.
     const templates = r() < 0.4 ? DOC_TEMPLATES : DOC_TEMPLATES.slice(0, 3);
     for (const t of templates) {
       const id = `doc-${p.uid}-${t.type}`;
       const offsetDays = -Math.floor(r() * 90) - 1;
+      const fileUrl = svgDocDataUrl({
+        title: t.title,
+        patientName: `${p.firstName} ${p.lastName}`,
+        dob: p.dob,
+        subtitle: t.subtitle,
+        accent: t.accent,
+      });
       batch.set(db.doc(`${path}/${id}`), {
         id,
         patientId: p.uid,
         fileName: t.fileName,
         originalFileName: t.fileName,
-        // Stub data URL — the preview/download flow handles it like any URL.
-        // Real customer deploys upload to Storage and use a signed URL here.
-        fileUrl: STUB_PDF_DATA_URL,
-        fileSize: 800,
-        fileType: "application/pdf",
+        fileUrl,
+        fileSize: fileUrl.length,
+        fileType: "image/svg+xml",
         documentType: t.type,
         description: t.description,
         uploadedAt: ts(offsetDays),

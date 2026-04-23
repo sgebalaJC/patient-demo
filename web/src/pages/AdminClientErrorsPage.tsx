@@ -1,24 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  collection,
-  deleteDoc,
-  doc,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-  Timestamp,
-} from 'firebase/firestore';
-import { AlertTriangle, Bug, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { deleteDoc, doc, Timestamp } from 'firebase/firestore';
+import { AlertTriangle, Bug, ChevronDown, ChevronRight, Trash2, RefreshCw } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { LoadingState } from '../components/ui/LoadingState';
+import { PaginationBar } from '../components/ui/PaginationBar';
+import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
+import { useCollectionCounts } from '../hooks/useCollectionCounts';
 
 interface ClientErrorDoc {
   id: string;
@@ -37,26 +31,38 @@ type LevelFilter = 'all' | 'error' | 'warn';
 
 export const AdminClientErrorsPage: React.FC = () => {
   const { userProfile } = useAuth();
-  const [rows, setRows] = useState<ClientErrorDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+  const isSuperAdmin = userProfile?.role === 'super_admin';
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [level, setLevel] = useState<LevelFilter>('all');
 
-  useEffect(() => {
-    if (userProfile?.role !== 'super_admin') return;
+  const whereClauses = useMemo<WhereClause[] | undefined>(
+    () => (level === 'all' ? undefined : [['level', '==', level]]),
+    [level],
+  );
 
-    const base = collection(db, 'client-errors');
-    const q = level === 'all'
-      ? query(base, orderBy('createdAt', 'desc'), limit(200))
-      : query(base, where('level', '==', level), orderBy('createdAt', 'desc'), limit(200));
+  const paged = usePagedCollection<ClientErrorDoc>({
+    enabled: isSuperAdmin,
+    real: 'client-errors',
+    orderField: 'createdAt',
+    pageSize: 25,
+    whereClauses,
+    mapDoc: (d) => ({ ...(d.data() as Omit<ClientErrorDoc, 'id'>), id: d.id }),
+  });
+  const rows = paged.rows;
+  const loading = paged.loading;
 
-    const unsub = onSnapshot(q, (snap) => {
-      setRows(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ClientErrorDoc, 'id'>) })));
-      setLoading(false);
-    }, () => setLoading(false));
+  const countsPredicates = useMemo(() => ({
+    all: [] as [string, '==', string][],
+    error: [['level', '==', 'error']] as [string, '==', string][],
+    warn: [['level', '==', 'warn']] as [string, '==', string][],
+  }), []);
+  const { counts, refresh: refreshCounts } = useCollectionCounts({
+    enabled: isSuperAdmin,
+    real: 'client-errors',
+    predicates: countsPredicates,
+  });
 
-    return () => unsub();
-  }, [userProfile?.role, level]);
+  const refreshAll = () => { paged.refresh(); refreshCounts(); };
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -69,20 +75,11 @@ export const AdminClientErrorsPage: React.FC = () => {
   const handleDelete = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'client-errors', id));
+      refreshAll();
     } catch {
       /* noop — reality of offline admin is fine */
     }
   };
-
-  const stats = useMemo(() => {
-    let errors = 0;
-    let warns = 0;
-    for (const r of rows) {
-      if (r.level === 'error') errors++;
-      else if (r.level === 'warn') warns++;
-    }
-    return { errors, warns };
-  }, [rows]);
 
   return (
     <AdminGuard superOnly>
@@ -98,14 +95,19 @@ export const AdminClientErrorsPage: React.FC = () => {
         activeKey={level}
         onChange={(k) => setLevel(k as LevelFilter)}
         tabs={[
-          { key: 'all', label: 'All', count: rows.length },
-          { key: 'error', label: 'Errors', count: stats.errors },
-          { key: 'warn', label: 'Warnings', count: stats.warns },
+          { key: 'all', label: 'All', count: counts.all },
+          { key: 'error', label: 'Errors', count: counts.error },
+          { key: 'warn', label: 'Warnings', count: counts.warn },
         ]}
       />
-      <p className="text-xs text-secondary-500 -mt-3">
-        Live feed. Latest 200. PII is scrubbed server-side before write.
-      </p>
+      <div className="flex items-center justify-between -mt-3">
+        <p className="text-xs text-secondary-500">
+          Cursor-paged. PII is scrubbed server-side before write.
+        </p>
+        <Button onClick={refreshAll} loading={loading} variant="secondary" size="sm">
+          <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
 
       {loading ? (
         <LoadingState title="Loading client errors…" />
@@ -195,6 +197,15 @@ export const AdminClientErrorsPage: React.FC = () => {
               </Card>
             );
           })}
+          <PaginationBar
+            currentPage={paged.page}
+            pageSize={paged.pageSize}
+            totalItems={(paged.page - 1) * paged.pageSize + rows.length + (paged.hasNext ? 1 : 0)}
+            hasMore={paged.hasNext}
+            onPreviousPage={paged.prev}
+            onNextPage={paged.next}
+            label="errors"
+          />
         </div>
       )}
     </div>

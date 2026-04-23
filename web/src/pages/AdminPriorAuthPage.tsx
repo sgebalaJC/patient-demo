@@ -1,16 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ClipboardCheck, Plus, AlertCircle, ShieldCheck, Clock, FileWarning } from 'lucide-react';
+import { ClipboardCheck, Plus, AlertCircle, ShieldCheck, Clock, FileWarning, RefreshCw } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatsGrid } from '../components/ui/StatsGrid';
 import { EmptyState } from '../components/ui/EmptyState';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
+import { PaginationBar } from '../components/ui/PaginationBar';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
 import { isAdminRole } from '../lib/roles';
-import { subscribeToPriorAuths } from '../lib/firestore/prior-auths';
+import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
+import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import { PaStatusBadge } from '../components/prior-auth/StatusBadge';
 import type { PriorAuth, PriorAuthStatus } from '../types/prior-auth';
 
@@ -20,51 +22,47 @@ const OPEN_STATUSES: PriorAuthStatus[] = ['draft', 'submitted', 'pending', 'need
 
 export const AdminPriorAuthPage: React.FC = () => {
   const { userProfile } = useAuth();
+  const isAdminUser = isAdminRole(userProfile?.role);
   const navigate = useNavigate();
-  const [rows, setRows] = useState<PriorAuth[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('open');
 
-  useEffect(() => {
-    if (!isAdminRole(userProfile?.role)) return;
-    const unsub = subscribeToPriorAuths(
-      (r) => {
-        setRows(r);
-        setLoading(false);
-      },
-      (err) => {
-        setError(err.message);
-        setLoading(false);
-      },
-    );
-    return unsub;
-  }, [userProfile?.role]);
-
-  const counts = useMemo(() => {
-    const open = rows.filter((r) => OPEN_STATUSES.includes(r.status)).length;
-    const followup = rows.filter((r) => r.needsFollowup).length;
-    const approved = rows.filter((r) => r.status === 'approved').length;
-    const denied = rows.filter((r) => r.status === 'denied').length;
-    return { total: rows.length, open, followup, approved, denied };
-  }, [rows]);
-
-  const filtered = useMemo(() => {
+  const whereClauses = useMemo<WhereClause[] | undefined>(() => {
     switch (tab) {
-      case 'all':
-        return rows;
-      case 'open':
-        return rows.filter((r) => OPEN_STATUSES.includes(r.status));
-      case 'followup':
-        return rows.filter((r) => r.needsFollowup);
-      case 'approved':
-        return rows.filter((r) => r.status === 'approved');
-      case 'denied':
-        return rows.filter((r) => r.status === 'denied');
+      case 'all': return undefined;
+      case 'open': return [['status', 'in', OPEN_STATUSES]];
+      case 'followup': return [['needsFollowup', '==', true]];
+      case 'approved': return [['status', '==', 'approved']];
+      case 'denied': return [['status', '==', 'denied']];
     }
-  }, [rows, tab]);
+  }, [tab]);
 
-  if (!isAdminRole(userProfile?.role)) return <AccessDenied />;
+  const paged = usePagedCollection<PriorAuth>({
+    enabled: isAdminUser,
+    real: 'prior-auths',
+    orderField: 'updatedAt',
+    pageSize: 25,
+    whereClauses,
+    mapDoc: (d) => ({ ...(d.data() as PriorAuth), id: d.id }),
+  });
+  const filtered = paged.rows;
+  const loading = paged.loading;
+
+  const countsPredicates = useMemo(() => ({
+    total: [] as [string, '==' | 'in', unknown][],
+    open: [['status', 'in', OPEN_STATUSES]] as [string, '==' | 'in', unknown][],
+    followup: [['needsFollowup', '==', true]] as [string, '==' | 'in', unknown][],
+    approved: [['status', '==', 'approved']] as [string, '==' | 'in', unknown][],
+    denied: [['status', '==', 'denied']] as [string, '==' | 'in', unknown][],
+  }), []);
+  const { counts, refresh: refreshCounts } = useCollectionCounts({
+    enabled: isAdminUser,
+    real: 'prior-auths',
+    predicates: countsPredicates,
+  });
+
+  const refreshAll = () => { paged.refresh(); refreshCounts(); };
+
+  if (!isAdminUser) return <AccessDenied />;
 
   return (
     <div className="space-y-6">
@@ -119,11 +117,11 @@ export const AdminPriorAuthPage: React.FC = () => {
         </div>
       </Card>
 
-      {error && (
-        <Card className="p-4 border border-red-200 bg-red-50 text-red-800 text-sm">
-          Failed to load: {error}
-        </Card>
-      )}
+      <div className="flex justify-end">
+        <Button onClick={refreshAll} loading={loading} variant="secondary" size="sm">
+          <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
 
       {loading ? (
         <LoadingSpinner />
@@ -170,6 +168,17 @@ export const AdminPriorAuthPage: React.FC = () => {
                 </div>
               </Link>
             ))}
+          </div>
+          <div className="p-3 border-t border-secondary-100">
+            <PaginationBar
+              currentPage={paged.page}
+              pageSize={paged.pageSize}
+              totalItems={(paged.page - 1) * paged.pageSize + filtered.length + (paged.hasNext ? 1 : 0)}
+              hasMore={paged.hasNext}
+              onPreviousPage={paged.prev}
+              onNextPage={paged.next}
+              label="prior auths"
+            />
           </div>
         </Card>
       )}

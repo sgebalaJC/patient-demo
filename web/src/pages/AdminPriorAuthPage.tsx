@@ -77,7 +77,6 @@ export const AdminPriorAuthPage: React.FC = () => {
             <Button
               onClick={() => navigate('/admin/prior-auth/policies')}
               variant="secondary"
-              size="sm"
               className="whitespace-nowrap"
             >
               <BookOpen className="h-4 w-4 mr-1.5" /> Policy library
@@ -86,7 +85,6 @@ export const AdminPriorAuthPage: React.FC = () => {
               onClick={refreshAll}
               loading={loading}
               variant="secondary"
-              size="sm"
               className="whitespace-nowrap"
             >
               <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh

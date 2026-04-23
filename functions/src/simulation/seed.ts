@@ -11,6 +11,7 @@ import {isSuperAdminEmail} from "../superAdmins.js";
 import {seedFaxes} from "./simulators/faxes.js";
 import {seedSms} from "./simulators/messaging.js";
 import {seedWorkspace} from "./simulators/workspace.js";
+import {seedNative, NATIVE_SIM_PATHS} from "./simulators/native.js";
 
 function assertSuperAdmin(auth: {uid: string; token?: {email?: string}} | undefined) {
   if (!auth) throw new HttpsError("unauthenticated", "Sign-in required");
@@ -155,6 +156,10 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
   } as Awaited<ReturnType<typeof seedFaxes>>);
   const sms = await safeSeed("sms", () => seedSms(db), {outbound: 0, inbound: 0});
   const workspace = await safeSeed("workspace", () => seedWorkspace(db), {emails: 0, events: 0});
+  const native = await safeSeed("native", () => seedNative(db), {
+    users: 0, appointments: 0, refills: 0,
+    specialistRequests: 0, intakeForms: 0, priorAuths: 0,
+  } as Awaited<ReturnType<typeof seedNative>>);
   return {
     ok: true,
     seeded: {
@@ -173,6 +178,13 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
       sms_inbound: sms.inbound,
       workspace_emails: workspace.emails,
       workspace_events: workspace.events,
+      native_users: native.users,
+      native_appointments: native.appointments,
+      native_refills: native.refills,
+      native_specialist_requests: native.specialistRequests,
+      native_intake_forms: native.intakeForms,
+      native_prior_auths: native.priorAuths,
+      ...(native._safeSeedError ? {native_safeseed_error: native._safeSeedError} : {}),
     },
   };
 });
@@ -190,6 +202,7 @@ export const clearSimulationData = onCall({timeoutSeconds: 120}, async (req) => 
     "simulation/sms/inbound",
     "simulation/workspace/emails",
     "simulation/workspace/events",
+    ...NATIVE_SIM_PATHS,
   ];
   const cleared: Record<string, number> = {};
   for (const p of paths) {

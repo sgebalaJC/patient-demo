@@ -89,7 +89,10 @@ export function usePagedCollection<T>(
 
   const path = useMemo(() => {
     if (!simulated) return real;
-    return sim || `simulation/${real}`;
+    // Default sim path lives under `simulation/native/<real>` so the segment
+    // count is always odd (collection, not doc). Pages with their own sim
+    // layout (faxes, sms, drchrono) pass `sim` explicitly.
+    return sim || `simulation/native/${real}`;
   }, [simulated, real, sim]);
 
   // Serialize whereClauses so the fetch effect re-runs when they change.

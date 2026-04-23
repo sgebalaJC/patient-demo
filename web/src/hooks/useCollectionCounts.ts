@@ -51,7 +51,9 @@ export function useCollectionCounts<K extends string>(
 
   const path = useMemo(() => {
     if (!simulated) return real;
-    return sim || `simulation/${real}`;
+    // Mirror usePagedCollection — fall back to `simulation/native/<real>`
+    // (odd-segment collection path) when the caller doesn't provide `sim`.
+    return sim || `simulation/native/${real}`;
   }, [simulated, real, sim]);
 
   const predicatesKey = useMemo(() => {

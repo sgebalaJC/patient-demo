@@ -134,7 +134,11 @@ export const BatchLookupPanel: React.FC = () => {
         />
         <div className="flex items-center justify-between flex-wrap gap-2">
           <p className="text-xs text-secondary-500">
-            Each line is parsed as a name, email, phone, or DrChrono ID. Server-paced to stay under DrChrono's rate limit.
+            Each line is parsed as a name, email, phone, or DrChrono ID.
+            A single token is treated as a last name — use{' '}
+            <span className="font-mono">First Last</span> or{' '}
+            <span className="font-mono">Last, First</span> for full-name search.
+            Server-paced to stay under DrChrono's rate limit.
           </p>
           <div className="flex items-center gap-2">
             {text && !running && (

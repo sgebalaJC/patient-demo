@@ -142,7 +142,9 @@ export const PatientLookupPanel: React.FC = () => {
             Examples: <span className="font-mono">1001</span> (DrChrono ID),{' '}
             <span className="font-mono">grace.chen1@example.com</span>,{' '}
             <span className="font-mono">+15551000005</span>,{' '}
-            <span className="font-mono">Patel, Hiro</span>
+            <span className="font-mono">Patel, Hiro</span>. A single token is
+            treated as a last name — use <span className="font-mono">First Last</span> or{' '}
+            <span className="font-mono">Last, First</span> for full-name search.
           </p>
         </form>
       </Card>

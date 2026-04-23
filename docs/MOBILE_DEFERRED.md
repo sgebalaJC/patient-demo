@@ -5,6 +5,31 @@ here so they don't get re-discovered every planning pass. Revisit after the
 first real customer fork goes live; none of these block the demo or the
 template ship.
 
+## Next session — suggested start order
+
+When we return to mobile, the highest-leverage path is:
+
+1. **Item #3 — New-message attachment race (S)**: actual bug with an
+   explicit TODO in the code, has data-integrity implications. Fix first.
+2. **Item #1 — Documents screen parity (M)**: biggest perceived-quality
+   gap. A demo viewer who uploads an ID on web then opens mobile sees a
+   broken-looking list.
+3. **Item #4 — Mobile dashboard skeletons (XS)**: quick polish; the web
+   Skeleton primitive pattern now exists (`web/src/components/ui/Skeleton.tsx`),
+   mobile can mirror it.
+4. **Item #6 — Release prep (S-M, per-fork)**: only when a fork commits
+   to a mobile launch date.
+
+Context notes for the next session:
+
+- Branding config now exposes `fromEmail`, `address`, `hours`, `fax` on
+  all three sides (web/mobile/functions). Item #2 is done.
+- FCM tap deep-link is wired — mobile already routes notification taps
+  to `MessagesScreen` + pushes `ThreadDetailScreen`. No FCM work needed.
+- Phone-verify UX was softened on web; mobile equivalent is in
+  `mobile/lib/screens/dashboard_screen.dart` `_buildVerifyPhoneBanner`
+  and already uses the branded primary color — no port needed.
+
 ## 1. Documents screen parity (M)
 
 **What:** `mobile/lib/screens/documents/documents_screen.dart` is far behind

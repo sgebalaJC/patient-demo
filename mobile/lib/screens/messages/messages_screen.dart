@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore/messages_service.dart';
+import '../../services/fcm_service.dart';
 import '../../models/message_thread.dart';
 import '../../config/colors.dart';
 import '../../widgets/paginated_list.dart';
@@ -20,6 +21,36 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   final _service = MessagesService();
   final _listKey = GlobalKey<PaginatedListState<MessageThread>>();
+
+  @override
+  void initState() {
+    super.initState();
+    FcmService.pendingThreadId.addListener(_handleDeepLink);
+    // In case the tap happened before this widget mounted (cold start):
+    if (FcmService.pendingThreadId.value != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _handleDeepLink());
+    }
+  }
+
+  @override
+  void dispose() {
+    FcmService.pendingThreadId.removeListener(_handleDeepLink);
+    super.dispose();
+  }
+
+  Future<void> _handleDeepLink() async {
+    final threadId = FcmService.pendingThreadId.value;
+    if (threadId == null || !mounted) return;
+    FcmService.pendingThreadId.value = null;
+
+    final thread = await _service.getThread(threadId);
+    if (!mounted || thread == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ThreadDetailScreen(thread: thread)),
+    );
+    if (mounted) _listKey.currentState?.refresh();
+  }
 
   @override
   Widget build(BuildContext context) {

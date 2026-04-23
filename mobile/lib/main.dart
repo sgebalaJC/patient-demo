@@ -8,6 +8,7 @@ import 'config/branding.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/auth_service.dart';
+import 'services/fcm_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/appointments/appointments_screen.dart';
@@ -112,6 +113,26 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Notification taps with a threadId jump us to the Messages tab;
+    // MessagesScreen itself pushes the ThreadDetailScreen.
+    FcmService.pendingThreadId.addListener(_onThreadDeepLink);
+  }
+
+  @override
+  void dispose() {
+    FcmService.pendingThreadId.removeListener(_onThreadDeepLink);
+    super.dispose();
+  }
+
+  void _onThreadDeepLink() {
+    if (FcmService.pendingThreadId.value != null && _currentIndex != 2) {
+      setState(() => _currentIndex = 2);
+    }
+  }
 
   void _navigateTo(int index) {
     setState(() => _currentIndex = index);

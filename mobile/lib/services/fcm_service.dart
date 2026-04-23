@@ -6,6 +6,11 @@ class FcmService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  /// Broadcast a threadId from the most recent notification tap.
+  /// UI widgets (MessagesScreen, MainShell) listen on this to deep-link.
+  /// Consumers MUST null it out after handling to avoid re-firing.
+  static final ValueNotifier<String?> pendingThreadId = ValueNotifier(null);
+
   /// Initialize FCM: request permission, register token, set up listeners.
   Future<void> initialize(String uid) async {
     // Request notification permission (iOS + Android 13+)
@@ -33,6 +38,19 @@ class FcmService {
     FirebaseMessaging.onMessage.listen((message) {
       debugPrint('[FCM] Foreground message: ${message.notification?.title}');
     });
+
+    // Tap-to-open: handle cold-start (app was killed) and warm-start
+    // (app was in background) tap payloads the same way.
+    final initialMessage = await _messaging.getInitialMessage();
+    if (initialMessage != null) _handleTapPayload(initialMessage);
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleTapPayload);
+  }
+
+  void _handleTapPayload(RemoteMessage message) {
+    final threadId = message.data['threadId'];
+    if (threadId is String && threadId.isNotEmpty) {
+      pendingThreadId.value = threadId;
+    }
   }
 
   Future<void> _registerToken(String uid) async {

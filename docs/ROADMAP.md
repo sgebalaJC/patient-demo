@@ -18,7 +18,7 @@ Low effort, high impact. Finishes partially-built features.
 
 | Item | Description | Platform |
 |------|-------------|----------|
-| Push notifications (FCM) | Scaffolding exists in mobile — wire up token registration and Cloud Function triggers | Mobile + Functions |
+| ~~Push notifications (FCM)~~ | ~~Scaffolding exists in mobile — wire up token registration and Cloud Function triggers~~ Done: token register/clear on sign-in/out, onNotificationCreated trigger, tap deep-link to message threads | ~~Mobile + Functions~~ |
 | Mobile document upload | Camera/gallery picker for patient documents | Mobile |
 | Mobile message attachments | Display attachments in thread detail view | Mobile |
 | Transactional email templates | Appointment confirmations, refill status updates, welcome emails (replace hardcoded SMS strings) | Functions |

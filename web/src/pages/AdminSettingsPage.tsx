@@ -347,7 +347,7 @@ export const AdminSettingsPage: React.FC = () => {
                       onClick={() => runSeed('seed')}
                       loading={seedState.busy === 'seed'}
                       disabled={seedState.busy !== null}
-                      className="!bg-green-600 !border-green-600 !text-white hover:!bg-green-700 hover:!border-green-700"
+                      className="!bg-transparent !border-green-600 !text-green-700 hover:!bg-green-50"
                     >
                       <Database className="h-3.5 w-3.5 mr-1" />
                       Seed demo data

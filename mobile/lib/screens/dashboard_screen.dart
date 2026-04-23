@@ -9,6 +9,7 @@ import '../models/appointment.dart';
 import '../models/message_thread.dart';
 import '../models/notification.dart';
 import '../widgets/phone_verification_sheet.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/status_chip.dart';
 import '../config/colors.dart';
 import '../config/branding.dart';
@@ -193,7 +194,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: RefreshIndicator(
         onRefresh: _loadData,
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? _buildSkeleton()
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -247,6 +248,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+
+  Widget _buildSkeleton() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        // Appointments section
+        const Skeleton(height: 18, width: 180),
+        const SizedBox(height: 12),
+        const SkeletonList(rows: 2),
+        const SizedBox(height: 24),
+        // Messages section
+        const Skeleton(height: 18, width: 160),
+        const SizedBox(height: 12),
+        const SkeletonList(rows: 2, showLeading: false),
+        const SizedBox(height: 24),
+        // Contact card
+        const SkeletonList(rows: 1),
+      ],
+    );
+  }
 
   Widget _buildSectionHeader(String title, {VoidCallback? onSeeAll}) {
     return Row(

@@ -7,12 +7,9 @@ template ship.
 
 ## Next session — suggested start order
 
-When we return to mobile, the highest-leverage path is:
+Remaining:
 
-1. **Item #4 — Mobile dashboard skeletons (XS)**: quick polish; the web
-   Skeleton primitive pattern now exists (`web/src/components/ui/Skeleton.tsx`),
-   mobile can mirror it.
-2. **Item #6 — Release prep (S-M, per-fork)**: only when a fork commits
+1. **Item #6 — Release prep (S-M, per-fork)**: only when a fork commits
    to a mobile launch date.
 
 Context notes for the next session:
@@ -68,18 +65,13 @@ send failure the empty thread is best-effort deleted via
 
 ---
 
-## 4. Mobile dashboard loading skeletons (XS slice of a larger item)
+## 4. ~~Mobile dashboard loading skeletons~~ — DONE
 
-**What:** `mobile/lib/screens/dashboard_screen.dart` shows a centered
-`CircularProgressIndicator` on a blank screen while Firestore subscriptions
-warm up. Web side of this is tracked with the web skeletons work; kept
-here so the mobile slice doesn't get forgotten.
-
-**Fix sketch:** skeleton cards matching the real layout (appointments
-card, messages card, intake banner).
-
-**Why deferred:** web skeletons may land first; mobile follows same
-pattern once the shape is agreed.
+`mobile/lib/widgets/skeleton.dart` mirrors the web `Skeleton` /
+`SkeletonList` primitives (AnimationController-based pulse via
+`Color.lerp` between divider and background). Dashboard now renders a
+skeleton layout (appointments section, messages section, contact card)
+in place of the old centered `CircularProgressIndicator`.
 
 ---
 

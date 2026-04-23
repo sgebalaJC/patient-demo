@@ -8,7 +8,7 @@
 
 import {FUNCTIONS_BRANDING} from "./branding.js";
 import {isSuperAdminEmail, assertAdmin as assertCallerIsAdmin} from "./superAdmins.js";
-import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail} from "./email.js";
+import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail, refillStatusEmail} from "./email.js";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {defineSecret} from "firebase-functions/params";
 import {onSchedule} from "firebase-functions/v2/scheduler";
@@ -3120,6 +3120,37 @@ export const onNotificationCreated = onDocumentCreated({
       logger.error("FCM send failed:", err);
     }
   }
+});
+
+// ── Refill status email ─────────────────────────────────────────────
+// Email the patient when an admin flips a refill request to approved or
+// denied. Transitions to completed/cancelled don't notify — admins
+// already tell the patient out-of-band for those.
+export const onRefillStatusChanged = onDocumentWritten({
+  document: "prescription-refills/{refillId}",
+}, async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (!before || !after) return;
+
+  const newStatus = after.status;
+  if (newStatus !== "approved" && newStatus !== "denied") return;
+  if (before.status === newStatus) return;
+
+  const patientDoc = await db.collection("users").doc(after.patientId).get();
+  const patient = patientDoc.data();
+  const email = patient?.email;
+  if (!email) return;
+
+  const patientName = [patient?.firstName, patient?.lastName]
+    .filter(Boolean).join(" ") || "Patient";
+  const template = refillStatusEmail(
+    patientName,
+    after.medicationName || "your prescription",
+    newStatus,
+    after.doctorNotes || after.notes,
+  );
+  await sendTransactionalEmail({to: email, ...template});
 });
 
 // ─── DrChrono integration ───────────────────────────────────────────

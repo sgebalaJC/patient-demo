@@ -145,8 +145,24 @@ firebase apphosting:rollouts:create web-patient --git-branch main
       FUNCTION_REGION=us-west1
       PRACTICE_NAME=<short branded name>  # appears on fax cover sheet
       ```
+- [ ] **If real SMS is enabled** (Admin → SMS page), also append to
+      `/root/sidecar.env`:
+      ```
+      TWILIO_ACCOUNT_SID=AC...
+      TWILIO_AUTH_TOKEN=...
+      TWILIO_PHONE_NUMBER=+1...
+      ```
+      Without these, `/admin-api/messaging/send` (outbound send) and
+      `/webhooks/twilio/inbound-sms` (inbound) both fail. Sim mode
+      works fine without them.
 - [ ] Deploy sidecar: `cd sidecar && ./deploy.sh`
 - [ ] Verify health via admin dashboard → AI Agent page
+- [ ] **If real SMS is enabled:** register the Twilio Messaging Webhook
+      on the customer's Twilio number → URL
+      `http://<sidecar-host>:8081/webhooks/twilio/inbound-sms` (HTTP
+      POST). Requires the TWILIO_AUTH_TOKEN on the VM to match — the
+      handler HMAC-SHA1-verifies every request. Plain HTTP is fine for
+      staging; front with nginx+TLS for HIPAA-hardened production.
 
 ## 10. Simulation middleware (optional — see [SIMULATION.md](SIMULATION.md))
 

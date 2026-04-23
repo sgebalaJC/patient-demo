@@ -16,6 +16,7 @@ import {
     Calendar
 } from 'lucide-react';
 import { SkeletonList } from '../components/ui/Skeleton';
+import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { getUrgencyColor as getUrgencyColorHelper, getRefillStatusIcon, getRefillStatusColor } from '../lib/status-helpers';
@@ -36,6 +37,7 @@ interface PaginationState {
 export const RefillsPage: React.FC = () => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [editingRefill, setEditingRefill] = useState<PrescriptionRefillRequest | undefined>();
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export const RefillsPage: React.FC = () => {
         if (!user) return;
 
         setLoading(true);
+        setFetchError(null);
         try {
             const response = await prescriptionRefillOperations.getPatientRefills(
                 user.uid,
@@ -79,9 +82,12 @@ export const RefillsPage: React.FC = () => {
                     pageSize: paginationState.pageSize,
                     cursors: data.lastDocId ? [data.lastDocId] : []
                 });
+            } else {
+                setFetchError('We couldn’t load your refill requests. Please try again in a moment.');
             }
         } catch (error) {
             logger.error('Error fetching refills:', error);
+            setFetchError('We couldn’t load your refill requests. Please try again in a moment.');
         } finally {
             setLoading(false);
         }
@@ -219,7 +225,9 @@ export const RefillsPage: React.FC = () => {
                 </div>
             </Card>
 
-            {paginationState.refills.length === 0 ? (
+            {fetchError && <ErrorAlert message={fetchError} />}
+
+            {paginationState.refills.length === 0 && !fetchError ? (
                 <Card className="p-8 text-center">
                     <div className="flex flex-col items-center space-y-4">
                         <div className="bg-secondary-100 p-4 rounded-full">
@@ -227,7 +235,7 @@ export const RefillsPage: React.FC = () => {
                         </div>
                         <h3 className="text-lg font-semibold text-secondary-900">No refill requests yet</h3>
                         <p className="text-secondary-600">
-                            You haven't submitted any prescription refill requests yet. Use the 'New Request' button above to get started.
+                            When you request a prescription refill, it will appear here. Tap <strong>New Request</strong> above to start one.
                         </p>
                     </div>
                 </Card>

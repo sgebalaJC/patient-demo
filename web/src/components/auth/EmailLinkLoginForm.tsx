@@ -87,7 +87,7 @@ export const EmailLinkLoginForm: React.FC<EmailLinkLoginFormProps> = ({
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <h4 className="text-sm font-medium text-amber-900 mb-1">Can't find the email?</h4>
           <p className="text-sm text-amber-700">
-            Check your <strong>spam or junk folder</strong> — emails from <strong>noreply@example.com</strong> sometimes end up there.
+            Check your <strong>spam or junk folder</strong> — emails from <strong>{BRANDING.fromEmail}</strong> sometimes end up there.
           </p>
         </div>
 

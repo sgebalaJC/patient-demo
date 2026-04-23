@@ -211,7 +211,17 @@ export const MessagesPage: React.FC = () => {
                         {threadsPage.length === 0 ? (
                             <div className="p-8 text-center text-secondary-500">
                                 <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                <p>No messages found</p>
+                                <p className="font-medium text-secondary-700">
+                                    {filter === 'unread' ? 'No unread messages' :
+                                     filter === 'priority' ? 'No priority messages' :
+                                     searchTerm ? 'No messages match your search' :
+                                     'No messages yet'}
+                                </p>
+                                {filter === 'all' && !searchTerm && (
+                                    <p className="mt-1 text-sm">
+                                        Tap <strong>New Message</strong> to reach out to the care team.
+                                    </p>
+                                )}
                             </div>
                         ) : (
                             threadsPage.map((thread) => {

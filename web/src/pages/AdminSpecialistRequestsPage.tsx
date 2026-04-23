@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
@@ -7,6 +7,7 @@ import {
   specialistRequestOperations,
   appointmentOperations,
   notificationOperations,
+  prescriptionRefillOperations,
 } from '../lib/firestore';
 import { SpecialistRequest } from '../types';
 import { Timestamp } from 'firebase/firestore';
@@ -20,10 +21,10 @@ import {
   MapPin,
   Calendar,
   FileText,
+  RefreshCw,
 } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AdminGuard } from '../components/ui/AdminGuard';
-import { SearchInput } from '../components/ui/SearchInput';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatsGrid } from '../components/ui/StatsGrid';
 import { PaginationBar } from '../components/ui/PaginationBar';
@@ -33,22 +34,18 @@ import { getSpecialistLabel } from '../config/specialists';
 import { BUSINESS } from '../config/branding';
 import { FIELD_LIMITS } from '../lib/validation';
 import { formatDate } from '../lib/date-helpers';
+import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
+import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import logger from '../lib/logger';
-import { doc, getDoc } from 'firebase/firestore';
-import { collections } from '../lib/firestore/base';
 import { Loader as MapsLoader } from '@googlemaps/js-api-loader';
 
 type RequestWithPatient = SpecialistRequest & { patientName: string };
 
 export const AdminSpecialistRequestsPage: React.FC = () => {
   const { user, userProfile } = useAuth();
-  const [allRequests, setAllRequests] = useState<RequestWithPatient[]>([]);
-  const [loading, setLoading] = useState(true);
+  const isAdminUser = !!user && isAdminRole(userProfile?.role);
   const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('pending');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
-  const [statusCounts, setStatusCounts] = useState({ all: 0, pending: 0, confirmed: 0, cancelled: 0 });
+  const [patientNames, setPatientNames] = useState<Record<string, { firstName: string; lastName: string }>>({});
 
   // Confirm modal
   const [confirmingRequest, setConfirmingRequest] = useState<RequestWithPatient | null>(null);
@@ -67,11 +64,53 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
   const autocompleteRef = useRef<google.maps.places.BasicPlaceAutocompleteElement | null>(null);
   const [useBusinessAddress, setUseBusinessAddress] = useState(false);
 
-  useEffect(() => {
-    if (user && isAdminRole(userProfile?.role)) fetchRequests();
-  }, [user, userProfile]);
+  const whereClauses = useMemo<WhereClause[] | undefined>(
+    () => (filter === 'all' ? undefined : [['status', '==', filter]]),
+    [filter],
+  );
 
-  useEffect(() => { setCurrentPage(1); }, [filter]);
+  const paged = usePagedCollection<SpecialistRequest>({
+    enabled: isAdminUser,
+    real: 'specialist-requests',
+    orderField: 'createdAt',
+    pageSize: 10,
+    whereClauses,
+    mapDoc: (d) => ({ ...(d.data() as SpecialistRequest), id: d.id }),
+  });
+  const loading = paged.loading;
+
+  const countsPredicates = useMemo(() => ({
+    all: [] as [string, '==', string][],
+    pending: [['status', '==', 'pending']] as [string, '==', string][],
+    confirmed: [['status', '==', 'confirmed']] as [string, '==', string][],
+    cancelled: [['status', '==', 'cancelled']] as [string, '==', string][],
+  }), []);
+  const { counts: statusCounts, refresh: refreshCounts } = useCollectionCounts({
+    enabled: isAdminUser,
+    real: 'specialist-requests',
+    predicates: countsPredicates,
+  });
+
+  // Fetch names only for patients on the current page.
+  useEffect(() => {
+    const ids = [...new Set(paged.rows.map((r) => r.patientId))].filter(
+      (id) => !(id in patientNames),
+    );
+    if (ids.length === 0) return;
+    prescriptionRefillOperations.getPatientNamesByIds(ids).then((res) => {
+      if (res.success && res.data) {
+        setPatientNames((prev) => ({ ...prev, ...res.data }));
+      }
+    }).catch((err) => logger.error('patient-name lookup failed', err));
+  }, [paged.rows, patientNames]);
+
+  const requestsPage: RequestWithPatient[] = paged.rows.map((r) => {
+    const n = patientNames[r.patientId];
+    const patientName = n ? `${n.firstName} ${n.lastName}`.trim() || 'Unknown Patient' : 'Unknown Patient';
+    return { ...r, patientName };
+  });
+
+  const refreshAll = () => { paged.refresh(); refreshCounts(); };
 
   // Initialize Google Places when confirm modal opens
   useEffect(() => {
@@ -162,59 +201,6 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
     };
   }, [confirmingRequest, useBusinessAddress]);
 
-  const fetchRequests = async () => {
-    setLoading(true);
-    try {
-      const res = await specialistRequestOperations.getAllRequests();
-      if (res.success && res.data) {
-        const withPatients = await Promise.all(
-          res.data.map(async (req) => {
-            try {
-              const userDoc = await getDoc(doc(collections.users, req.patientId));
-              const userData = userDoc.data();
-              const patientName = userData
-                ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown Patient'
-                : 'Unknown Patient';
-              return { ...req, patientName } as RequestWithPatient;
-            } catch {
-              return { ...req, patientName: 'Unknown Patient' } as RequestWithPatient;
-            }
-          })
-        );
-        setAllRequests(withPatients);
-        setStatusCounts({
-          all: withPatients.length,
-          pending: withPatients.filter(r => r.status === 'pending').length,
-          confirmed: withPatients.filter(r => r.status === 'confirmed').length,
-          cancelled: withPatients.filter(r => r.status === 'cancelled').length,
-        });
-      }
-    } catch (error) {
-      logger.error('Error fetching specialist requests:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getFiltered = () => {
-    let result = allRequests;
-    if (filter !== 'all') result = result.filter(r => r.status === filter);
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      result = result.filter(r =>
-        r.patientName.toLowerCase().includes(q) ||
-        getSpecialistLabel(r.specialistType).toLowerCase().includes(q) ||
-        r.reason?.toLowerCase().includes(q) ||
-        r.notes?.toLowerCase().includes(q)
-      );
-    }
-    return result;
-  };
-
-  const filtered = getFiltered();
-  const paged = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const hasMore = currentPage * pageSize < filtered.length;
-
   const openConfirmModal = (request: RequestWithPatient) => {
     setConfirmingRequest(request);
     setConfirmForm({ appointmentDate: '', appointmentTime: '', duration: 30, notes: '', address: '' });
@@ -265,7 +251,7 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
         }).catch(() => {});
 
         setConfirmingRequest(null);
-        fetchRequests();
+        refreshAll();
       }
     } catch (error) {
       logger.error('Error confirming specialist request:', error);
@@ -280,13 +266,13 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
         status: 'cancelled',
       });
       setCancelConfirmId(null);
-      fetchRequests();
+      refreshAll();
     } catch (error) {
       logger.error('Error cancelling specialist request:', error);
     }
   };
 
-  if (loading && allRequests.length === 0) return <AdminGuard><LoadingSpinner /></AdminGuard>;
+  if (loading && paged.rows.length === 0 && paged.page === 1) return <AdminGuard><LoadingSpinner /></AdminGuard>;
 
   return (
     <AdminGuard>
@@ -329,25 +315,26 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
               </button>
             ))}
           </div>
-          <SearchInput
-            placeholder="Search by patient name or specialist type..."
-            value={searchTerm}
-            onChange={setSearchTerm}
-          />
         </div>
       </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={refreshAll} loading={loading} variant="secondary" size="sm">
+          <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
 
       {/* Request List */}
       <div className={`transition-opacity duration-150 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
         <Card className="p-6">
           <div className="space-y-4">
-            {paged.length === 0 ? (
+            {requestsPage.length === 0 ? (
               <div className="text-center py-12 text-secondary-500">
                 <Stethoscope className="h-16 w-16 mx-auto mb-4 opacity-50" />
                 <p>No specialist requests found</p>
               </div>
             ) : (
-              paged.map((request) => {
+              requestsPage.map((request) => {
                 const statusColor = request.status === 'pending'
                   ? 'bg-yellow-50 text-yellow-700'
                   : request.status === 'confirmed'
@@ -436,12 +423,12 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
           </div>
 
           <PaginationBar
-            currentPage={currentPage}
-            pageSize={pageSize}
-            totalItems={filtered.length}
-            hasMore={hasMore}
-            onPreviousPage={() => setCurrentPage(currentPage - 1)}
-            onNextPage={() => setCurrentPage(currentPage + 1)}
+            currentPage={paged.page}
+            pageSize={paged.pageSize}
+            totalItems={(paged.page - 1) * paged.pageSize + requestsPage.length + (paged.hasNext ? 1 : 0)}
+            hasMore={paged.hasNext}
+            onPreviousPage={paged.prev}
+            onNextPage={paged.next}
             label="requests"
           />
         </Card>

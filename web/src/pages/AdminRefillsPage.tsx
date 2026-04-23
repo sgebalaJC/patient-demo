@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -13,7 +13,8 @@ import {
     Check,
     X,
     CheckCircle2,
-    Calendar
+    Calendar,
+    RefreshCw,
 } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AdminGuard } from '../components/ui/AdminGuard';
@@ -24,6 +25,8 @@ import { PaginationBar } from '../components/ui/PaginationBar';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { getUrgencyColor as getUrgencyColorHelper, getRefillStatusColor, getRefillStatusIcon } from '../lib/status-helpers';
 import { formatDate } from '../lib/date-helpers';
+import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
+import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import logger from '../lib/logger';
 
 const REFILL_STATUS_ICON_COLORS: Record<string, string> = {
@@ -35,81 +38,61 @@ const REFILL_STATUS_ICON_COLORS: Record<string, string> = {
 
 export const AdminRefillsPage: React.FC = () => {
     const { user, userProfile } = useAuth();
-    const [loading, setLoading] = useState(true);
+    const isAdminUser = !!user && isAdminRole(userProfile?.role);
     const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'denied' | 'completed'>('all');
     const [patientNames, setPatientNames] = useState<{ [patientId: string]: { firstName: string; lastName: string } }>({});
-    const [statusCounts, setStatusCounts] = useState({
-        all: 0,
-        pending: 0,
-        approved: 0,
-        denied: 0,
-        completed: 0,
-    });
 
     const [completeConfirmId, setCompleteConfirmId] = useState<string | null>(null);
     const [denyConfirmId, setDenyConfirmId] = useState<string | null>(null);
-    const [allRefills, setAllRefills] = useState<PrescriptionRefillRequest[]>([]);
-    const [currentPage, setCurrentPage] = useState(1);
-    const pageSize = 5;
 
-    // Load all data once on mount
+    const whereClauses = useMemo<WhereClause[] | undefined>(
+        () => (filter === 'all' ? undefined : [['status', '==', filter]]),
+        [filter],
+    );
+
+    const paged = usePagedCollection<PrescriptionRefillRequest & { id: string }>({
+        enabled: isAdminUser,
+        real: 'prescription-refills',
+        orderField: 'createdAt',
+        pageSize: 5,
+        whereClauses,
+        mapDoc: (d) => ({ ...(d.data() as PrescriptionRefillRequest), id: d.id }),
+    });
+    const refillsPage = paged.rows;
+    const loading = paged.loading;
+
+    const countsPredicates = useMemo(() => ({
+        all: [] as [string, '==', string][],
+        pending: [['status', '==', 'pending']] as [string, '==', string][],
+        approved: [['status', '==', 'approved']] as [string, '==', string][],
+        denied: [['status', '==', 'denied']] as [string, '==', string][],
+        completed: [['status', '==', 'completed']] as [string, '==', string][],
+    }), []);
+    const { counts: statusCounts, refresh: refreshCounts } = useCollectionCounts({
+        enabled: isAdminUser,
+        real: 'prescription-refills',
+        predicates: countsPredicates,
+    });
+
+    // Fetch patient names for just the current page's refills.
     useEffect(() => {
-        if (user && isAdminRole(userProfile?.role)) {
-            loadAllRefills();
-        }
-    }, [user, userProfile]);
-
-    // Reset to page 1 when filter changes (no re-fetch)
-    useEffect(() => { setCurrentPage(1); }, [filter]);
-
-    const loadAllRefills = async () => {
-        if (!user || !userProfile) return;
-
-        setLoading(true);
-        try {
-            const response = await prescriptionRefillOperations.getAllRefills(1000, 1, 'all');
-
-            if (response.success && response.data) {
-                const all = Array.isArray(response.data) ? response.data : response.data.refills;
-                setAllRefills(all);
-
-                setStatusCounts({
-                    all: all.length,
-                    pending: all.filter(r => r.status === 'pending').length,
-                    approved: all.filter(r => r.status === 'approved').length,
-                    denied: all.filter(r => r.status === 'denied').length,
-                    completed: all.filter(r => r.status === 'completed').length,
-                });
-
-                const uniquePatientIds = [...new Set(all.map(r => r.patientId))];
-                if (uniquePatientIds.length > 0) {
-                    const namesResponse = await prescriptionRefillOperations.getPatientNamesByIds(uniquePatientIds);
-                    if (namesResponse.success && namesResponse.data) {
-                        setPatientNames(namesResponse.data);
-                    }
-                }
+        const ids = [...new Set(refillsPage.map((r) => r.patientId))].filter(
+            (id) => !(id in patientNames),
+        );
+        if (ids.length === 0) return;
+        prescriptionRefillOperations.getPatientNamesByIds(ids).then((res) => {
+            if (res.success && res.data) {
+                setPatientNames((prev) => ({ ...prev, ...res.data }));
             }
-        } catch (error) {
-            logger.error('Error fetching refills:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+        }).catch((err) => logger.error('patient-name lookup failed', err));
+    }, [refillsPage, patientNames]);
 
-    // Client-side filter + paginate (instant, no network)
-    const filtered = filter === 'all' ? allRefills : allRefills.filter(r => r.status === filter);
-    const refillsPage = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-    const hasMore = currentPage * pageSize < filtered.length;
-
-    // Alias for action handlers that call fetchRefills()
-    const fetchRefills = loadAllRefills;
+    const refreshAll = () => { paged.refresh(); refreshCounts(); };
 
     const handleApprove = async (refillId: string) => {
         try {
             const response = await prescriptionRefillOperations.updateRefillStatus(refillId, 'approved');
-            if (response.success) {
-                fetchRefills();
-            }
+            if (response.success) refreshAll();
         } catch (error) {
             logger.error('Error approving refill:', error);
         }
@@ -118,9 +101,7 @@ export const AdminRefillsPage: React.FC = () => {
     const handleDeny = async (refillId: string, reason?: string) => {
         try {
             const response = await prescriptionRefillOperations.updateRefillStatus(refillId, 'denied', reason || '');
-            if (response.success) {
-                fetchRefills();
-            }
+            if (response.success) refreshAll();
         } catch (error) {
             logger.error('Error denying refill:', error);
         }
@@ -130,9 +111,7 @@ export const AdminRefillsPage: React.FC = () => {
     const handleComplete = async (refillId: string) => {
         try {
             const response = await prescriptionRefillOperations.updateRefillStatus(refillId, 'completed');
-            if (response.success) {
-                fetchRefills();
-            }
+            if (response.success) refreshAll();
         } catch (error) {
             logger.error('Error completing refill:', error);
         }
@@ -143,7 +122,7 @@ export const AdminRefillsPage: React.FC = () => {
 
     const counts = statusCounts;
 
-    if (loading && allRefills.length === 0) {
+    if (loading && refillsPage.length === 0 && paged.page === 1) {
         return <AdminGuard><LoadingSpinner /></AdminGuard>;
     }
 
@@ -154,7 +133,7 @@ export const AdminRefillsPage: React.FC = () => {
               backTo="/admin"
               icon={Pill}
               title="Prescription Refills"
-              subtitle={`Total: ${filtered.length} refills`}
+              subtitle={`Total: ${counts.all} refills`}
             />
 
             <FilterTabs
@@ -168,6 +147,12 @@ export const AdminRefillsPage: React.FC = () => {
               activeKey={filter}
               onChange={(key) => setFilter(key as typeof filter)}
             />
+
+            <div className="flex justify-end">
+              <Button onClick={refreshAll} loading={loading} variant="secondary" size="sm">
+                <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh
+              </Button>
+            </div>
 
             <div className={`transition-opacity duration-150 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
             {refillsPage.length === 0 && !loading ? (
@@ -301,12 +286,12 @@ export const AdminRefillsPage: React.FC = () => {
                     </div>
 
                     <PaginationBar
-                      currentPage={currentPage}
-                      pageSize={pageSize}
-                      totalItems={filtered.length}
-                      hasMore={hasMore}
-                      onPreviousPage={() => setCurrentPage(currentPage - 1)}
-                      onNextPage={() => setCurrentPage(currentPage + 1)}
+                      currentPage={paged.page}
+                      pageSize={paged.pageSize}
+                      totalItems={(paged.page - 1) * paged.pageSize + refillsPage.length + (paged.hasNext ? 1 : 0)}
+                      hasMore={paged.hasNext}
+                      onPreviousPage={paged.prev}
+                      onNextPage={paged.next}
                       label="refills"
                     />
                 </>

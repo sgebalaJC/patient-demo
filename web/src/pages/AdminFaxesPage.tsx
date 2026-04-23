@@ -6,7 +6,7 @@ import { functions } from '../lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import {
   Inbox, Send, Copy, FileText, AlertTriangle,
-  CheckCircle2, Clock, Loader2, X, Trash, Sparkles, Paperclip,
+  CheckCircle2, Clock, Loader2, X, Trash, Sparkles, Paperclip, RefreshCw,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
@@ -19,10 +19,9 @@ import { StatsGrid } from '../components/ui/StatsGrid';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { PaginationBar } from '../components/ui/PaginationBar';
-import { usePagination } from '../hooks/usePagination';
 import { formatDateTime } from '../lib/date-helpers';
 import { isAdminRole } from '../lib/roles';
-import { useIntegrationCollection } from '../hooks/useIntegrationCollection';
+import { usePagedCollection } from '../hooks/usePagedCollection';
 import { faxes as faxesApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
 
@@ -145,13 +144,15 @@ const STATUS_BADGE: Record<FaxStatus, { label: string; className: string; icon: 
 export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
   const isAdminUser = !!user && isAdminRole(userProfile?.role);
-  const { rows: faxes, loading, simulated } = useIntegrationCollection<InboundFax>({
+  const paged = usePagedCollection<InboundFax>({
     enabled: isAdminUser,
     real: 'inbound-faxes',
     sim: 'simulation/faxes/inbound',
     orderField: 'receivedAt',
+    pageSize: 25,
     mapDoc: (d) => ({ faxSid: d.id, ...(d.data() as Omit<InboundFax, 'faxSid'>) }),
   });
+  const { rows: faxes, loading, simulated } = paged;
   const [filter, setFilter] = useState<'all' | FaxStatus>('all');
   const [selectedFaxSid, setSelectedFaxSid] = useState<string | null>(null);
   const [inlineDeleteTarget, setInlineDeleteTarget] = useState<InboundFax | null>(null);
@@ -196,17 +197,12 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
     failed: faxes.filter((f) => f.status === 'failed').length,
   };
 
+  // Filter applies to the current page only — cursor paging can't run a
+  // server-side status filter without a composite (status, receivedAt) index.
+  // For now, users page forward to find older faxes in a given status; the
+  // StatsGrid/tab counts above reflect the visible page.
   const filtered = filter === 'all' ? faxes : faxes.filter((f) => f.status === filter);
   const selected = faxes.find((f) => f.faxSid === selectedFaxSid) || null;
-
-  const [pagState, pagControls] = usePagination({ initialPageSize: 25 });
-  useEffect(() => { pagControls.setTotalItems(filtered.length); }, [filtered.length, pagControls]);
-  useEffect(() => { pagControls.goToPage(1); }, [filter, pagControls]);
-  const pagedFaxes = filtered.slice(
-    (pagState.currentPage - 1) * pagState.pageSize,
-    pagState.currentPage * pagState.pageSize,
-  );
-  const faxesHasMore = pagState.currentPage * pagState.pageSize < filtered.length;
 
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     embedded ? <div className="space-y-6">{children}</div> : (
@@ -246,14 +242,18 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
         ]}
       />
 
-      {simulated && (
-        <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button onClick={paged.refresh} loading={loading} variant="secondary" size="sm">
+          <RefreshCw className="h-4 w-4 mr-1.5" />
+          Refresh
+        </Button>
+        {simulated && (
           <Button onClick={handleInjectInbound} loading={injecting} variant="secondary" size="sm">
             <Sparkles className="h-4 w-4 mr-1.5" />
             Simulate incoming fax
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {loading ? <LoadingSpinner /> : filtered.length === 0 ? (
         <EmptyState icon={Inbox} title="No faxes" description="Inbound faxes will appear here." />
@@ -273,7 +273,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
                 </tr>
               </thead>
               <tbody className="divide-y divide-secondary-200/60">
-                {pagedFaxes.map((f) => {
+                {filtered.map((f) => {
                   const badge = STATUS_BADGE[f.status];
                   const Icon = badge.icon;
                   return (
@@ -319,12 +319,12 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
           </div>
           <div className="p-3 border-t border-secondary-200">
             <PaginationBar
-              currentPage={pagState.currentPage}
-              pageSize={pagState.pageSize}
-              totalItems={filtered.length}
-              hasMore={faxesHasMore}
-              onPreviousPage={pagControls.prevPage}
-              onNextPage={pagControls.nextPage}
+              currentPage={paged.page}
+              pageSize={paged.pageSize}
+              totalItems={(paged.page - 1) * paged.pageSize + faxes.length + (paged.hasNext ? 1 : 0)}
+              hasMore={paged.hasNext}
+              onPreviousPage={paged.prev}
+              onNextPage={paged.next}
               label="faxes"
             />
           </div>

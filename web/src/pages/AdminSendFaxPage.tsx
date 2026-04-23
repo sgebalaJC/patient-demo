@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { functions, storage } from '../lib/firebase';
 import { Timestamp } from 'firebase/firestore';
@@ -14,12 +14,11 @@ import { AccessDenied } from '../components/ui/AccessDenied';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { PaginationBar } from '../components/ui/PaginationBar';
-import { usePagination } from '../hooks/usePagination';
 import { formatDateTime } from '../lib/date-helpers';
 import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
 import { isAdminRole } from '../lib/roles';
 import { useSimulationMode } from '../hooks/useSimulationMode';
-import { useIntegrationCollection } from '../hooks/useIntegrationCollection';
+import { usePagedCollection } from '../hooks/usePagedCollection';
 import { faxes as faxesApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
 
@@ -73,21 +72,15 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
   const [coverIncluded, setCoverIncluded] = useState(true);
   const [coverTo, setCoverTo] = useState('');
 
-  const { rows: recent } = useIntegrationCollection<OutboundFax>({
+  const paged = usePagedCollection<OutboundFax>({
     enabled: isAdmin,
     real: 'outbound-faxes',
     sim: 'simulation/faxes/outbound',
     orderField: 'submittedAt',
+    pageSize: 10,
     mapDoc: (d) => ({ ...(d.data() as OutboundFax) }),
   });
-
-  const [pagState, pagControls] = usePagination({ initialPageSize: 10 });
-  useEffect(() => { pagControls.setTotalItems(recent.length); }, [recent.length, pagControls]);
-  const pagedRecent = recent.slice(
-    (pagState.currentPage - 1) * pagState.pageSize,
-    pagState.currentPage * pagState.pageSize,
-  );
-  const recentHasMore = pagState.currentPage * pagState.pageSize < recent.length;
+  const recent = paged.rows;
   const [deleteTarget, setDeleteTarget] = useState<OutboundFax | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -130,6 +123,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
         setSubject('');
         setTo('');
         setCoverTo('');
+        paged.refresh();
       } catch (err: any) {
         setSubmitError(err?.message || 'Submit failed');
       } finally {
@@ -162,6 +156,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
       setSubject('');
       setTo('');
       setCoverTo('');
+      paged.refresh();
     } catch (err: any) {
       setSubmitError(err?.message || 'Submit failed');
       // Best-effort cleanup of any uploaded source files so we don't leak
@@ -181,6 +176,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
       const fn = httpsCallable(functions, 'deleteOutboundFax');
       await fn({ faxSid: deleteTarget.faxSid });
       setDeleteTarget(null);
+      paged.refresh();
     } catch (err: any) {
       void modalAlert({ tone: 'error', title: 'Delete failed', message: err?.message || String(err) });
     } finally {
@@ -379,7 +375,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
                 </tr>
               </thead>
               <tbody>
-                {pagedRecent.map((fax) => {
+                {recent.map((fax) => {
                   const tone = statusTone(fax.status);
                   const Icon = TONE_ICON[tone];
                   return (
@@ -422,15 +418,15 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
             </table>
           </div>
         )}
-        {recent.length > 0 && (
+        {(recent.length > 0 || paged.page > 1) && (
           <div className="mt-3">
             <PaginationBar
-              currentPage={pagState.currentPage}
-              pageSize={pagState.pageSize}
-              totalItems={recent.length}
-              hasMore={recentHasMore}
-              onPreviousPage={pagControls.prevPage}
-              onNextPage={pagControls.nextPage}
+              currentPage={paged.page}
+              pageSize={paged.pageSize}
+              totalItems={(paged.page - 1) * paged.pageSize + recent.length + (paged.hasNext ? 1 : 0)}
+              hasMore={paged.hasNext}
+              onPreviousPage={paged.prev}
+              onNextPage={paged.next}
               label="faxes"
             />
           </div>

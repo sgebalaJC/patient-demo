@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Timestamp } from 'firebase/firestore';
-import { MessageSquare, Send, Inbox, Sparkles } from 'lucide-react';
+import { MessageSquare, Send, Inbox, Sparkles, RefreshCw } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { useIntegrationCollection } from '../hooks/useIntegrationCollection';
+import { usePagedCollection } from '../hooks/usePagedCollection';
 import { isAdminRole } from '../lib/roles';
 import { sms as smsApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
@@ -13,7 +13,6 @@ import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { PaginationBar } from '../components/ui/PaginationBar';
-import { usePagination } from '../hooks/usePagination';
 import { formatDateTime } from '../lib/date-helpers';
 import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
 
@@ -48,22 +47,15 @@ export const AdminSmsPage: React.FC = () => {
   }, [composeTo]);
   const canSend = !!composeToNormalized && composeBody.trim().length > 0 && !sending;
 
-  const { rows, loading, simulated } = useIntegrationCollection<SmsDoc>({
+  const paged = usePagedCollection<SmsDoc>({
     enabled: isAdminUser,
     real: tab === 'outbound' ? 'sms-outbound' : 'sms-inbound',
     sim: tab === 'outbound' ? 'simulation/sms/outbound' : 'simulation/sms/inbound',
     orderField: tab === 'outbound' ? 'sentAt' : 'receivedAt',
+    pageSize: 25,
     mapDoc: (d) => ({ sid: d.id, ...(d.data() as Omit<SmsDoc, 'sid'>) }),
   });
-
-  const [pagState, pagControls] = usePagination({ initialPageSize: 25 });
-  useEffect(() => { pagControls.setTotalItems(rows.length); }, [rows.length, pagControls]);
-  useEffect(() => { pagControls.goToPage(1); }, [tab, pagControls]);
-  const pagedRows = rows.slice(
-    (pagState.currentPage - 1) * pagState.pageSize,
-    pagState.currentPage * pagState.pageSize,
-  );
-  const hasMore = pagState.currentPage * pagState.pageSize < rows.length;
+  const { rows, loading, simulated } = paged;
 
   async function handleInject() {
     setInjecting(true);
@@ -95,6 +87,7 @@ export const AdminSmsPage: React.FC = () => {
       setComposeTo('');
       setComposeBody('');
       setTab('outbound');
+      paged.refresh();
     } catch (err: any) {
       setSendStatus({ kind: 'err', text: err?.message || 'Send failed' });
     } finally {
@@ -173,19 +166,23 @@ export const AdminSmsPage: React.FC = () => {
         activeKey={tab}
         onChange={(v) => setTab(v as 'outbound' | 'inbound')}
         tabs={[
-          { key: 'outbound', label: 'Outbound', count: tab === 'outbound' ? rows.length : undefined },
-          { key: 'inbound', label: 'Inbound', count: tab === 'inbound' ? rows.length : undefined },
+          { key: 'outbound', label: 'Outbound' },
+          { key: 'inbound', label: 'Inbound' },
         ]}
       />
 
-      {simulated && tab === 'inbound' && (
-        <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button onClick={paged.refresh} loading={loading} variant="secondary" size="sm">
+          <RefreshCw className="h-4 w-4 mr-1.5" />
+          Refresh
+        </Button>
+        {simulated && tab === 'inbound' && (
           <Button onClick={handleInject} loading={injecting} variant="secondary" size="sm">
             <Sparkles className="h-4 w-4 mr-1.5" />
             Simulate incoming SMS
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {loading ? (
         <LoadingSpinner />
@@ -200,7 +197,7 @@ export const AdminSmsPage: React.FC = () => {
       ) : (
         <Card className="p-0 overflow-hidden">
           <ul className="divide-y divide-secondary-100">
-            {pagedRows.map((row) => (
+            {rows.map((row) => (
               <li key={row.sid} className="p-4 flex items-start gap-3">
                 <div className="mt-0.5">
                   {tab === 'outbound' ? (
@@ -230,12 +227,14 @@ export const AdminSmsPage: React.FC = () => {
           </ul>
           <div className="p-3 border-t border-secondary-100">
             <PaginationBar
-              currentPage={pagState.currentPage}
-              pageSize={pagState.pageSize}
-              totalItems={rows.length}
-              hasMore={hasMore}
-              onPreviousPage={pagControls.prevPage}
-              onNextPage={pagControls.nextPage}
+              currentPage={paged.page}
+              pageSize={paged.pageSize}
+              // Lower-bound on total (cursor-based — no count query). Enough
+              // to satisfy PaginationBar's "is there only one page?" check.
+              totalItems={(paged.page - 1) * paged.pageSize + rows.length + (paged.hasNext ? 1 : 0)}
+              hasMore={paged.hasNext}
+              onPreviousPage={paged.prev}
+              onNextPage={paged.next}
               label="messages"
             />
           </div>

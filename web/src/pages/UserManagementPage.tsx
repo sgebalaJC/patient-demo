@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -51,7 +51,6 @@ import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import logger from '../lib/logger';
 import { alert as modalAlert } from '../lib/modals';
 export const UserManagementPage: React.FC = () => {
-  const navigate = useNavigate();
   const { userProfile } = useAuth();
   const { enabled: simulated } = useSimulationMode();
   const isAdminUser = isAdminRole(userProfile?.role);
@@ -193,11 +192,13 @@ export const UserManagementPage: React.FC = () => {
       }));
       try {
         await signInWithCustomToken(auth, res.data.token);
-        // Send the impersonator off the admin route — the target user is
-        // usually a patient or non-admin who'd hit AccessDenied if left on
-        // /admin/users. The router's role-based redirects then route them
-        // to /dashboard or wherever their role belongs.
-        navigate('/');
+        // Full reload, not SPA navigate: AuthContext doesn't reset `loading`
+        // when the auth identity flips, so a SPA navigation runs role-based
+        // redirects against the *previous* (admin) profile and lands on
+        // /admin. A hard reload remounts everything against the fresh patient
+        // identity so RoleBasedRedirect picks /dashboard and the banner shows
+        // immediately instead of after the operator manually reloads.
+        window.location.assign('/');
       } catch (signInErr) {
         sessionStorage.removeItem('impersonation');
         throw signInErr;

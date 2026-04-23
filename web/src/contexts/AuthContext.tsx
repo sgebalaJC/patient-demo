@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User as FirebaseUser, signInWithPopup } from 'firebase/auth';
-import { onAuthChange, signOut as firebaseSignOut, googleProvider, auth } from '../lib/firebase';
+import { User as FirebaseUser } from 'firebase/auth';
+import { onAuthChange, signOut as firebaseSignOut } from '../lib/firebase';
 import { userOperations } from '../lib/firestore';
 import { User as AppUser } from '../types';
 import logger from '../lib/logger';
@@ -44,13 +44,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const handleExitImpersonation = async () => {
+    // Sign out + hard reload to /auth: the previous Google-popup approach
+    // failed for admins using email-link or phone-OTP and left stale auth
+    // state in the React tree even when it worked. A full reload through
+    // /auth lets the operator re-authenticate via whatever method they
+    // normally use, and guarantees AuthContext starts clean.
     try {
       sessionStorage.removeItem('impersonation');
       setImpersonating(false);
-      await signInWithPopup(auth, googleProvider);
+      await firebaseSignOut();
     } catch (err: any) {
       logger.error('Error exiting impersonation:', err);
-      await firebaseSignOut();
+    } finally {
+      window.location.assign('/auth');
     }
   };
 

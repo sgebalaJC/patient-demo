@@ -6,7 +6,10 @@ import {
   query,
   where,
   serverTimestamp,
+  collection,
+  CollectionReference,
 } from 'firebase/firestore';
+import { db } from '../firebase';
 import { collections } from './base';
 import { PatientDocument, DocumentType, ApiResponse } from '../../types';
 import logger from '../logger';
@@ -39,14 +42,20 @@ export const documentOperations = {
     }
   },
 
-  // Get patient documents
-  async getPatientDocuments(patientId: string): Promise<ApiResponse<PatientDocument[]>> {
+  // Get patient documents. Honors sim mode so admin views of seeded
+  // demo patients show the seeded patient-documents alongside everything else.
+  async getPatientDocuments(
+    patientId: string,
+    simulated = false,
+  ): Promise<ApiResponse<PatientDocument[]>> {
     try {
-      // First try with isActive filter - remove orderBy to avoid undefined field issues
+      const docsRef = simulated
+        ? (collection(db, 'simulation/native/patient-documents') as CollectionReference)
+        : collections.patientDocuments;
       const documentsQuery = query(
-        collections.patientDocuments,
+        docsRef,
         where('isActive', '==', true),
-        where('patientId', '==', patientId)
+        where('patientId', '==', patientId),
       );
 
       const snapshot = await getDocs(documentsQuery);

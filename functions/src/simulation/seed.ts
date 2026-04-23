@@ -159,6 +159,7 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
   const native = await safeSeed("native", () => seedNative(db), {
     users: 0, appointments: 0, refills: 0,
     specialistRequests: 0, intakeForms: 0, priorAuths: 0,
+    patientDocuments: 0,
     patients: [] as DemoPatient[],
   } as Awaited<ReturnType<typeof seedNative>>);
   const patientIds = native.patients.length > 0
@@ -203,6 +204,7 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
       native_specialist_requests: native.specialistRequests,
       native_intake_forms: native.intakeForms,
       native_prior_auths: native.priorAuths,
+      native_patient_documents: native.patientDocuments,
       ...(native._safeSeedError ? {native_safeseed_error: native._safeSeedError} : {}),
     },
   };

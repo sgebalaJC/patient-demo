@@ -20,6 +20,7 @@ import {
 import logger from '../../lib/logger';
 import { Modal } from '../ui/Modal';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { useSimulationMode } from '../../hooks/useSimulationMode';
 
 interface PatientDocumentManagementProps {
   isOpen: boolean;
@@ -40,12 +41,14 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
   const [imageZoom, setImageZoom] = useState(100);
   const [imageRotation, setImageRotation] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
+  const { enabled: simulated } = useSimulationMode();
 
   useEffect(() => {
     if (isOpen && patient) {
       fetchDocuments();
     }
-  }, [isOpen, patient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, patient, simulated]);
 
   const fetchDocuments = async () => {
     if (!patient) return;
@@ -58,7 +61,7 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
         patientEmail: patient.email
       });
       
-      const response = await documentOperations.getPatientDocuments(patient.id);
+      const response = await documentOperations.getPatientDocuments(patient.id, simulated);
       
       logger.log('📥 [PatientDocumentManagement] API Response:', {
         success: response.success,

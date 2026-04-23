@@ -375,6 +375,58 @@ async function seedPriorAuths(
   return PA_COUNT;
 }
 
+// Tiny stub PDF (single empty page) — embedded so seeded documents have a
+// real downloadable file without requiring Storage uploads. Browsers + the
+// PatientDocumentManagement preview render it as a blank page; that's enough
+// to demonstrate the "open patient document" flow.
+const STUB_PDF_DATA_URL =
+  "data:application/pdf;base64," +
+  "JVBERi0xLjQKJeLjz9MKMyAwIG9iago8PC9UeXBlIC9QYWdlIC9QYXJlbnQgMSAwIFIgL1Jlc291cmNlcyA8PD4+IC9NZWRpYUJveCBbMCAwIDYxMiA3OTJdIC9Db250ZW50cyBbXSA+PgplbmRvYmoKMSAwIG9iago8PC9UeXBlIC9QYWdlcyAvS2lkcyBbMyAwIFJdIC9Db3VudCAxPj4KZW5kb2JqCjIgMCBvYmoKPDwvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMSAwIFI+PgplbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMTI4IDAwMDAwIG4gCjAwMDAwMDAxNzcgMDAwMDAgbiAKMDAwMDAwMDAxNSAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNCAvUm9vdCAyIDAgUj4+CnN0YXJ0eHJlZgoyMjUKJSVFT0YK";
+
+const DOC_TEMPLATES: Array<{ type: string; fileName: string; description: string }> = [
+  { type: "drivers_license",       fileName: "drivers_license.pdf",       description: "California Driver's License" },
+  { type: "insurance_card_front",  fileName: "insurance_card_front.pdf",  description: "Insurance card — front" },
+  { type: "insurance_card_back",   fileName: "insurance_card_back.pdf",   description: "Insurance card — back" },
+  { type: "lab_results",           fileName: "lab_panel_2026.pdf",        description: "CBC + metabolic panel" },
+];
+
+async function seedPatientDocuments(
+  db: admin.firestore.Firestore,
+  patients: DemoPatient[],
+): Promise<number> {
+  const path = "simulation/native/patient-documents";
+  await wipe(db, path);
+  const r = rand(SEED + 6);
+  const batch = db.batch();
+  let count = 0;
+  for (const p of patients) {
+    // Most patients get the 3 ID/insurance docs; some get a lab result too.
+    const templates = r() < 0.4 ? DOC_TEMPLATES : DOC_TEMPLATES.slice(0, 3);
+    for (const t of templates) {
+      const id = `doc-${p.uid}-${t.type}`;
+      const offsetDays = -Math.floor(r() * 90) - 1;
+      batch.set(db.doc(`${path}/${id}`), {
+        id,
+        patientId: p.uid,
+        fileName: t.fileName,
+        originalFileName: t.fileName,
+        // Stub data URL — the preview/download flow handles it like any URL.
+        // Real customer deploys upload to Storage and use a signed URL here.
+        fileUrl: STUB_PDF_DATA_URL,
+        fileSize: 800,
+        fileType: "application/pdf",
+        documentType: t.type,
+        description: t.description,
+        uploadedAt: ts(offsetDays),
+        isActive: true,
+      });
+      count++;
+    }
+  }
+  await batch.commit();
+  return count;
+}
+
 export interface NativeSeedResult {
   users: number;
   appointments: number;
@@ -382,6 +434,7 @@ export interface NativeSeedResult {
   specialistRequests: number;
   intakeForms: number;
   priorAuths: number;
+  patientDocuments: number;
   /** The seeded demo patients — shared with DrChrono/EHR sims for 1:1 alignment. */
   patients: DemoPatient[];
 }
@@ -390,12 +443,13 @@ export async function seedNative(
   db: admin.firestore.Firestore,
 ): Promise<NativeSeedResult> {
   const patients = await seedUsers(db);
-  const [appointments, refills, specialistRequests, intakeForms, priorAuths] = await Promise.all([
+  const [appointments, refills, specialistRequests, intakeForms, priorAuths, patientDocuments] = await Promise.all([
     seedAppointments(db, patients),
     seedRefills(db, patients),
     seedSpecialistRequests(db, patients),
     seedIntakeForms(db, patients),
     seedPriorAuths(db, patients),
+    seedPatientDocuments(db, patients),
   ]);
   return {
     users: patients.length + 1, // +1 admin
@@ -404,6 +458,7 @@ export async function seedNative(
     specialistRequests,
     intakeForms,
     priorAuths,
+    patientDocuments,
     patients,
   };
 }
@@ -415,4 +470,5 @@ export const NATIVE_SIM_PATHS = [
   "simulation/native/specialist-requests",
   "simulation/native/patient-intake-forms",
   "simulation/native/prior-auths",
+  "simulation/native/patient-documents",
 ];

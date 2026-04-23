@@ -5,8 +5,9 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { ChatMarkdown } from '../chat/ChatMarkdown';
 
 interface SkillEntry {
+  id: string;
   name: string;
-  path: string;
+  description: string;
 }
 
 export const AgentSkills: React.FC = () => {
@@ -28,14 +29,8 @@ export const AgentSkills: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const files = await sidecar.listFiles('skills');
-      const skillFiles = files
-        .filter((f: string) => f.endsWith('SKILL.md'))
-        .map((f: string) => {
-          const parts = f.split('/');
-          return { name: parts[1] || parts[0], path: f };
-        });
-      setSkills(skillFiles);
+      const { skills } = await sidecar.listSkills();
+      setSkills(skills);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load skills');
     } finally {
@@ -48,8 +43,8 @@ export const AgentSkills: React.FC = () => {
     setShowForm(false);
     setContentLoading(true);
     try {
-      const text = await sidecar.readFile(skill.path);
-      setContent(text);
+      const { content } = await sidecar.readSkill(skill.id);
+      setContent(content);
     } catch (err) {
       setContent(`Error loading skill: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -76,11 +71,9 @@ export const AgentSkills: React.FC = () => {
 
   const handleDelete = async (skill: SkillEntry) => {
     try {
-      // Delete the skill directory (path is like skills/name/SKILL.md, delete skills/name)
-      const dirPath = skill.path.split('/').slice(0, 2).join('/');
-      await sidecar.deleteFile(dirPath);
+      await sidecar.deleteFile(`skills/${skill.id}`);
       setDeleteTarget(null);
-      if (selected?.path === skill.path) {
+      if (selected?.id === skill.id) {
         setSelected(null);
         setContent('');
       }
@@ -124,9 +117,9 @@ export const AgentSkills: React.FC = () => {
           )}
           {skills.map((skill) => (
             <div
-              key={skill.path}
+              key={skill.id}
               className={`group flex items-center justify-between px-3 py-2.5 border-b border-secondary-100 cursor-pointer transition-colors ${
-                selected?.path === skill.path
+                selected?.id === skill.id
                   ? 'bg-primary-50 text-primary-700'
                   : 'text-secondary-700 hover:bg-secondary-50'
               }`}

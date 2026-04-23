@@ -256,21 +256,12 @@ class SidecarClient {
     id: string;
     name: string;
     description: string;
-    icon: string;
-    requiresWorkspace: boolean;
-    enhancedByWorkspace: boolean;
-    category: string;
-    installed: boolean;
   }[] }> {
     return this.request('/skills');
   }
 
-  async installSkill(id: string): Promise<{ ok: boolean }> {
-    return this.request(`/skills/${id}/install`, { method: 'POST' });
-  }
-
-  async uninstallSkill(id: string): Promise<{ ok: boolean }> {
-    return this.request(`/skills/${id}/uninstall`, { method: 'POST' });
+  async readSkill(id: string): Promise<{ id: string; content: string }> {
+    return this.request(`/skills/${encodeURIComponent(id)}`);
   }
 
   // ── Files (workspace) ─────────────────────────

@@ -16,7 +16,7 @@ import { handleStatus, handleRestart } from "./routes/container.js";
 import { handleStats } from "./routes/stats.js";
 import { readConfig, patchConfig } from "./routes/config.js";
 import { handleCreate, handleList, handleRestore, handleDelete, handleDownload } from "./routes/backup.js";
-import { handleListSkills, handleInstallSkill, handleUninstallSkill } from "./routes/skills.js";
+import { handleListSkills, handleReadSkill } from "./routes/skills.js";
 import { handleAdminApi } from "./routes/admin-api.js";
 import { handleSnapshot } from "./routes/snapshot.js";
 import { startHealthMonitor } from "./lib/health-monitor.js";
@@ -158,28 +158,16 @@ const server = Bun.serve({
       }
 
       // ── Skills ───────────────────────────────────
+      // Skills are deployed via sidecar/deploy.sh into
+      // /root/.openclaw/workspace/skills/<id>/SKILL.md. The sidecar enumerates
+      // them directly from disk — no openclaw CLI dependency, no registry
+      // file. Read /skills/:id to get the full SKILL.md body.
       if (path === "/skills" && method === "GET") {
-        try {
-          const { execSync } = await import("child_process");
-          const out = execSync("/usr/bin/openclaw skills list --json", {
-            timeout: 15000,
-            encoding: "utf-8",
-            env: { ...process.env, HOME: "/root" },
-            stdio: ["pipe", "pipe", "pipe"],
-          });
-          // The output may contain warnings before/after the JSON — extract just the JSON object
-          const jsonStart = out.indexOf("{");
-          const jsonEnd = out.lastIndexOf("}");
-          const json = (jsonStart >= 0 && jsonEnd > jsonStart)
-            ? out.slice(jsonStart, jsonEnd + 1)
-            : out;
-          return respond(new Response(json, {
-            headers: { "Content-Type": "application/json" },
-          }));
-        } catch (err) {
-          console.error("[skills] failed:", err);
-          return respond(Response.json({ skills: [], error: String(err) }));
-        }
+        return respond(handleListSkills());
+      }
+      const skillReadMatch = path.match(/^\/skills\/([\w-]+)$/);
+      if (skillReadMatch && method === "GET") {
+        return respond(handleReadSkill(skillReadMatch[1]));
       }
 
       // ── Status / Restart ────────────────────────
@@ -204,16 +192,6 @@ const server = Bun.serve({
       if (path.startsWith("/backup/") && method === "DELETE") {
         const name = path.replace("/backup/", "");
         return respond(handleDelete(name));
-      }
-
-      // ── Skills ─────────────────────────────────
-      if (path.match(/^\/skills\/[\w-]+\/install$/) && method === "POST") {
-        const id = path.split("/")[2];
-        return respond(handleInstallSkill(id));
-      }
-      if (path.match(/^\/skills\/[\w-]+\/uninstall$/) && method === "POST") {
-        const id = path.split("/")[2];
-        return respond(handleUninstallSkill(id));
       }
 
       // ── Cron ──────────────────────────────────

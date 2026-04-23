@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useSimulationMode } from '../hooks/useSimulationMode';
 import { useFeatures } from '../hooks/useFeatures';
 import { isAdminRole } from '../lib/roles';
 import { Card } from '../components/ui/Card';
@@ -21,6 +22,7 @@ import logger from "../lib/logger";
 
 export const AdminDashboardPage: React.FC = () => {
     const { user, userProfile } = useAuth();
+    const { enabled: simulated } = useSimulationMode();
     const { features } = useFeatures();
     const [recentMessages, setRecentMessages] = useState<MessageThread[]>([]);
     const [recentRefills, setRecentRefills] = useState<PrescriptionRefillRequest[]>([]);
@@ -68,7 +70,7 @@ export const AdminDashboardPage: React.FC = () => {
                 // Fetch patient names for these refills
                 const patientIds = [...new Set(recent.map(r => r.patientId))];
                 if (patientIds.length > 0) {
-                    const namesResponse = await prescriptionRefillOperations.getPatientNamesByIds(patientIds);
+                    const namesResponse = await prescriptionRefillOperations.getPatientNamesByIds(patientIds, simulated);
                     if (namesResponse.success && namesResponse.data) {
                         setPatientNames(namesResponse.data);
                     }

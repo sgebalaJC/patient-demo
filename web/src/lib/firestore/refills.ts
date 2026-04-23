@@ -11,20 +11,29 @@ import {
   serverTimestamp,
   documentId,
   startAfter,
+  collection,
 } from 'firebase/firestore';
 import { collections, logAuthContext } from './base';
+import { db } from '../firebase';
 import { PrescriptionRefillRequest, ApiResponse, User } from '../../types';
 import logger from "../logger";
 import { audit } from "../audit";
 
 // Prescription refill operations
 export const prescriptionRefillOperations = {
-  // Get patient names by IDs (batch fetch for efficiency)
-  async getPatientNamesByIds(patientIds: string[]): Promise<ApiResponse<{ [patientId: string]: { firstName: string; lastName: string } }>> {
+  // Get patient names by IDs (batch fetch for efficiency). In sim mode the
+  // caller passes `simulated: true` so we read from `simulation/native/users`
+  // instead of the real users collection.
+  async getPatientNamesByIds(
+    patientIds: string[],
+    simulated: boolean = false,
+  ): Promise<ApiResponse<{ [patientId: string]: { firstName: string; lastName: string } }>> {
     try {
       if (patientIds.length === 0) {
         return { success: true, data: {} };
       }
+
+      const usersRef = simulated ? collection(db, 'simulation/native/users') : collections.users;
 
       // Firestore 'in' queries support up to 10 items, so we need to batch larger queries
       const batchSize = 10;
@@ -33,7 +42,7 @@ export const prescriptionRefillOperations = {
       for (let i = 0; i < patientIds.length; i += batchSize) {
         const batchIds = patientIds.slice(i, i + batchSize);
         const patientsQuery = query(
-          collections.users,
+          usersRef,
           where(documentId(), 'in', batchIds)
         );
 

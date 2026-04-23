@@ -3,6 +3,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { useAuth } from '../hooks/useAuth';
+import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
 import { prescriptionRefillOperations } from '../lib/firestore';
 import { PrescriptionRefillRequest } from '../types';
@@ -38,6 +39,7 @@ const REFILL_STATUS_ICON_COLORS: Record<string, string> = {
 
 export const AdminRefillsPage: React.FC = () => {
     const { user, userProfile } = useAuth();
+    const { enabled: simulated } = useSimulationMode();
     const isAdminUser = !!user && isAdminRole(userProfile?.role);
     const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'denied' | 'completed'>('all');
     const [patientNames, setPatientNames] = useState<{ [patientId: string]: { firstName: string; lastName: string } }>({});
@@ -80,12 +82,12 @@ export const AdminRefillsPage: React.FC = () => {
             (id) => !(id in patientNames),
         );
         if (ids.length === 0) return;
-        prescriptionRefillOperations.getPatientNamesByIds(ids).then((res) => {
+        prescriptionRefillOperations.getPatientNamesByIds(ids, simulated).then((res) => {
             if (res.success && res.data) {
                 setPatientNames((prev) => ({ ...prev, ...res.data }));
             }
         }).catch((err) => logger.error('patient-name lookup failed', err));
-    }, [refillsPage, patientNames]);
+    }, [refillsPage, patientNames, simulated]);
 
     const refreshAll = () => { paged.refresh(); refreshCounts(); };
 

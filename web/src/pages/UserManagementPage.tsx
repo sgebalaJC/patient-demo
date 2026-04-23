@@ -5,6 +5,7 @@ import { Input } from '../components/ui/Input';
 import { userOperations, UserSortField, SortDirection } from '../lib/firestore';
 import { User } from '../types';
 import { useAuth } from '../hooks/useAuth';
+import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
 import {
     Users,
@@ -50,6 +51,7 @@ import logger from '../lib/logger';
 import { alert as modalAlert } from '../lib/modals';
 export const UserManagementPage: React.FC = () => {
   const { userProfile } = useAuth();
+  const { enabled: simulated } = useSimulationMode();
   const isAdminUser = isAdminRole(userProfile?.role);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -108,7 +110,7 @@ export const UserManagementPage: React.FC = () => {
     if (!isAdminUser || !searchQuery) { setSearchResults([]); return; }
     let cancelled = false;
     setSearchLoading(true);
-    userOperations.getAllUsers(500, 1, searchQuery, sortBy, sortDir).then((res) => {
+    userOperations.getAllUsers(500, 1, searchQuery, sortBy, sortDir, null, 'first', simulated).then((res) => {
       if (cancelled) return;
       if (res.success && res.data) setSearchResults(res.data.users);
       else setSearchResults([]);
@@ -118,7 +120,7 @@ export const UserManagementPage: React.FC = () => {
       if (!cancelled) setSearchLoading(false);
     });
     return () => { cancelled = true; };
-  }, [isAdminUser, searchQuery, sortBy, sortDir]);
+  }, [isAdminUser, searchQuery, sortBy, sortDir, simulated]);
 
   const users = searchQuery ? searchResults : paged.rows;
   const loading = searchQuery ? searchLoading : paged.loading;
@@ -131,7 +133,7 @@ export const UserManagementPage: React.FC = () => {
       // trigger via state — force by clearing+restoring
       setSearchResults([]);
       setSearchLoading(true);
-      userOperations.getAllUsers(500, 1, searchQuery, sortBy, sortDir).then((res) => {
+      userOperations.getAllUsers(500, 1, searchQuery, sortBy, sortDir, null, 'first', simulated).then((res) => {
         if (res.success && res.data) setSearchResults(res.data.users);
       }).finally(() => setSearchLoading(false));
     } else {

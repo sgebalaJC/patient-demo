@@ -16,8 +16,11 @@ import {
   DocumentSnapshot,
   QueryDocumentSnapshot,
   getCountFromServer,
+  collection,
+  CollectionReference,
 } from 'firebase/firestore';
 import { collections } from './base';
+import { db } from '../firebase';
 import { User, ApiResponse } from '../../types';
 import { isAdminRole } from '../roles';
 import logger from "../logger";
@@ -107,7 +110,8 @@ export const userOperations = {
     sortBy: UserSortField = 'lastName',
     sortDir: SortDirection = 'asc',
     cursorDoc?: DocumentSnapshot | null,
-    direction: 'next' | 'prev' | 'first' = 'first'
+    direction: 'next' | 'prev' | 'first' = 'first',
+    simulated: boolean = false,
   ): Promise<ApiResponse<{
     users: User[];
     total: number;
@@ -118,27 +122,31 @@ export const userOperations = {
     lastDoc: DocumentSnapshot | null;
   }>> {
     try {
+      const usersRef: CollectionReference = simulated
+        ? collection(db, 'simulation/native/users')
+        : collections.users;
+
       // Search mode: fetch all and filter client-side (unavoidable with Firestore)
       if (searchQuery && searchQuery.trim()) {
-        return this._searchUsers(pageSize, page, searchQuery);
+        return this._searchUsers(pageSize, page, searchQuery, usersRef);
       }
 
       // ── Server-side paginated query ──
       const baseConstraints = [orderBy(sortBy, sortDir)];
 
       // Get total count (cached by Firestore, cheap after first call)
-      const countSnap = await getCountFromServer(query(collections.users));
+      const countSnap = await getCountFromServer(query(usersRef));
       const total = countSnap.data().count;
 
       // Build paginated query
       let paginatedQuery;
       if (direction === 'next' && cursorDoc) {
-        paginatedQuery = query(collections.users, ...baseConstraints, startAfter(cursorDoc), limit(pageSize));
+        paginatedQuery = query(usersRef, ...baseConstraints, startAfter(cursorDoc), limit(pageSize));
       } else if (direction === 'prev' && cursorDoc) {
-        paginatedQuery = query(collections.users, ...baseConstraints, endBefore(cursorDoc), limitToLast(pageSize));
+        paginatedQuery = query(usersRef, ...baseConstraints, endBefore(cursorDoc), limitToLast(pageSize));
       } else {
         // First page
-        paginatedQuery = query(collections.users, ...baseConstraints, limit(pageSize));
+        paginatedQuery = query(usersRef, ...baseConstraints, limit(pageSize));
       }
 
       const snapshot = await getDocs(paginatedQuery);
@@ -148,7 +156,7 @@ export const userOperations = {
       let hasMore = false;
       if (snapshot.docs.length === pageSize) {
         const lastDoc = snapshot.docs[snapshot.docs.length - 1];
-        const peekQuery = query(collections.users, ...baseConstraints, startAfter(lastDoc), limit(1));
+        const peekQuery = query(usersRef, ...baseConstraints, startAfter(lastDoc), limit(1));
         const peekSnap = await getDocs(peekQuery);
         hasMore = !peekSnap.empty;
       }
@@ -194,7 +202,8 @@ export const userOperations = {
   async _searchUsers(
     pageSize: number,
     page: number,
-    searchQuery: string
+    searchQuery: string,
+    usersRef: CollectionReference = collections.users,
   ): Promise<ApiResponse<{
     users: User[];
     total: number;
@@ -204,7 +213,7 @@ export const userOperations = {
     firstDoc: null;
     lastDoc: null;
   }>> {
-    const allSnapshot = await getDocs(query(collections.users, orderBy('lastName', 'asc')));
+    const allSnapshot = await getDocs(query(usersRef, orderBy('lastName', 'asc')));
     const allUsers = allSnapshot.docs.map(doc => this._docToUser(doc)).filter(Boolean) as User[];
 
     const q = searchQuery.toLowerCase().trim();

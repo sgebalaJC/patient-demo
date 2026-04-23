@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
 import { intakeFormOperations, prescriptionRefillOperations } from '../lib/firestore';
 import { PatientIntakeForm, PatientInfoForm, MedicalHistoryForm, ConsentForm, ConciergeAgreement } from '../types';
@@ -309,6 +310,7 @@ const FormDataViewer: React.FC<{ form: PatientIntakeForm }> = ({ form }) => {
 
 export const AdminIntakeFormsPage: React.FC = () => {
   const { user, userProfile } = useAuth();
+  const { enabled: simulated } = useSimulationMode();
   const isAdminUser = !!user && isAdminRole(userProfile?.role);
   const [patientNames, setPatientNames] = useState<Record<string, { firstName: string; lastName: string }>>({});
   const [filter, setFilter] = useState<'all' | 'completed' | 'in_progress' | 'approved'>('all');
@@ -353,12 +355,12 @@ export const AdminIntakeFormsPage: React.FC = () => {
       (id) => !(id in patientNames),
     );
     if (ids.length === 0) return;
-    prescriptionRefillOperations.getPatientNamesByIds(ids).then((res) => {
+    prescriptionRefillOperations.getPatientNamesByIds(ids, simulated).then((res) => {
       if (res.success && res.data) {
         setPatientNames((prev) => ({ ...prev, ...res.data }));
       }
     }).catch((err) => logger.error('patient-name lookup failed', err));
-  }, [filtered, patientNames]);
+  }, [filtered, patientNames, simulated]);
 
   const refreshAll = () => { paged.refresh(); refreshCounts(); };
 

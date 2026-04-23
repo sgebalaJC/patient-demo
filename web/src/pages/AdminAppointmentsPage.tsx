@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
 import { isAdminRole } from '../lib/roles';
-import { appointmentOperations, notificationOperations, userOperations } from '../lib/firestore';
+import {
+    appointmentOperations,
+    notificationOperations,
+    userOperations,
+    prescriptionRefillOperations,
+} from '../lib/firestore';
 import { Appointment, User as UserType } from '../types';
 import { Timestamp } from 'firebase/firestore';
 import { Modal } from '../components/ui/Modal';
@@ -18,12 +23,12 @@ import {
     X,
     Plus,
     Loader,
+    RefreshCw,
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AdminGuard } from '../components/ui/AdminGuard';
-import { SearchInput } from '../components/ui/SearchInput';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatsGrid } from '../components/ui/StatsGrid';
 import { PaginationBar } from '../components/ui/PaginationBar';
@@ -33,26 +38,20 @@ import { getAppointmentStatusColor, getAppointmentStatusIcon } from '../lib/stat
 import { formatDate, formatTime } from '../lib/date-helpers';
 import { getSpecialistLabel } from '../config/specialists';
 import { BUSINESS } from '../config/branding';
+import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
+import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import logger from '../lib/logger';
-import { doc, getDoc } from 'firebase/firestore';
-import { collections } from '../lib/firestore/base';
 
 type AppointmentWithPatient = Appointment & { patientName: string };
 
 export const AdminAppointmentsPage: React.FC = () => {
     const { user, userProfile } = useAuth();
-    const [allAppointments, setAllAppointments] = useState<AppointmentWithPatient[]>([]);
-    const [loading, setLoading] = useState(true);
+    const isAdminUser = !!user && isAdminRole(userProfile?.role);
     const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'today'>('upcoming');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
-    const pageSize = 10;
-    const [statusCounts, setStatusCounts] = useState({
-        all: 0,
-        upcoming: 0,
-        past: 0,
-        today: 0,
-    });
+    const [patientNames, setPatientNames] = useState<Record<string, { firstName: string; lastName: string }>>({});
+    // Bumped on Refresh to recompute time windows (now, todayStart, todayEnd)
+    // and reload rows + counts with fresh bounds.
+    const [timeKey, setTimeKey] = useState(0);
     const [editingReminder, setEditingReminder] = useState<string | null>(null);
     const [reminderText, setReminderText] = useState('');
     const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
@@ -72,100 +71,87 @@ export const AdminAppointmentsPage: React.FC = () => {
     });
     const [creating, setCreating] = useState(false);
 
-    // Load all data once
-    useEffect(() => {
-        if (user && isAdminRole(userProfile?.role)) {
-            fetchAppointments();
-        }
-    }, [user, userProfile]);
-
-    // Reset page on filter change (no re-fetch)
-    useEffect(() => { setCurrentPage(1); }, [filter]);
-
-    const fetchAppointments = async () => {
-        setLoading(true);
-        try {
-            const allResponse = await appointmentOperations.getAllAppointments(1000, 1);
-
-            if (allResponse.success && allResponse.data) {
-                const appointmentsWithPatients = await Promise.all(
-                    allResponse.data.appointments.map(async (appointment) => {
-                        try {
-                            const userDoc = await getDoc(doc(collections.users, appointment.patientId));
-                            const userData = userDoc.data();
-                            const patientName = userData
-                                ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown Patient'
-                                : 'Unknown Patient';
-                            return { ...appointment, patientName } as AppointmentWithPatient;
-                        } catch {
-                            return { ...appointment, patientName: 'Unknown Patient' } as AppointmentWithPatient;
-                        }
-                    })
-                );
-
-                setAllAppointments(appointmentsWithPatients);
-
-                const now = new Date();
-                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-
-                setStatusCounts({
-                    all: appointmentsWithPatients.length,
-                    upcoming: appointmentsWithPatients.filter(a => a.appointmentDate.toDate() > now).length,
-                    past: appointmentsWithPatients.filter(a => a.appointmentDate.toDate() < now).length,
-                    today: appointmentsWithPatients.filter(a => {
-                        const d = a.appointmentDate.toDate();
-                        return d >= todayStart && d <= todayEnd;
-                    }).length,
-                });
-            }
-        } catch (error) {
-            logger.error('Error fetching appointments:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Client-side filter + sort + paginate (instant)
-    const getFilteredAppointments = () => {
+    // Time window values — snapshotted per timeKey bump; Refresh bumps timeKey
+    // to recompute them. Computed at render (stable through memo) so Firestore
+    // query identity stays stable across re-renders while filter is constant.
+    const { nowTs, todayStartTs, todayEndTs } = useMemo(() => {
         const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        const ts = Timestamp.fromDate(now);
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        return {
+            nowTs: ts,
+            todayStartTs: Timestamp.fromDate(start),
+            todayEndTs: Timestamp.fromDate(end),
+        };
+    }, [timeKey]);
 
-        let result = allAppointments;
+    const whereClauses = useMemo<WhereClause[] | undefined>(() => {
         switch (filter) {
-            case 'upcoming': result = allAppointments.filter(a => a.appointmentDate.toDate() > now); break;
-            case 'past': result = allAppointments.filter(a => a.appointmentDate.toDate() < now); break;
-            case 'today': result = allAppointments.filter(a => {
-                const d = a.appointmentDate.toDate();
-                return d >= todayStart && d <= todayEnd;
-            }); break;
+            case 'upcoming': return [['appointmentDate', '>', nowTs]];
+            case 'past':     return [['appointmentDate', '<', nowTs]];
+            case 'today':    return [
+                ['appointmentDate', '>=', todayStartTs],
+                ['appointmentDate', '<=', todayEndTs],
+            ];
+            case 'all':
+            default:         return undefined;
         }
+    }, [filter, nowTs, todayStartTs, todayEndTs]);
 
-        // Search filter
-        if (searchTerm) {
-            const q = searchTerm.toLowerCase();
-            result = result.filter(a =>
-                a.patientName?.toLowerCase().includes(q) ||
-                a.appointmentType?.toLowerCase().includes(q) ||
-                a.reason?.toLowerCase().includes(q)
-            );
-        }
+    const paged = usePagedCollection<Appointment>({
+        enabled: isAdminUser,
+        real: 'appointments',
+        orderField: 'appointmentDate',
+        orderDir: 'desc',
+        pageSize: 10,
+        whereClauses,
+        mapDoc: (d) => ({ ...(d.data() as Appointment), id: d.id }),
+    });
+    const loading = paged.loading;
 
-        // Sort newest first
-        result.sort((a, b) => b.appointmentDate.toMillis() - a.appointmentDate.toMillis());
-        return result;
+    const countsPredicates = useMemo(() => ({
+        all:      [] as WhereClause[],
+        today:    [['appointmentDate', '>=', todayStartTs], ['appointmentDate', '<=', todayEndTs]] as WhereClause[],
+        upcoming: [['appointmentDate', '>', nowTs]] as WhereClause[],
+        past:     [['appointmentDate', '<', nowTs]] as WhereClause[],
+    }), [nowTs, todayStartTs, todayEndTs]);
+    const { counts: statusCounts, refresh: refreshCounts } = useCollectionCounts({
+        enabled: isAdminUser,
+        real: 'appointments',
+        predicates: countsPredicates,
+    });
+
+    // Fetch names only for patients on the current page.
+    useEffect(() => {
+        const ids = [...new Set(paged.rows.map((a) => a.patientId))].filter(
+            (id) => !(id in patientNames),
+        );
+        if (ids.length === 0) return;
+        prescriptionRefillOperations.getPatientNamesByIds(ids).then((res) => {
+            if (res.success && res.data) {
+                setPatientNames((prev) => ({ ...prev, ...res.data }));
+            }
+        }).catch((err) => logger.error('patient-name lookup failed', err));
+    }, [paged.rows, patientNames]);
+
+    const appointments: AppointmentWithPatient[] = paged.rows.map((a) => {
+        const n = patientNames[a.patientId];
+        const patientName = n ? `${n.firstName} ${n.lastName}`.trim() || 'Unknown Patient' : 'Unknown Patient';
+        return { ...a, patientName };
+    });
+
+    const refreshAll = () => {
+        setTimeKey((k) => k + 1);
+        paged.refresh();
+        refreshCounts();
     };
-
-    const filteredAppointments = getFilteredAppointments();
-    const appointments = filteredAppointments.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-    const hasMore = currentPage * pageSize < filteredAppointments.length;
 
     const handleStatusUpdate = async (appointmentId: string, status: Appointment['status']) => {
         try {
             const response = await appointmentOperations.updateAppointment(appointmentId, { status });
             if (response.success) {
-                fetchAppointments();
+                refreshAll();
             }
         } catch (error) {
             logger.error('Error updating appointment status:', error);
@@ -200,7 +186,7 @@ export const AdminAppointmentsPage: React.FC = () => {
                     });
                 }
 
-                fetchAppointments();
+                refreshAll();
             }
         } catch (error) {
             logger.error('Error approving appointment:', error);
@@ -216,7 +202,7 @@ export const AdminAppointmentsPage: React.FC = () => {
             const response = await appointmentOperations.updateAppointment(appointmentId, updates);
             if (response.success) {
                 setRejectConfirmId(null);
-                fetchAppointments();
+                refreshAll();
 
                 // Notify the patient
                 const appointment = appointments.find(a => a.id === appointmentId);
@@ -244,7 +230,7 @@ export const AdminAppointmentsPage: React.FC = () => {
             if (response.success) {
                 setEditingReminder(null);
                 setReminderText('');
-                fetchAppointments();
+                refreshAll();
             }
         } catch (error) {
             logger.error('Error saving reminder message:', error);
@@ -334,7 +320,7 @@ export const AdminAppointmentsPage: React.FC = () => {
             if (response.success) {
                 setShowCreateModal(false);
                 setCreateForm({ patientId: '', appointmentDate: '', appointmentTime: '', appointmentType: 'consultation', reminderMessage: '' });
-                fetchAppointments();
+                refreshAll();
             }
         } catch (error) {
             logger.error('Error creating appointment:', error);
@@ -344,7 +330,7 @@ export const AdminAppointmentsPage: React.FC = () => {
     };
 
 
-    if (loading && allAppointments.length === 0) {
+    if (loading && paged.rows.length === 0 && paged.page === 1) {
         return <AdminGuard><LoadingSpinner /></AdminGuard>;
     }
 
@@ -394,13 +380,14 @@ export const AdminAppointmentsPage: React.FC = () => {
                         ))}
                     </div>
 
-                    <SearchInput
-                      placeholder="Search by patient name, type, or reason..."
-                      value={searchTerm}
-                      onChange={setSearchTerm}
-                    />
                 </div>
             </Card>
+
+            <div className="flex justify-end">
+                <Button onClick={refreshAll} loading={loading} variant="secondary" size="sm">
+                    <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh
+                </Button>
+            </div>
 
             {/* Appointments List */}
             <div className={`transition-opacity duration-150 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -615,12 +602,12 @@ export const AdminAppointmentsPage: React.FC = () => {
                 </div>
 
                 <PaginationBar
-                  currentPage={currentPage}
-                  pageSize={pageSize}
-                  totalItems={filteredAppointments.length}
-                  hasMore={hasMore}
-                  onPreviousPage={() => setCurrentPage(currentPage - 1)}
-                  onNextPage={() => setCurrentPage(currentPage + 1)}
+                  currentPage={paged.page}
+                  pageSize={paged.pageSize}
+                  totalItems={(paged.page - 1) * paged.pageSize + appointments.length + (paged.hasNext ? 1 : 0)}
+                  hasMore={paged.hasNext}
+                  onPreviousPage={paged.prev}
+                  onNextPage={paged.next}
                   label="appointments"
                 />
             </Card>

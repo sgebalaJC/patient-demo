@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { appSettingsOperations, AppSettings, APP_SETTINGS_DEFAULTS } from '../lib/firestore/app-settings';
+import { setSimCollectionMode } from '../lib/firestore/base';
 
 interface AppSettingsState {
   settings: AppSettings;
@@ -30,6 +31,11 @@ export const AppSettingsProvider: React.FC<AppSettingsProviderProps> = ({ childr
   useEffect(() => {
     const unsubscribe = appSettingsOperations.subscribe((next) => {
       setSettings(next);
+      // Keep the sim flag that drives `collections.*` aligned with the live
+      // settings doc. Patient-facing Firestore ops use `collections.users`
+      // etc. directly; without this, they'd always hit real paths even when
+      // sim mode is on, so impersonated sim patients saw empty dashboards.
+      setSimCollectionMode(next.simulationMode === true);
       setLoading(false);
     });
     return unsubscribe;

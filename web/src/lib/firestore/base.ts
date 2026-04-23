@@ -11,26 +11,40 @@ export const logAuthContext = (_operation: string) => {
   // Auth context logging removed for production
 };
 
-// Collection references
+// Global sim-mode flag, kept in sync by AppSettingsProvider. When true, every
+// access through `collections.*` routes to `simulation/native/<name>` so the
+// patient-side pages (Dashboard / Refills / Appointments / etc.) see seeded
+// sandbox data transparently — same way the admin side already does via
+// usePagedCollection and the sidecar nc() helper.
+let simMode = false;
+export function setSimCollectionMode(on: boolean) {
+  simMode = on;
+}
+
+const simPath = (name: string) => (simMode ? `simulation/native/${name}` : name);
+
+// Collection references — implemented as getters so they re-resolve against
+// the current sim flag on every access. Firebase caches CollectionReference
+// internally so the repeated `collection(db, ...)` calls are cheap.
 export const collections = {
-  users: collection(db, 'users'),
-  appointments: collection(db, 'appointments'),
-  messageThreads: collection(db, 'message-threads'),
-  threadMessages: collection(db, 'thread-messages'),
-  prescriptionRefills: collection(db, 'prescription-refills'),
-  patientDocuments: collection(db, 'patient-documents'),
-  patientIntakeForms: collection(db, 'patient-intake-forms'),
-  notifications: collection(db, 'notifications'),
-  specialistRequests: collection(db, 'specialist-requests'),
-  subscriptionPlans: collection(db, 'subscription-plans'),
-  patientSubscriptions: collection(db, 'patient-subscriptions'),
-  priorAuths: collection(db, 'prior-auths'),
-  payers: collection(db, 'payers'),
-  payerPolicies: collection(db, 'payer-policies'),
-  payerPolicySnapshots: collection(db, 'payer-policy-snapshots'),
-  payerCandidates: collection(db, 'payer-candidates'),
-  targetCpts: collection(db, 'target-cpts'),
-  priorAuthEvents: collection(db, 'prior-auth-events'),
+  get users() { return collection(db, simPath('users')); },
+  get appointments() { return collection(db, simPath('appointments')); },
+  get messageThreads() { return collection(db, simPath('message-threads')); },
+  get threadMessages() { return collection(db, simPath('thread-messages')); },
+  get prescriptionRefills() { return collection(db, simPath('prescription-refills')); },
+  get patientDocuments() { return collection(db, simPath('patient-documents')); },
+  get patientIntakeForms() { return collection(db, simPath('patient-intake-forms')); },
+  get notifications() { return collection(db, simPath('notifications')); },
+  get specialistRequests() { return collection(db, simPath('specialist-requests')); },
+  get subscriptionPlans() { return collection(db, simPath('subscription-plans')); },
+  get patientSubscriptions() { return collection(db, simPath('patient-subscriptions')); },
+  get priorAuths() { return collection(db, simPath('prior-auths')); },
+  get payers() { return collection(db, simPath('payers')); },
+  get payerPolicies() { return collection(db, simPath('payer-policies')); },
+  get payerPolicySnapshots() { return collection(db, simPath('payer-policy-snapshots')); },
+  get payerCandidates() { return collection(db, simPath('payer-candidates')); },
+  get targetCpts() { return collection(db, simPath('target-cpts')); },
+  get priorAuthEvents() { return collection(db, simPath('prior-auth-events')); },
 };
 
 // Utility functions

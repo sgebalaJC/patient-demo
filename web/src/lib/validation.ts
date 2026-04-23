@@ -1,3 +1,30 @@
+import { FORK_CONFIG } from '../../../fork.config';
+
+/**
+ * Global ceiling for any free-text field written by a client. Per-field
+ * caps below may be smaller (e.g. firstName: 100). Anything longer
+ * than this ceiling throws — both in Zod schemas on the client and in
+ * the matching helper on the server (functions/src/lib/validation.ts).
+ */
+export const MAX_FIELD_CHARS = FORK_CONFIG.limits.maxFieldChars;
+
+/**
+ * Throws if `value` exceeds the given max (default: MAX_FIELD_CHARS).
+ * Error message names the field so form-level catches can surface a
+ * precise message to the user. Use in hand-rolled validation paths
+ * that aren't driven by Zod.
+ */
+export function assertMaxLength(
+  field: string,
+  value: string | null | undefined,
+  max: number = MAX_FIELD_CHARS,
+): void {
+  if (value == null) return;
+  if (value.length > max) {
+    throw new Error(`${field} must be ${max} characters or fewer (got ${value.length}).`);
+  }
+}
+
 /**
  * Centralized field length limits.
  * Used by Zod schemas (frontend) and should match Cloud Function validation.

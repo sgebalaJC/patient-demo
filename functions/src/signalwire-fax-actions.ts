@@ -268,7 +268,7 @@ export const sendFaxEmail = onCall({
     logger.warn("[fax] No pdfPath on fax doc, sending text-only", {faxSid});
   }
 
-  logger.info("[fax] Sending email", {faxSid, to: draft.to, by: uid, attached: attachments.length});
+  logger.info("[fax] Sending email", {faxSid, by: uid, attached: attachments.length});
   const messageId = await sendFaxForwardEmail({
     to: draft.to,
     cc: draft.cc?.length ? draft.cc : FAX_CC_EMAIL ? [FAX_CC_EMAIL] : [],

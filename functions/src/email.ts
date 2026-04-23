@@ -58,7 +58,7 @@ export async function sendEmail(opts: {
       from: `"${B.shortName}" <${process.env.SMTP_USER}>`,
       ...opts,
     });
-    logger.info(`Email sent to ${opts.to}: ${opts.subject}`);
+    logger.info("Email sent", { subject: opts.subject });
     return true;
   } catch (err) {
     logger.error("Email send failed:", err);

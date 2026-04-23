@@ -170,29 +170,31 @@ function clientIp(req: { rawRequest?: { headers?: any; ip?: string; socket?: any
 }
 
 /**
- * Format phone number for SMS (ensure +1 prefix for US numbers)
+ * Normalize raw input to canonical US 10-digit form (`"4425004657"`).
+ * This is the stored format in `users.phoneNumber` and all Firestore
+ * collections. Mirrors web/src/lib/phone.ts `normalizePhoneNumber`.
+ *
+ * Empty → `""`. Anything that doesn't reduce to 10 digits (or 11 starting
+ * with `1`) throws — callers surface the error back to the client.
  */
-function formatPhoneNumber(phoneNumber: string): string {
-    // Remove all non-digits
-    const digits = phoneNumber.replace(/\D/g, '');
+function normalizePhoneNumber(phoneNumber: string): string {
+    const trimmed = (phoneNumber || '').trim();
+    if (!trimmed) return '';
+    const digits = trimmed.replace(/\D/g, '');
+    if (digits.length === 10) return digits;
+    if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
+    throw new Error(`Invalid US phone number: ${JSON.stringify(trimmed)}. Expected 10 digits.`);
+}
 
-    // If it's 10 digits, assume US and add +1
-    if (digits.length === 10) {
-        return `+1${digits}`;
-    }
-
-    // If it's 11 digits and starts with 1, add +
-    if (digits.length === 11 && digits.startsWith('1')) {
-        return `+${digits}`;
-    }
-
-    // If it already starts with +, return as is
-    if (phoneNumber.startsWith('+')) {
-        return phoneNumber;
-    }
-
-    // Default: add + prefix
-    return `+${digits}`;
+/**
+ * Convert a canonical 10-digit phone to E.164 (`+1XXXXXXXXXX`) for
+ * external APIs (Twilio send, Firebase Auth create/update user).
+ */
+function toE164(phone10: string): string {
+    const digits = (phone10 || '').replace(/\D/g, '');
+    if (digits.length === 10) return `+1${digits}`;
+    if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+    throw new Error(`Invalid US phone number for E.164: ${JSON.stringify(phone10)}`);
 }
 
 
@@ -447,9 +449,9 @@ export const createUserWithAuth = onCall({
       throw new Error(`Invalid role. Must be one of: ${VALID_ROLES.join(', ')}`);
     }
 
-    // Normalize phone to the canonical +1XXXXXXXXXX format so later phone-OTP
+    // Normalize phone to canonical 10-digit US form so later phone-OTP
     // sign-ins can match on users.where('phoneNumber', '==', ...).
-    const phoneNumber = rawPhoneNumber ? formatPhoneNumber(rawPhoneNumber) : '';
+    const phoneNumber = rawPhoneNumber ? normalizePhoneNumber(rawPhoneNumber) : '';
 
     // Passwordless: admin-created users have no password set. They sign in via
     // the invite link (Firebase email link) sent from the admin's browser after
@@ -573,9 +575,7 @@ export const createUserWithAuth = onCall({
     let smsSent = false;
     if (sendWelcomeSms && phoneNumber) {
       try {
-        const formattedTo = phoneNumber.startsWith('+')
-          ? phoneNumber
-          : formatPhoneNumber(phoneNumber);
+        const formattedTo = toE164(phoneNumber);
         const body = `Welcome to ${FUNCTIONS_BRANDING.shortName}, ${firstName}! Check your email for a sign-in link to access your account.`;
 
         const settingsSnap = await admin.firestore().doc('system/settings').get();
@@ -724,10 +724,9 @@ export const onBootstrapRequestCreated = onDocumentCreated({
       return;
     }
 
-    // Normalize phone number to the canonical +1XXXXXXXXXX format so that
-    // later phone-OTP sign-ins can match. formatPhoneNumber handles raw
-    // digits, leading 1, already-formatted, etc.
-    const normalizedPhone = phoneNumber ? formatPhoneNumber(phoneNumber) : '';
+    // Normalize phone number to canonical 10-digit US form so later
+    // phone-OTP sign-ins can match.
+    const normalizedPhone = phoneNumber ? normalizePhoneNumber(phoneNumber) : '';
 
     const settingsRef = db.collection('system').doc('settings');
 
@@ -1711,10 +1710,11 @@ export const sendPhoneVerificationCode = onCall({
       throw new Error('Phone number is required');
     }
 
-    const formatted = formatPhoneNumber(phoneNumber);
-    if (!/^\+1\d{10}$/.test(formatted)) {
+    const normalized = normalizePhoneNumber(phoneNumber);
+    if (!/^\d{10}$/.test(normalized)) {
       throw new Error('Please enter a valid US phone number');
     }
+    const wireTo = toE164(normalized);
 
     // Generate 6-digit code
     const code = crypto.randomInt(100000, 999999).toString();
@@ -1725,7 +1725,7 @@ export const sendPhoneVerificationCode = onCall({
     // Store in Firestore with 10-minute expiry
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await db.collection('phone-verifications').doc(context.uid).set({
-      phoneNumber: formatted,
+      phoneNumber: normalized,
       codeHash,
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
       attempts: 0,
@@ -1741,7 +1741,7 @@ export const sendPhoneVerificationCode = onCall({
     const body = `Your ${FUNCTIONS_BRANDING.shortName} verification code is: ${code}`;
     if (simOn) {
       const {recordSimSms} = await import('./simulation/simulators/messaging.js');
-      await recordSimSms({to: formatted, body, kind: 'verification'});
+      await recordSimSms({to: wireTo, body, kind: 'verification'});
       logger.info('Verification code recorded (sim)', { uid: context.uid });
       return { success: true, message: 'Verification code sent' };
     }
@@ -1756,7 +1756,7 @@ export const sendPhoneVerificationCode = onCall({
     }
 
     const client = twilio(accountSid, authToken);
-    await client.messages.create({body, from: fromNumber, to: formatted});
+    await client.messages.create({body, from: fromNumber, to: wireTo});
 
     logger.info('Verification code sent', { uid: context.uid });
     return { success: true, message: 'Verification code sent' };
@@ -1868,15 +1868,16 @@ export const sendPhoneLoginCode = onCall({
       throw new Error('Phone number is required');
     }
 
-    const formatted = formatPhoneNumber(phoneNumber);
-    if (!/^\+1\d{10}$/.test(formatted)) {
+    const normalized = normalizePhoneNumber(phoneNumber);
+    if (!/^\d{10}$/.test(normalized)) {
       throw new Error('Please enter a valid US phone number');
     }
+    const wireTo = toE164(normalized);
 
     // Rate limit by phone number (protects the victim from SMS bombing) AND
     // by client IP (protects our Twilio budget from an attacker cycling
     // through many different phone numbers). Both must pass.
-    await checkRateLimit(formatted, 'phoneLogin', 5, 10);
+    await checkRateLimit(normalized, 'phoneLogin', 5, 10);
     await checkRateLimit(clientIp(request), 'phoneLoginIp', 10, 10);
 
     // Generate 6-digit code
@@ -1885,8 +1886,8 @@ export const sendPhoneLoginCode = onCall({
 
     // Store in phone-login-codes with 5-minute expiry
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-    await db.collection('phone-login-codes').doc(formatted).set({
-      phoneNumber: formatted,
+    await db.collection('phone-login-codes').doc(normalized).set({
+      phoneNumber: normalized,
       codeHash,
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
       attempts: 0,
@@ -1899,8 +1900,8 @@ export const sendPhoneLoginCode = onCall({
     const body = `Your ${FUNCTIONS_BRANDING.shortName} login code is: ${code}`;
     if (simOn) {
       const {recordSimSms} = await import('./simulation/simulators/messaging.js');
-      await recordSimSms({to: formatted, body, kind: 'verification'});
-      logger.info('Phone login code recorded (sim)', { phone: formatted.slice(-4) });
+      await recordSimSms({to: wireTo, body, kind: 'verification'});
+      logger.info('Phone login code recorded (sim)', { phone: normalized.slice(-4) });
       return { success: true, message: 'Verification code sent' };
     }
 
@@ -1914,9 +1915,9 @@ export const sendPhoneLoginCode = onCall({
     }
 
     const client = twilio(accountSid, authToken);
-    await client.messages.create({body, from: fromNumber, to: formatted});
+    await client.messages.create({body, from: fromNumber, to: wireTo});
 
-    logger.info('Phone login code sent', { phone: formatted.slice(-4) });
+    logger.info('Phone login code sent', { phone: normalized.slice(-4) });
     return { success: true, message: 'Verification code sent' };
   } catch (error: any) {
     logger.error('Error sending phone login code:', { message: error.message });
@@ -1943,10 +1944,10 @@ export const verifyPhoneLogin = onCall({
       throw new Error('Please enter a 6-digit verification code');
     }
 
-    const formatted = formatPhoneNumber(phoneNumber);
+    const normalized = normalizePhoneNumber(phoneNumber);
 
     // Look up verification record
-    const verificationRef = db.collection('phone-login-codes').doc(formatted);
+    const verificationRef = db.collection('phone-login-codes').doc(normalized);
     const verificationDoc = await verificationRef.get();
 
     if (!verificationDoc.exists) {
@@ -1981,7 +1982,7 @@ export const verifyPhoneLogin = onCall({
 
     // Look up existing user by phone number
     const usersSnapshot = await db.collection('users')
-      .where('phoneNumber', '==', formatted)
+      .where('phoneNumber', '==', normalized)
       .limit(1)
       .get();
 
@@ -2039,17 +2040,19 @@ export const verifyPhoneLogin = onCall({
       return { success: false, error: 'First and last name must be at least 2 characters.' };
     }
 
-    // Create Firebase Auth user (phone only, no email)
+    // Create Firebase Auth user (phone only, no email). Firebase Auth
+    // requires E.164 for phoneNumber; Firestore stores the 10-digit form.
+    const wirePhone = toE164(normalized);
     let userRecord;
     try {
       userRecord = await admin.auth().createUser({
-        phoneNumber: formatted,
+        phoneNumber: wirePhone,
         displayName: `${trimmedFirst} ${trimmedLast}`,
       });
     } catch (authError: any) {
       // Phone number might already be in Firebase Auth but not in our users collection
       if (authError.code === 'auth/phone-number-already-exists') {
-        const existingAuth = await admin.auth().getUserByPhoneNumber(formatted);
+        const existingAuth = await admin.auth().getUserByPhoneNumber(wirePhone);
         userRecord = existingAuth;
       } else {
         logger.error('Error creating phone user:', authError);
@@ -2066,7 +2069,7 @@ export const verifyPhoneLogin = onCall({
       lastName: trimmedLast,
       displayName: `${trimmedFirst} ${trimmedLast}`,
       role: 'patient',
-      phoneNumber: formatted,
+      phoneNumber: normalized,
       phoneVerified: true,
       isActive: true,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2209,7 +2212,7 @@ async function sendAppointmentStatusSMS(
     const phone = patientData?.phoneNumber;
     if (!phone) return;
 
-    const formatted = formatPhoneNumber(phone);
+    const wireTo = toE164(phone);
     const date = appointmentDate.toDate();
     const dateStr = date.toLocaleDateString('en-US', {
       timeZone: 'America/Los_Angeles',
@@ -2237,13 +2240,13 @@ async function sendAppointmentStatusSMS(
     const simOn = settingsSnap.exists && settingsSnap.data()?.simulationMode === true;
     if (simOn) {
       const {recordSimSms} = await import('./simulation/simulators/messaging.js');
-      await recordSimSms({to: formatted, body: message, kind: 'admin'});
+      await recordSimSms({to: wireTo, body: message, kind: 'admin'});
     } else {
       const client = twilio(accountSid, authToken);
       await client.messages.create({
         body: message,
         from: fromNumber,
-        to: formatted,
+        to: wireTo,
       });
     }
 

@@ -1,47 +1,21 @@
 /**
- * Branding configuration for Cloud Functions — edit per fork.
+ * Branding for Cloud Functions — flat view over /fork.config.ts.
  *
- * Kept separate from the web and mobile configs because Cloud Functions cannot
- * import from the web workspace. Values must be manually kept in sync with:
- * - web/src/config/branding.ts
- * - mobile/lib/config/branding.dart
- *
- * These strings are embedded in SMS templates, email bodies, and admin
- * notifications, so changing them without redeploying functions will leave
- * stale references in outbound messages.
+ * /fork.config.ts is copied to functions/src/_fork.config.ts by the
+ * `prebuild` npm script (see functions/package.json). Edit /fork.config.ts
+ * at the repo root — never this file.
  */
+
+import { FORK_CONFIG } from './_fork.config';
+
 export const FUNCTIONS_BRANDING = {
-  /** App/product display name (matches BRANDING.appName on the web) */
-  appName: 'Aurelia MD',
-  /** Short marketing name used in SMS bodies */
-  shortName: 'Aurelia',
-  /** Full legal/display name */
-  practiceName: 'Aurelia MD',
-  /** Legal entity for legal/audit text */
-  legalEntity: 'Aurelia Primary Care, LLC',
-  /** Name used to sign admin system messages */
-  adminSignatureName: 'Aurelia Admin System',
-  /** Patient portal URL for email links */
-  portalUrl: 'https://demo.aureliamd.com',
-  /**
-   * Email sender address for transactional emails (verification, invites,
-   * notifications). Mirror of BRANDING.fromEmail on the web side.
-   */
-  fromEmail: 'noreply@aureliamd.com',
-  /**
-   * Additional origins allowed by the CORS allow-list. Include the App
-   * Hosting default URL so the portal still works when accessed directly,
-   * plus any staging or preview URLs.
-   */
-  additionalOrigins: [
-    'https://web-patient-demo--patient-demo-project.us-central1.hosted.app',
-    'https://patient-demo-project.web.app',
-    'https://patient-demo-project.firebaseapp.com',
-  ] as string[],
-  /** Platform vendor (you) — billed on Stripe statements for the practice subscription */
-  platformVendor: {
-    name: 'Patient Portal Inc.',
-    supportEmail: 'billing@patientportal.example',
-    billingDescriptor: 'PATIENT PORTAL',
-  },
+  appName: FORK_CONFIG.identity.appName,
+  shortName: FORK_CONFIG.identity.shortName,
+  practiceName: FORK_CONFIG.identity.practiceName,
+  legalEntity: FORK_CONFIG.identity.legalEntity,
+  adminSignatureName: FORK_CONFIG.identity.adminSignatureName,
+  portalUrl: FORK_CONFIG.urls.portalUrl,
+  fromEmail: FORK_CONFIG.contact.fromEmail,
+  additionalOrigins: [...FORK_CONFIG.urls.additionalOrigins] as string[],
+  platformVendor: { ...FORK_CONFIG.platformVendor },
 } as const;

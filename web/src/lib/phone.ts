@@ -1,80 +1,81 @@
 /**
- * Phone number normalization — single source of truth for the client.
- *
- * Must match the server-side `formatPhoneNumber` in functions/src/index.ts
- * exactly so that the same input produces the same stored value regardless
- * of which path writes it.
+ * Phone normalization — US-only. Canonical stored format is 10 digits
+ * (no `+1`, no punctuation): `"4425004657"`. External APIs that require
+ * E.164 (Twilio, Firebase Auth) wrap with `toE164(...)` at the boundary.
  *
  * Used by every client path that writes `phoneNumber` to Firestore:
- *  - Admin UserForm edit flow (direct Firestore write)
+ *  - Admin UserForm edit flow
  *  - createUserDocument on first email/Google sign-in
- *  - Profile phone edit (when not going through verification)
- *  - Bootstrap admin form (via the Cloud Function, but we still normalize
- *    locally for UI consistency)
+ *  - Profile phone edit
+ *  - Bootstrap admin form
+ *
+ * Mirrors functions/src/index.ts — the two implementations MUST produce
+ * identical output for identical input.
  *
  * Input examples and their outputs:
- *   "14425004657"      → "+14425004657"
- *   "4425004657"       → "+14425004657"
- *   "(442) 500-4657"   → "+14425004657"
- *   "+1 (442) 500-4657"→ "+14425004657"
- *   "+14425004657"     → "+14425004657"  (already canonical)
- *   ""                 → ""  (empty stays empty)
- *
- * For non-US numbers (not 10 or 11 digits, or not starting with 1 when 11
- * digits), prepends `+` to the digits without assuming a country code.
+ *   "4425004657"        → "4425004657"
+ *   "(442) 500-4657"    → "4425004657"
+ *   "+1 (442) 500-4657" → "4425004657"
+ *   "14425004657"       → "4425004657"
+ *   ""                  → ""  (empty stays empty)
+ *   "+33123456789"      → throws InvalidPhoneError (non-US)
  */
-export function normalizePhoneNumber(phoneNumber: string | null | undefined): string {
-  if (!phoneNumber) return '';
 
-  const trimmed = phoneNumber.trim();
-  if (!trimmed) return '';
-
-  // Remove all non-digits
-  const digits = trimmed.replace(/\D/g, '');
-
-  // 10 digits → assume US, add +1
-  if (digits.length === 10) {
-    return `+1${digits}`;
+export class InvalidPhoneError extends Error {
+  constructor(input: string) {
+    super(`Invalid US phone number: ${JSON.stringify(input)}. Expected 10 digits.`);
+    this.name = 'InvalidPhoneError';
   }
-
-  // 11 digits starting with 1 → already US with country code, just add +
-  if (digits.length === 11 && digits.startsWith('1')) {
-    return `+${digits}`;
-  }
-
-  // Already started with + in original → preserve as-is, re-joined with digits
-  if (trimmed.startsWith('+')) {
-    return `+${digits}`;
-  }
-
-  // Fallback: prepend +
-  return `+${digits}`;
 }
 
 /**
- * Format a stored phone number for display.
+ * Strip to digits and validate as a US 10-digit number. Empty input
+ * returns empty string. Anything that doesn't reduce to exactly 10 digits
+ * (or 11 starting with 1) throws `InvalidPhoneError` — callers must catch
+ * and surface a field error to the user.
+ */
+export function normalizePhoneNumber(phoneNumber: string | null | undefined): string {
+  if (phoneNumber === null || phoneNumber === undefined) return '';
+  const trimmed = String(phoneNumber).trim();
+  if (!trimmed) return '';
+
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length === 10) return digits;
+  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
+  throw new InvalidPhoneError(trimmed);
+}
+
+/**
+ * Format a canonical 10-digit phone for display.
  *
- * Input (canonical):  "+14425004657"
- * Output:             "(442) 500-4657"
+ * Input:  "4425004657"
+ * Output: "(442) 500-4657"
  *
- * Non-US numbers are returned as-is. Empty/null returns empty string.
+ * Also accepts `+1XXXXXXXXXX` / `1XXXXXXXXXX` so rows read straight from
+ * Twilio webhook payloads (sms-inbound `from`, sms-outbound `to`) render
+ * without a second normalize step. Unrecognized shapes return as-is.
  */
 export function formatPhoneDisplay(phoneNumber: string | null | undefined): string {
   if (!phoneNumber) return '';
 
   const digits = phoneNumber.replace(/\D/g, '');
-
-  // US number with country code: 1 + 10 digits
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
   if (digits.length === 11 && digits.startsWith('1')) {
     const local = digits.slice(1);
     return `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
   }
-
-  // 10-digit US number without country code
-  if (digits.length === 10) {
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  }
-
-  // Non-US or unknown format: return as-is
   return phoneNumber;
+}
+
+/**
+ * Convert a canonical 10-digit phone to E.164 (`+1XXXXXXXXXX`) for
+ * external APIs (Twilio, Firebase Auth). Throws on invalid input.
+ */
+export function toE164(phone10: string): string {
+  const digits = phone10.replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  throw new InvalidPhoneError(phone10);
 }

@@ -75,7 +75,15 @@ service cloud.firestore {
     }
 
     // ───────────────────────── Messaging ─────────────────────────
-
+    //
+    // List rule is intentionally per-doc (no query-constraint mandate).
+    // Patients MUST call list with `where('patientId','==', uid)` — unfiltered
+    // queries are rejected wholesale by the Firestore SDK rather than
+    // returning others' threads. This is a deliberate implicit contract: the
+    // one web caller (lib/firestore/message-threads.ts) already enforces it,
+    // and keeping the rule simple avoids the cost of a second gate that would
+    // duplicate the same filter logic. If a new caller is added, it MUST pass
+    // the same where() filter or the query will fail with permission-denied.
     match /message-threads/{threadId} {
       allow read, list, write: if request.auth != null && (
         isOwner(resource.data.patientId) || isAdmin()

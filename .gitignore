@@ -117,3 +117,7 @@ web/dist-ssr
 
 # TypeScript compile output
 functions/lib/
+
+# Auto-synced from /fork.config.ts via scripts/sync-fork-config.sh at
+# functions prebuild time. See functions/package.json.
+functions/src/_fork.config.ts

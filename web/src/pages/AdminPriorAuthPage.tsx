@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ClipboardCheck, Plus, AlertCircle, ShieldCheck, Clock, FileWarning, RefreshCw } from 'lucide-react';
+import { ClipboardCheck, Plus, AlertCircle, ShieldCheck, Clock, FileWarning, RefreshCw, BookOpen } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatsGrid } from '../components/ui/StatsGrid';
@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { Button } from '../components/ui/Button';
+import { FilterTabs } from '../components/ui/FilterTabs';
 import { useAuth } from '../hooks/useAuth';
 import { isAdminRole } from '../lib/roles';
 import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
@@ -72,12 +73,31 @@ export const AdminPriorAuthPage: React.FC = () => {
         title="Prior Authorization"
         subtitle="Track payer authorizations, prevent rejections with payer-specific criteria and chart gap-checks."
         action={
-          <Button
-            onClick={() => navigate('/admin/prior-auth/new')}
-            className="flex items-center gap-1.5 whitespace-nowrap"
-          >
-            <Plus className="h-4 w-4" /> New
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => navigate('/admin/prior-auth/policies')}
+              variant="secondary"
+              size="sm"
+              className="whitespace-nowrap"
+            >
+              <BookOpen className="h-4 w-4 mr-1.5" /> Policy library
+            </Button>
+            <Button
+              onClick={refreshAll}
+              loading={loading}
+              variant="secondary"
+              size="sm"
+              className="whitespace-nowrap"
+            >
+              <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh
+            </Button>
+            <Button
+              onClick={() => navigate('/admin/prior-auth/new')}
+              className="flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <Plus className="h-4 w-4" /> New
+            </Button>
+          </div>
         }
       />
 
@@ -90,38 +110,17 @@ export const AdminPriorAuthPage: React.FC = () => {
         ]}
       />
 
-      <Card className="p-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          {(['open', 'followup', 'approved', 'denied', 'all'] as TabKey[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium border ${
-                tab === t ? 'border-primary-600 text-primary-700 bg-primary-50' : 'border-transparent bg-surface-elevated text-secondary-700 hover:bg-primary-100'
-              }`}
-            >
-              {t === 'open' && `Open (${counts.open})`}
-              {t === 'followup' && `Followup (${counts.followup})`}
-              {t === 'approved' && `Approved (${counts.approved})`}
-              {t === 'denied' && `Denied (${counts.denied})`}
-              {t === 'all' && `All (${counts.total})`}
-            </button>
-          ))}
-          <div className="flex-1" />
-          <Link
-            to="/admin/prior-auth/policies"
-            className="text-sm text-primary-600 hover:underline"
-          >
-            Policy library →
-          </Link>
-        </div>
-      </Card>
-
-      <div className="flex justify-end">
-        <Button onClick={refreshAll} loading={loading} variant="secondary" size="sm">
-          <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh
-        </Button>
-      </div>
+      <FilterTabs
+        tabs={[
+          { key: 'open', label: 'Open', count: counts.open },
+          { key: 'followup', label: 'Followup', count: counts.followup },
+          { key: 'approved', label: 'Approved', count: counts.approved },
+          { key: 'denied', label: 'Denied', count: counts.denied },
+          { key: 'all', label: 'All', count: counts.total },
+        ]}
+        activeKey={tab}
+        onChange={(k) => setTab(k as TabKey)}
+      />
 
       {loading ? (
         <LoadingSpinner />

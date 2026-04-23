@@ -217,7 +217,12 @@ service cloud.firestore {
     // `bootstrapped` before rendering signup or the bootstrap-admin form.
     match /system/settings {
       allow read: if true;
-      allow write: if isAdmin();
+      // Admins manage most settings; `simulationMode` is super-admin only
+      // (flipping it globally swaps every fork between real and sandbox data).
+      allow write: if isAdmin() && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['simulationMode'])
+        || isSuperAdmin()
+      );
     }
     match /system/{docId} {
       allow read, write: if isAdmin();

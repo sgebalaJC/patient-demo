@@ -313,9 +313,9 @@ export const AdminSettingsPage: React.FC = () => {
                   <div>
                     <p className="text-sm font-medium text-secondary-900">Simulation mode</p>
                     <p className="text-xs text-secondary-500 mt-0.5">
-                      When on, a per-session "Demo data" switch appears in the header.
-                      Users can flip it to route integration calls (DrChrono, inbox, etc.)
-                      to a seeded sandbox instead of real services. Leave off on real
+                      Global switch. When on, everyone sees seeded sandbox data and
+                      integration calls (DrChrono, inbox, SMS, etc.) never reach real
+                      services. Only super-admins can flip it. Leave off on real
                       customer forks.
                     </p>
                   </div>

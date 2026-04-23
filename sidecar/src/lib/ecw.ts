@@ -5,7 +5,7 @@
  * confidential-or-public token auth.
  */
 
-import { makeEhrProvider, type BaseEhrConfig } from "./ehr-provider.js";
+import { makeEhrProvider, type BaseEhrConfig, type TokenRefreshAuth } from "./ehr-provider.js";
 
 interface EcwConfig extends BaseEhrConfig {
   fhirBase?: string;
@@ -19,7 +19,7 @@ const provider = makeEhrProvider<EcwConfig>({
   configDoc: "integrations/ecw",
   resolveApiBase: (cfg) => (cfg.fhirBase || "").replace(/\/+$/, ""),
   resolveTokenUrl: (cfg) => cfg.tokenUrl || "",
-  tokenRefreshAuth: (cfg) => {
+  tokenRefreshAuth: (cfg): TokenRefreshAuth => {
     if (cfg.clientSecret) {
       return {
         headers: {

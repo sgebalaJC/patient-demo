@@ -5,7 +5,7 @@
  * or public (sandbox) SMART clients.
  */
 
-import { makeEhrProvider, type BaseEhrConfig } from "./ehr-provider.js";
+import { makeEhrProvider, type BaseEhrConfig, type TokenRefreshAuth } from "./ehr-provider.js";
 
 interface EpicConfig extends BaseEhrConfig {
   fhirBase?: string;
@@ -19,7 +19,7 @@ const provider = makeEhrProvider<EpicConfig>({
   configDoc: "integrations/epic",
   resolveApiBase: (cfg) => (cfg.fhirBase || "").replace(/\/+$/, ""),
   resolveTokenUrl: (cfg) => cfg.tokenUrl || "",
-  tokenRefreshAuth: (cfg) => {
+  tokenRefreshAuth: (cfg): TokenRefreshAuth => {
     if (cfg.clientSecret) {
       return {
         headers: {

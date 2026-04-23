@@ -5,7 +5,7 @@
  * confidential or public SMART auth, FHIR content types.
  */
 
-import { makeEhrProvider, type BaseEhrConfig } from "./ehr-provider.js";
+import { makeEhrProvider, type BaseEhrConfig, type TokenRefreshAuth } from "./ehr-provider.js";
 
 interface CernerConfig extends BaseEhrConfig {
   fhirBase?: string;
@@ -19,7 +19,7 @@ const provider = makeEhrProvider<CernerConfig>({
   configDoc: "integrations/cerner",
   resolveApiBase: (cfg) => (cfg.fhirBase || "").replace(/\/+$/, ""),
   resolveTokenUrl: (cfg) => cfg.tokenUrl || "",
-  tokenRefreshAuth: (cfg) => {
+  tokenRefreshAuth: (cfg): TokenRefreshAuth => {
     if (cfg.clientSecret) {
       return {
         headers: {

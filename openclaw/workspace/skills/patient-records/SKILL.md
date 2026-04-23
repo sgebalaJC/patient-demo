@@ -18,8 +18,10 @@ admin-api GET /patients?status=inactive&limit=10
 admin-api GET /patients?search=Jo&limit=5&after=LAST_DOC_ID
 ```
 
-`search` is a prefix match on `lastName` (case-sensitive). Pagination via
-`after=LAST_DOC_ID` from the previous page.
+`search` is a forgiving substring match: case-insensitive, scans both
+`firstName` and `lastName`, and accepts full names (`?search=Jane%20Smith`).
+Multiple whitespace-separated tokens must all match. Pagination via
+`after=LAST_DOC_ID` from the previous page (only when no `search`).
 
 ## Patient stats
 

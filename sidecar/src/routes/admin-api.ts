@@ -124,21 +124,49 @@ async function listPatients(db: Db, url: URL): Promise<Response> {
   const search = url.searchParams.get("search")?.trim();
   const statusFilter = url.searchParams.get("status");
 
+  // Forgiving search: case-insensitive, accepts "Last", "First Last", or "First".
+  // Strategy: scan a wider window and filter in memory. The patient set per
+  // practice is small enough (hundreds, not millions) that a 500-row scan is
+  // cheaper than maintaining a search index.
+  if (search) {
+    let q: FirebaseFirestore.Query = (await nc(db, "users"))
+      .where("role", "==", "patient")
+      .orderBy("lastName")
+      .limit(500);
+    if (statusFilter === "active") q = q.where("isActive", "==", true);
+    else if (statusFilter === "inactive") q = q.where("isActive", "==", false);
+
+    const snap = await q.get();
+    const tokens = search.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = snap.docs.filter(doc => {
+      const d = doc.data();
+      const first = (d.firstName ?? "").toLowerCase();
+      const last = (d.lastName ?? "").toLowerCase();
+      const full = `${first} ${last}`;
+      return tokens.every(t => first.includes(t) || last.includes(t) || full.includes(t));
+    }).slice(0, limit);
+
+    const patients = matches.map(doc => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        firstName: d.firstName,
+        lastName: d.lastName,
+        email: d.email,
+        phoneNumber: d.phoneNumber ?? null,
+        dateOfBirth: d.dateOfBirth ?? null,
+        isActive: d.isActive !== false,
+        createdAt: tsToISO(d.createdAt),
+      };
+    });
+    return json({ patients, count: patients.length });
+  }
+
   let query: FirebaseFirestore.Query = (await nc(db, "users"))
     .where("role", "==", "patient")
     .orderBy("lastName")
     .limit(limit);
 
-  if (search) {
-    query = (await nc(db, "users"))
-      .where("role", "==", "patient")
-      .where("lastName", ">=", search)
-      .where("lastName", "<=", search + "\uf8ff")
-      .orderBy("lastName")
-      .limit(limit);
-  }
-
-  // Apply status filter at query level to avoid fetching unnecessary docs
   if (statusFilter === "active") {
     query = query.where("isActive", "==", true);
   } else if (statusFilter === "inactive") {

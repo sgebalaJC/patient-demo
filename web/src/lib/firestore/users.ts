@@ -135,13 +135,23 @@ export const userOperations = {
     const ref = simulated
       ? doc(collection(db, 'simulation/native/users') as CollectionReference, uid)
       : doc(collections.users, uid);
-    return onSnapshot(ref, (snap) => {
-      if (snap.exists()) {
-        callback({ id: uid, ...snap.data() } as User);
-      } else {
+    return onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          callback({ id: uid, ...snap.data() } as User);
+        } else {
+          callback(null);
+        }
+      },
+      // Without an error handler, a permission-denied snapshot leaves the
+      // success callback unfired forever — the impersonation flow then sits
+      // on the loading spinner with no way out except clearing storage.
+      (err) => {
+        logger.error('onUserChange snapshot error:', err);
         callback(null);
-      }
-    });
+      },
+    );
   },
 
   // Get users with cursor-based pagination and server-side sorting (admin only)

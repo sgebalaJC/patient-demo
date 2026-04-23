@@ -274,6 +274,20 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Impersonating a sim-seeded patient signs the operator in as that
+    // patient's UID. Their dashboard then reads their own profile + the
+    // collections that drive the patient app — all of which only exist under
+    // `simulation/native/`. Allow self-read on those paths so the impersonated
+    // session isn't stuck staring at a permission-denied loading screen.
+    match /simulation/native/users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+    }
+    match /simulation/native/{collection}/{docId} {
+      allow read: if isAdmin()
+        || (request.auth != null && resource.data.patientId == request.auth.uid)
+        || (request.auth != null && resource.data.userId == request.auth.uid);
+    }
+
     // ───────────────────────── Subscriptions & billing ─────────────────────────
 
     match /subscription-plans/{priceId} {

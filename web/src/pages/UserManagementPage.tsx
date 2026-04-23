@@ -33,7 +33,7 @@ import { httpsCallable } from 'firebase/functions';
 import { signInWithCustomToken } from 'firebase/auth';
 import { functions, auth } from '../lib/firebase';
 import { sendInviteLink } from '../lib/firebase';
-import { isSuperAdminRole } from '../lib/roles';
+import { isSuperAdminEmail } from '../lib/roles';
 import { UserForm } from '../components/admin/UserForm';
 import { PatientDocumentManagement } from '../components/admin/PatientDocumentManagement';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -51,7 +51,7 @@ import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import logger from '../lib/logger';
 import { alert as modalAlert } from '../lib/modals';
 export const UserManagementPage: React.FC = () => {
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
   const { enabled: simulated } = useSimulationMode();
   const isAdminUser = isAdminRole(userProfile?.role);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -523,7 +523,7 @@ export const UserManagementPage: React.FC = () => {
                           )}
                         </Button>
                       )}
-                      {isSuperAdminRole(userProfile?.role) && (
+                      {isSuperAdminEmail(user?.email) && (
                         <Button
                           variant="secondary"
                           size="sm"

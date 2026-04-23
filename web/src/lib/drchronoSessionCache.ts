@@ -14,7 +14,3 @@ export function getCachedPatientDetails(drchronoId: number): DrChronoPatientDeta
 export function setCachedPatientDetails(drchronoId: number, details: DrChronoPatientDetails): void {
   detailsCache.set(drchronoId, details);
 }
-
-export function clearDrChronoSessionCache(): void {
-  detailsCache.clear();
-}

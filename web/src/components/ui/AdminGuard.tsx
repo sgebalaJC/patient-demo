@@ -1,22 +1,22 @@
 import React, { ReactNode } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { isAdminRole, isSuperAdminRole } from '../../lib/roles';
+import { isAdminRole, isSuperAdminEmail } from '../../lib/roles';
 import { LoadingSpinner } from './LoadingSpinner';
 import { AccessDenied } from './AccessDenied';
 
 interface AdminGuardProps {
   children: ReactNode;
-  /** Require super_admin instead of admin */
+  /** Require super-admin (email-allowlisted) instead of admin */
   superOnly?: boolean;
 }
 
 export const AdminGuard: React.FC<AdminGuardProps> = ({ children, superOnly }) => {
-  const { userProfile, loading } = useAuth();
+  const { user, userProfile, loading } = useAuth();
 
   if (loading) return <LoadingSpinner />;
 
   const allowed = superOnly
-    ? isSuperAdminRole(userProfile?.role)
+    ? isSuperAdminEmail(user?.email)
     : isAdminRole(userProfile?.role);
 
   if (!allowed) return <AccessDenied />;

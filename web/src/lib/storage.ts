@@ -94,48 +94,6 @@ export const uploadDocument = (
   });
 };
 
-// Simple upload without progress tracking
-export const uploadDocumentSimple = async (
-  file: File,
-  patientId: string,
-  documentType: DocumentType
-): Promise<UploadResult> => {
-  try {
-    const timestamp = Date.now();
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${documentType}_${timestamp}.${fileExtension}`;
-    const filePath = getDocumentPath(patientId, documentType, fileName);
-
-    const storageRef = ref(storage, filePath);
-    const snapshot = await uploadBytes(storageRef, file);
-    const fileUrl = await getDownloadURL(snapshot.ref);
-
-    return {
-      success: true,
-      fileUrl,
-      fileName
-    };
-  } catch (error: any) {
-    logger.error('Simple upload error:', error);
-    return {
-      success: false,
-      error: error.message || 'Upload failed'
-    };
-  }
-};
-
-// Delete document
-export const deleteDocument = async (filePath: string): Promise<boolean> => {
-  try {
-    const storageRef = ref(storage, filePath);
-    await deleteObject(storageRef);
-    return true;
-  } catch (error: any) {
-    logger.error('Delete error:', error);
-    return false;
-  }
-};
-
 // Delete message attachment by URL
 export const deleteMessageAttachment = async (fileUrl: string): Promise<boolean> => {
   try {

@@ -3,6 +3,7 @@ import { deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { AlertTriangle, Bug, ChevronDown, ChevronRight, Trash2, RefreshCw } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
+import { isSuperAdminEmail } from '../lib/roles';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -30,8 +31,8 @@ interface ClientErrorDoc {
 type LevelFilter = 'all' | 'error' | 'warn';
 
 export const AdminClientErrorsPage: React.FC = () => {
-  const { userProfile } = useAuth();
-  const isSuperAdmin = userProfile?.role === 'super_admin';
+  const { user } = useAuth();
+  const isSuperAdmin = isSuperAdminEmail(user?.email);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [level, setLevel] = useState<LevelFilter>('all');
 

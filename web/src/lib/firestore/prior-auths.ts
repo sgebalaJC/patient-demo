@@ -24,29 +24,11 @@ function priorAuthsRef(simulated: boolean) {
 }
 import type {
   PriorAuth,
-  PriorAuthStatus,
   PayerPolicy,
   Payer,
   TargetCpt,
   CriteriaChecklistItem,
 } from '../../types/prior-auth';
-
-// List and subscribe to all PAs ordered newest first. Optional status filter
-// narrows the query so coordinators can jump to e.g. "pending followup".
-export function subscribeToPriorAuths(
-  onChange: (rows: PriorAuth[]) => void,
-  onError: (err: Error) => void,
-  status?: PriorAuthStatus,
-): Unsubscribe {
-  const base = status
-    ? query(collections.priorAuths, where('status', '==', status), orderBy('updatedAt', 'desc'), limit(200))
-    : query(collections.priorAuths, orderBy('updatedAt', 'desc'), limit(200));
-  return onSnapshot(
-    base,
-    (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PriorAuth, 'id'>) }))),
-    (err) => onError(err as Error),
-  );
-}
 
 export function subscribeToPriorAuth(
   paId: string,

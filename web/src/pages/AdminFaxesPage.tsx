@@ -23,6 +23,7 @@ import { formatDateTime } from '../lib/date-helpers';
 import { isAdminRole } from '../lib/roles';
 import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
 import { useCollectionCounts } from '../hooks/useCollectionCounts';
+import { usePdfPreview } from '../hooks/usePdfPreview';
 import { faxes as faxesApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
 
@@ -374,9 +375,15 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
 
 const FaxDetailDrawer: React.FC<{ fax: InboundFax; onClose: () => void }> = ({ fax, onClose }) => {
   const navigate = useNavigate();
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
+  const { url: pdfUrl, loading: pdfLoading, error: pdfError } = usePdfPreview(
+    async () => {
+      if (!fax.pdfPath) return null;
+      const fn = httpsCallable(functions, 'getFaxPdfUrl');
+      const res = (await fn({ faxSid: fax.faxSid })).data as { url: string };
+      return res.url;
+    },
+    [fax.faxSid, fax.pdfPath],
+  );
   const [draft, setDraft] = useState({
     to: fax.emailDraft?.to || '',
     subject: fax.emailDraft?.subject || '',
@@ -396,45 +403,6 @@ const FaxDetailDrawer: React.FC<{ fax: InboundFax; onClose: () => void }> = ({ f
     });
     setNotes(fax.notes || '');
   }, [fax.faxSid, fax.emailDraft, fax.notes]);
-
-  useEffect(() => {
-    let cancelled = false;
-    let revokeUrl: string | null = null;
-    setPdfUrl(null);
-    setPdfError(null);
-    if (!fax.pdfPath) return;
-    setPdfLoading(true);
-    (async () => {
-      try {
-        const fn = httpsCallable(functions, 'getFaxPdfUrl');
-        const res = (await fn({ faxSid: fax.faxSid })).data as { url: string };
-        // Fetch the bytes and re-host them as a same-origin blob URL.
-        // Chrome refuses to render cross-origin PDFs inline in iframes
-        // (showing its dark "Open" prompt) regardless of
-        // Content-Disposition. A blob: URL has the app's origin, so the
-        // built-in PDF viewer renders it in-place.
-        // Force the MIME type when wrapping — GCS response may carry
-        // application/octet-stream depending on bucket settings, which
-        // makes Chrome's PDF viewer fall back to the download prompt.
-        const r = await fetch(res.url);
-        if (!r.ok) throw new Error(`PDF fetch ${r.status}`);
-        const buf = await r.arrayBuffer();
-        const blob = new Blob([buf], { type: 'application/pdf' });
-        const blobUrl = URL.createObjectURL(blob);
-        revokeUrl = blobUrl;
-        if (!cancelled) setPdfUrl(blobUrl);
-      } catch (err: any) {
-        console.error('getFaxPdfUrl failed', err);
-        if (!cancelled) setPdfError(err?.message || 'Failed to load PDF');
-      } finally {
-        if (!cancelled) setPdfLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (revokeUrl) URL.revokeObjectURL(revokeUrl);
-    };
-  }, [fax.faxSid, fax.pdfPath]);
 
   async function call(name: string, data: any, label: string): Promise<void> {
     setBusy(label);

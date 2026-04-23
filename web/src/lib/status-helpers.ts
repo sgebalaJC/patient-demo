@@ -8,8 +8,6 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  CheckCircle2,
-  AlertTriangle,
 } from 'lucide-react';
 
 // Status icon resolvers — return Lucide component
@@ -28,15 +26,6 @@ export const getAppointmentStatusIcon = (status: string) => {
     case 'confirmed': return CheckCircle;
     case 'cancelled': return XCircle;
     case 'no-show': return AlertCircle;
-    default: return Clock;
-  }
-};
-
-export const getPriorityIcon = (priority: string) => {
-  switch (priority) {
-    case 'high': return AlertTriangle;
-    case 'medium': return Clock;
-    case 'low': return CheckCircle2;
     default: return Clock;
   }
 };

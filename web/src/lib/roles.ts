@@ -17,7 +17,3 @@ export function isSuperAdminEmail(email: string | null | undefined): boolean {
 export function isAdminRole(role: UserRole | undefined): boolean {
   return role === 'admin' || role === 'super_admin';
 }
-
-export function isSuperAdminRole(role: UserRole | undefined): boolean {
-  return role === 'super_admin';
-}

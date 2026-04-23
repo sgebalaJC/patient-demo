@@ -21,6 +21,7 @@ import logger from '../../lib/logger';
 import { Modal } from '../ui/Modal';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { useSimulationMode } from '../../hooks/useSimulationMode';
+import { usePdfPreview } from '../../hooks/usePdfPreview';
 
 interface PatientDocumentManagementProps {
   isOpen: boolean;
@@ -42,44 +43,13 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
   const [imageRotation, setImageRotation] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const { enabled: simulated } = useSimulationMode();
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-  const [pdfBlobLoading, setPdfBlobLoading] = useState(false);
-  const [pdfBlobError, setPdfBlobError] = useState<string | null>(null);
-
-  // For PDF previews, fetch the file and re-host it as a same-origin blob:
-  // URL. Chrome refuses to render cross-origin PDFs inline in <iframe>
-  // (storage.googleapis.com signed URLs trigger the dark "Open" prompt
-  // instead). data: URLs are also blocked. blob: URLs inherit the app's
-  // origin so the built-in PDF viewer renders them in place.
-  useEffect(() => {
-    let cancelled = false;
-    let revoke: string | null = null;
-    setPdfBlobUrl(null);
-    setPdfBlobError(null);
-    if (!previewDocument || previewDocument.fileType !== 'application/pdf') return;
-    setPdfBlobLoading(true);
-    (async () => {
-      try {
-        const r = await fetch(previewDocument.fileUrl);
-        if (!r.ok) throw new Error(`Fetch ${r.status}`);
-        const buf = await r.arrayBuffer();
-        // Force application/pdf so Chrome's PDF viewer takes the blob
-        // URL even when the upstream Content-Type was octet-stream.
-        const blob = new Blob([buf], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        revoke = url;
-        if (!cancelled) setPdfBlobUrl(url);
-      } catch (err: any) {
-        if (!cancelled) setPdfBlobError(err?.message || 'Failed to load PDF');
-      } finally {
-        if (!cancelled) setPdfBlobLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (revoke) URL.revokeObjectURL(revoke);
-    };
-  }, [previewDocument]);
+  const { url: pdfBlobUrl, loading: pdfBlobLoading, error: pdfBlobError } = usePdfPreview(
+    async () => {
+      if (!previewDocument || previewDocument.fileType !== 'application/pdf') return null;
+      return previewDocument.fileUrl;
+    },
+    [previewDocument?.id, previewDocument?.fileUrl, previewDocument?.fileType],
+  );
 
   useEffect(() => {
     if (isOpen && patient) {

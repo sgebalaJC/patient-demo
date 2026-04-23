@@ -20,6 +20,7 @@ import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
 import { isAdminRole } from '../lib/roles';
 import { useSimulationMode } from '../hooks/useSimulationMode';
 import { usePagedCollection } from '../hooks/usePagedCollection';
+import { usePdfPreview } from '../hooks/usePdfPreview';
 import { faxes as faxesApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
 
@@ -466,43 +467,14 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
 // =============================================================================
 
 const OutboundFaxDrawer: React.FC<{ fax: OutboundFax; onClose: () => void }> = ({ fax, onClose }) => {
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    let revokeUrl: string | null = null;
-    setLoading(true);
-    setLoadError(null);
-    setPdfUrl(null);
-    (async () => {
-      try {
-        const fn = httpsCallable(functions, 'getFaxPdfUrl');
-        const res = (await fn({ faxSid: fax.faxSid })).data as { url: string };
-        // Re-host as a same-origin blob URL — Chrome refuses to render
-        // cross-origin PDFs inline in <iframe> (shows the dark "Open"
-        // prompt instead). A blob: URL inherits the app's origin so the
-        // built-in PDF viewer renders it inline. Force application/pdf
-        // since GCS may serve octet-stream depending on metadata.
-        const r = await fetch(res.url);
-        if (!r.ok) throw new Error(`PDF fetch ${r.status}`);
-        const buf = await r.arrayBuffer();
-        const blob = new Blob([buf], { type: 'application/pdf' });
-        const blobUrl = URL.createObjectURL(blob);
-        revokeUrl = blobUrl;
-        if (!cancelled) setPdfUrl(blobUrl);
-      } catch (err: any) {
-        if (!cancelled) setLoadError(err?.message || 'Failed to load PDF');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (revokeUrl) URL.revokeObjectURL(revokeUrl);
-    };
-  }, [fax.faxSid]);
+  const { url: pdfUrl, loading, error: loadError } = usePdfPreview(
+    async () => {
+      const fn = httpsCallable(functions, 'getFaxPdfUrl');
+      const res = (await fn({ faxSid: fax.faxSid })).data as { url: string };
+      return res.url;
+    },
+    [fax.faxSid],
+  );
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex justify-end" onClick={onClose}>

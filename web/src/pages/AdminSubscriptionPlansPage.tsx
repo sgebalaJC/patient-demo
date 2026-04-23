@@ -9,7 +9,7 @@ import { Modal } from '../components/ui/Modal';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useAuth } from '../hooks/useAuth';
-import { isAdminRole, isSuperAdminRole } from '../lib/roles';
+import { isAdminRole, isSuperAdminEmail } from '../lib/roles';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { BRANDING } from '../config/branding';
 import { subscriptionOperations } from '../lib/firestore/subscriptions';
@@ -33,7 +33,7 @@ const emptyPlan = (): PlanDraft => ({
 type PlanFilter = 'active' | 'inactive';
 
 export const AdminSubscriptionPlansPage: React.FC = () => {
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<PlanDraft>(emptyPlan());
@@ -131,7 +131,7 @@ export const AdminSubscriptionPlansPage: React.FC = () => {
 
   // In demo forks, restrict subscription-plan management to super-admins so
   // a logged-in test admin can't accidentally edit demo plans for everyone.
-  if (BRANDING.isDemo && !isSuperAdminRole(userProfile?.role)) {
+  if (BRANDING.isDemo && !isSuperAdminEmail(user?.email)) {
     return <AdminGuard><AccessDenied /></AdminGuard>;
   }
 

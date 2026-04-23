@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useFeatures } from '../../hooks/useFeatures';
-import { isAdminRole } from '../../lib/roles';
+import { isAdminRole, isSuperAdminEmail } from '../../lib/roles';
 import { signOut } from '../../lib/firebase';
 import { BRANDING } from '../../config/branding';
 import { BrandLogo } from '../ui/BrandLogo';
@@ -37,6 +37,8 @@ interface NavItem {
   featureFlag?: keyof ReturnType<typeof useFeatures>['features'];
   featureKey?: 'userManagement';
   matchPrefix?: boolean;
+  /** Hide from everyone except super-admins (email-allowlisted). */
+  superOnly?: boolean;
   /**
    * In demo forks (BRANDING.isDemo), hide this item from regular admins —
    * super-admins still see it. In real customer forks, the flag is a no-op
@@ -69,7 +71,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: 'SMS', href: '/admin/sms', icon: MessageSquare },
   { label: 'Subscriptions', href: '/admin/subscription-plans', icon: CreditCard, demoSuperAdminOnly: true },
   { label: 'Platform Billing', href: '/admin/platform-subscription', icon: Zap, demoSuperAdminOnly: true },
-  { label: 'Client Errors', href: '/admin/client-errors', icon: Bug, roles: ['super_admin'] },
+  { label: 'Client Errors', href: '/admin/client-errors', icon: Bug, superOnly: true },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
@@ -121,12 +123,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ mobileOpen, onMobileClos
     return location.pathname === item.href;
   };
 
+  const isSuper = isSuperAdminEmail(user?.email);
   const sourceItems = showAdminNav ? ADMIN_NAV_ITEMS : PATIENT_NAV_ITEMS;
   const visibleItems = sourceItems.filter((item) => {
     if (item.roles && !item.roles.includes(role)) return false;
     if (item.featureFlag && !features[item.featureFlag]) return false;
     if (item.featureKey === 'userManagement' && !features.userManagement) return false;
-    if (item.demoSuperAdminOnly && BRANDING.isDemo && role !== 'super_admin') return false;
+    if (item.superOnly && !isSuper) return false;
+    if (item.demoSuperAdminOnly && BRANDING.isDemo && !isSuper) return false;
     return true;
   });
 

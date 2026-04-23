@@ -26,7 +26,7 @@ type Tab = 'chat' | 'skills' | 'channels' | 'integrations' | 'backups' | 'health
 
 const ALL_NAV_ITEMS: { key: Tab; label: string; icon: React.ElementType; superAdminOnly?: boolean }[] = [
   { key: 'chat', label: 'Chat', icon: MessageSquare },
-  { key: 'skills', label: 'Skills', icon: Star },
+  { key: 'skills', label: 'Skills', icon: Star, superAdminOnly: true },
   { key: 'channels', label: 'Channels', icon: Radio },
   { key: 'integrations', label: 'Integrations', icon: Plug, superAdminOnly: true },
   { key: 'backups', label: 'Backups', icon: Archive, superAdminOnly: true },
@@ -128,7 +128,7 @@ export const AgentPage: React.FC = () => {
       case 'chat':
         return <AgentChat />;
       case 'skills':
-        return <AgentSkills />;
+        return isSuperAdmin ? <AgentSkills /> : <AgentChat />;
       case 'channels':
         return <AgentChannels />;
       case 'integrations':

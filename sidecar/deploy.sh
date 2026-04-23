@@ -99,15 +99,29 @@ fi
 
 SKILLS_DIR="$SCRIPT_DIR/../openclaw/workspace/skills"
 if [ -d "$SKILLS_DIR" ]; then
-  echo "==> Deploying skills..."
+  # Discover where Aurelia's runtime + sidecar actually read skills from.
+  # OPENCLAW_STATE_DIR in /root/sidecar.env wins; if absent we default to
+  # /root/.openclaw to match the sidecar's paths.ts fallback. Without this
+  # the skills land in /root but the agent reads from /home/openclaw and
+  # never sees them.
+  REMOTE_STATE_DIR=$(run_remote "grep -E '^OPENCLAW_STATE_DIR=' /root/sidecar.env 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\"" | tr -d '\r')
+  REMOTE_STATE_DIR="${REMOTE_STATE_DIR:-/root/.openclaw}"
+  REMOTE_SKILLS_DIR="$REMOTE_STATE_DIR/workspace/skills"
+  echo "==> Deploying skills to $REMOTE_SKILLS_DIR"
+  # Figure out who owns the parent state dir so we can chown after writing
+  # as root (e.g. /home/openclaw/.openclaw is owned by user 'openclaw').
+  REMOTE_OWNER=$(run_remote "stat -c '%U:%G' '$REMOTE_STATE_DIR' 2>/dev/null" | tr -d '\r')
   for skill_dir in "$SKILLS_DIR"/*/; do
     skill_name=$(basename "$skill_dir")
-    run_remote "sudo mkdir -p /root/.openclaw/workspace/skills/$skill_name"
+    run_remote "sudo mkdir -p '$REMOTE_SKILLS_DIR/$skill_name'"
     if [ -f "${skill_dir}SKILL.md" ]; then
       copy_to_remote "${skill_dir}SKILL.md" "/tmp/skill-${skill_name}.md"
-      run_remote "sudo mv /tmp/skill-${skill_name}.md /root/.openclaw/workspace/skills/$skill_name/SKILL.md"
+      run_remote "sudo mv /tmp/skill-${skill_name}.md '$REMOTE_SKILLS_DIR/$skill_name/SKILL.md'"
     fi
   done
+  if [ -n "$REMOTE_OWNER" ] && [ "$REMOTE_OWNER" != "root:root" ]; then
+    run_remote "sudo chown -R '$REMOTE_OWNER' '$REMOTE_SKILLS_DIR'"
+  fi
 fi
 
 echo "==> Starting remote sidecar..."

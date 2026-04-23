@@ -213,14 +213,17 @@ export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
 
   if (loading) {
     return (
-      <div className="card p-6">
-        <div className="flex items-center gap-4">
+      <div className="card overflow-hidden">
+        <div className="p-4 flex items-center gap-4">
+          <div className="shrink-0 text-secondary-400">
+            <ChevronRight className="h-4 w-4" />
+          </div>
           <div className="shrink-0 bg-secondary-50 rounded-lg p-2">
             <Icon className="w-6 h-6 text-primary-600" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-secondary-900">{provider.name}</h3>
-            <p className="text-xs text-secondary-500 mt-0.5">Loading...</p>
+            <p className="text-xs text-secondary-500 mt-0.5">{provider.description}</p>
           </div>
         </div>
       </div>

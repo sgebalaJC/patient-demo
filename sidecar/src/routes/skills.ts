@@ -1,7 +1,12 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
+import { WORKSPACE } from "../lib/paths.js";
 
-const WORKSPACE_SKILLS = "/root/.openclaw/workspace/skills";
+// Skills live alongside the rest of the OpenClaw workspace so Aurelia's
+// runtime + this sidecar see the same directory. Honor OPENCLAW_STATE_DIR
+// rather than hardcoding /root — when the agent runs as a non-root user
+// (e.g. /home/openclaw/.openclaw), skills must follow.
+const WORKSPACE_SKILLS = join(WORKSPACE, "skills");
 
 if (!existsSync(WORKSPACE_SKILLS)) {
   mkdirSync(WORKSPACE_SKILLS, { recursive: true });

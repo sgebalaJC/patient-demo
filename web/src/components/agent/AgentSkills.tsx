@@ -3,6 +3,7 @@ import { Plus, Trash2, FileText, X } from 'lucide-react';
 import { sidecar } from '../../lib/sidecar';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { ChatMarkdown } from '../chat/ChatMarkdown';
+import { ConfirmModal } from '../ui/ConfirmModal';
 
 interface SkillEntry {
   id: string;
@@ -205,31 +206,19 @@ export const AgentSkills: React.FC = () => {
         )}
       </div>
 
-      {/* Delete confirmation */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteTarget(null)}>
-          <div className="bg-surface-card rounded-xl p-6 max-w-sm mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-secondary-900 mb-2">Uninstall Skill</h3>
-            <p className="text-sm text-secondary-600 mb-4">
-              Remove <strong>{deleteTarget.name}</strong>? The agent will no longer have access to this skill.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 text-sm text-secondary-600 rounded-lg border border-secondary-300 hover:bg-secondary-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(deleteTarget)}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-              >
-                Uninstall
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+        title="Uninstall skill"
+        message={
+          deleteTarget
+            ? `Remove ${deleteTarget.name}? The agent will no longer have access to this skill.`
+            : ''
+        }
+        confirmLabel="Uninstall"
+        variant="danger"
+      />
     </div>
   );
 };

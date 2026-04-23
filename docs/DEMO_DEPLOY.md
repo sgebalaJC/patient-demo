@@ -193,9 +193,9 @@ agents. The `/admin/agent` and `/support` pages will fail when hit.
 
 To enable:
 
-1. Provision a VPS (~$6/month on Vultr, DigitalOcean, Hetzner, etc.)
-2. Rewrite `{{PLACEHOLDER}}` tokens in `openclaw/` workspace markdown
-3. Run `scripts/vultr-setup.sh <ip> <ssh-key>`
+1. Provision a VPS (~$6/month on DigitalOcean, Hetzner, etc.) or a GCE VM
+2. Install Node.js 22 + Bun + OpenClaw + QMD on the host
+3. Rewrite `{{PLACEHOLDER}}` tokens in `openclaw/` workspace markdown
 4. Deploy the sidecar: `cd sidecar && ./deploy.sh`
 5. Set `VITE_SIDECAR_PROXY_URL` in `web/.env` → rebuild + redeploy web
 6. Smoke-test via admin dashboard → AI Agent page

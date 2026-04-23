@@ -1,65 +1,62 @@
 /**
- * Google Calendar Service Module
- * Handles bidirectional sync between Firestore appointments and Google Calendar.
- * Event titles include patient phone numbers for appointment-reminder SMS compatibility.
+ * Google Calendar — appointment sync.
  *
- * Title format: "{firstName} {lastName} {phoneNumber}"
- * Example: "Aizle Arteta 949-284-5733"
+ * Creates / updates / deletes calendar events mirroring Firestore
+ * `appointments`, and polls for changes in the other direction. All calls
+ * go through `integrations/google-workspace` — the chosen calendar id and
+ * auth mode (service-account impersonation OR OAuth as a specific email)
+ * come from that doc. Env vars GOOGLE_CALENDAR_ID / GOOGLE_SA_KEY /
+ * GOOGLE_CALENDAR_SUBJECT are retired; set it all via the admin UI.
+ *
+ * Event title format keeps the patient phone number so the downstream
+ * appointment-reminder SMS job can parse it: "{firstName} {lastName} {phone}".
  */
 
-import { google, calendar_v3 } from 'googleapis';
 import { logger } from 'firebase-functions';
 import * as admin from 'firebase-admin';
+import {
+  loadIntegration,
+  resolveAccessToken,
+  type GoogleWorkspaceIntegration,
+} from './google-workspace.js';
 
+const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 const db = admin.firestore();
 
-// Calendar API scopes — read-write for creating/updating events
-const SCOPES = ['https://www.googleapis.com/auth/calendar'];
+// ── Shared integration resolver ────────────────────────────────────────
 
-/**
- * Get authenticated Google Calendar API client.
- * Uses a service account key with domain-wide delegation (JWT + subject)
- * to impersonate a Workspace user and get calendar write access.
- * Key is loaded from GOOGLE_SA_KEY env var (JSON string) or secret.
- */
-async function getCalendarClient(): Promise<calendar_v3.Calendar> {
-  const subject = process.env.GOOGLE_CALENDAR_SUBJECT;
-  const saKeyJson = process.env.GOOGLE_SA_KEY;
-
-  if (subject && saKeyJson) {
-    try {
-      const key = JSON.parse(saKeyJson);
-      const jwtClient = new google.auth.JWT({
-        email: key.client_email,
-        key: key.private_key,
-        scopes: SCOPES,
-        subject, // impersonate this Workspace user
-      });
-      await jwtClient.authorize();
-      return google.calendar({ version: 'v3', auth: jwtClient });
-    } catch (err: any) {
-      logger.error('Domain-wide delegation with key failed:', err.message);
-    }
-  }
-
-  // Fallback: plain ADC (works if calendar is directly shared with SA)
-  const auth = new google.auth.GoogleAuth({ scopes: SCOPES });
-  const authClient = await auth.getClient();
-  return google.calendar({ version: 'v3', auth: authClient as any });
-}
-
-function getCalendarId(): string {
-  const id = process.env.GOOGLE_CALENDAR_ID;
-  if (!id) {
-    throw new Error('GOOGLE_CALENDAR_ID environment variable not set');
-  }
-  return id;
+interface CalendarBinding {
+  accessToken: string;
+  calendarId: string;
 }
 
 /**
- * Create a Google Calendar event from a Firestore appointment
+ * Returns bearer token + calendar id, or null if the integration is not
+ * configured / disabled / missing its calendar id. Callers no-op on null
+ * so a fork without Google Workspace set up doesn't error — it just skips.
  */
-export async function createCalendarEvent(appointment: {
+async function bind(): Promise<CalendarBinding | null> {
+  let integration: GoogleWorkspaceIntegration | null;
+  try {
+    integration = await loadIntegration();
+  } catch (err: any) {
+    logger.error('Failed to load Google Workspace integration:', err.message);
+    return null;
+  }
+  if (!integration || integration.status !== 'active' || !integration.calendarId) return null;
+  if (!integration.enabledServices?.includes('calendar')) return null;
+  try {
+    const { accessToken } = await resolveAccessToken(integration);
+    return { accessToken, calendarId: integration.calendarId };
+  } catch (err: any) {
+    logger.error('Failed to resolve Google access token:', err.message);
+    return null;
+  }
+}
+
+// ── Event payload builder (shared by create + update) ──────────────────
+
+interface AppointmentInput {
   id: string;
   appointmentDate: admin.firestore.Timestamp;
   duration?: number;
@@ -70,279 +67,230 @@ export async function createCalendarEvent(appointment: {
   reminderMessage?: string;
   address?: string;
   specialistType?: string;
-}, patientName: string, patientPhone: string): Promise<string | null> {
+}
+
+function buildEventBody(
+  appointment: AppointmentInput,
+  patientName: string,
+  patientPhone: string,
+): Record<string, unknown> {
+  const startDate = appointment.appointmentDate.toDate();
+  const durationMinutes = appointment.duration || 20;
+  const endDate = new Date(startDate.getTime() + durationMinutes * 60 * 1000);
+
+  const summary = `${patientName} ${patientPhone}`;
+
+  let description: string;
+  if (appointment.reminderMessage) {
+    description = appointment.reminderMessage;
+  } else {
+    const parts: string[] = [];
+    if (appointment.appointmentType) parts.push(appointment.appointmentType);
+    if (appointment.reason) parts.push(`Reason: ${appointment.reason}`);
+    if (appointment.notes) parts.push(`Notes: ${appointment.notes}`);
+    description = parts.length > 0
+      ? parts.join('\n')
+      : `${appointment.appointmentType || 'Appointment'}`;
+  }
+
+  return {
+    summary,
+    description,
+    ...(appointment.address ? { location: appointment.address } : {}),
+    start: { dateTime: startDate.toISOString(), timeZone: 'America/Los_Angeles' },
+    end: { dateTime: endDate.toISOString(), timeZone: 'America/Los_Angeles' },
+    extendedProperties: {
+      private: { firestoreId: appointment.id, source: 'patient-portal' },
+    },
+  };
+}
+
+// ── Public API — unchanged signatures so index.ts callers are untouched.
+
+export async function createCalendarEvent(
+  appointment: AppointmentInput,
+  patientName: string,
+  patientPhone: string,
+): Promise<string | null> {
+  const b = await bind();
+  if (!b) return null;
   try {
-    const calendar = await getCalendarClient();
-    const calendarId = getCalendarId();
-
-    const startDate = appointment.appointmentDate.toDate();
-    const durationMinutes = appointment.duration || 20;
-    const endDate = new Date(startDate.getTime() + durationMinutes * 60 * 1000);
-
-    // Title format for appointment-reminder SMS compatibility
-    const summary = `${patientName} ${patientPhone}`;
-
-    // Description becomes the SMS reminder text via appointment-reminder project.
-    // If admin set a custom reminderMessage, use that. Otherwise build from fields.
-    let description: string;
-    if (appointment.reminderMessage) {
-      description = appointment.reminderMessage;
-    } else {
-      const parts: string[] = [];
-      if (appointment.appointmentType) parts.push(appointment.appointmentType);
-      if (appointment.reason) parts.push(`Reason: ${appointment.reason}`);
-      if (appointment.notes) parts.push(`Notes: ${appointment.notes}`);
-      description = parts.length > 0 ? parts.join('\n') : `${appointment.appointmentType || 'Appointment'}`;
-    }
-
-    const event: calendar_v3.Schema$Event = {
-      summary,
-      description,
-      ...(appointment.address ? { location: appointment.address } : {}),
-      start: {
-        dateTime: startDate.toISOString(),
-        timeZone: 'America/Los_Angeles',
-      },
-      end: {
-        dateTime: endDate.toISOString(),
-        timeZone: 'America/Los_Angeles',
-      },
-      extendedProperties: {
-        private: {
-          firestoreId: appointment.id,
-          source: 'patient-portal',
+    const res = await fetch(
+      `${CALENDAR_API}/calendars/${encodeURIComponent(b.calendarId)}/events`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${b.accessToken}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify(buildEventBody(appointment, patientName, patientPhone)),
       },
-    };
-
-    const response = await calendar.events.insert({
-      calendarId,
-      requestBody: event,
-    });
-
-    const eventId = response.data.id;
-    logger.info(`Calendar event created: ${eventId} for appointment ${appointment.id}`);
-    return eventId || null;
+    );
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      logger.error('Calendar create failed', { status: res.status, body: text.slice(0, 200) });
+      return null;
+    }
+    const data = await res.json();
+    logger.info(`Calendar event created: ${data.id} for appointment ${appointment.id}`);
+    return (data.id as string) || null;
   } catch (error: any) {
-    logger.error('Error creating calendar event:', {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-      errors: error.errors,
-      response: error.response?.data,
-    });
+    logger.error('Error creating calendar event:', { message: error.message });
     return null;
   }
 }
 
-/**
- * Update an existing Google Calendar event
- */
 export async function updateCalendarEvent(
   eventId: string,
-  appointment: {
-    id: string;
-    appointmentDate: admin.firestore.Timestamp;
-    duration?: number;
-    appointmentType?: string;
-    reason?: string;
-    notes?: string;
-    status: string;
-    reminderMessage?: string;
-    address?: string;
-    specialistType?: string;
-  },
+  appointment: AppointmentInput,
   patientName: string,
-  patientPhone: string
+  patientPhone: string,
 ): Promise<boolean> {
+  const b = await bind();
+  if (!b) return false;
   try {
-    const calendar = await getCalendarClient();
-    const calendarId = getCalendarId();
-
-    const startDate = appointment.appointmentDate.toDate();
-    const durationMinutes = appointment.duration || 20;
-    const endDate = new Date(startDate.getTime() + durationMinutes * 60 * 1000);
-
-    const summary = `${patientName} ${patientPhone}`;
-
-    let description: string;
-    if (appointment.reminderMessage) {
-      description = appointment.reminderMessage;
-    } else {
-      const parts: string[] = [];
-      if (appointment.appointmentType) parts.push(appointment.appointmentType);
-      if (appointment.reason) parts.push(`Reason: ${appointment.reason}`);
-      if (appointment.notes) parts.push(`Notes: ${appointment.notes}`);
-      description = parts.length > 0 ? parts.join('\n') : `${appointment.appointmentType || 'Appointment'}`;
-    }
-
-    await calendar.events.update({
-      calendarId,
-      eventId,
-      requestBody: {
-        summary,
-        description,
-        ...(appointment.address ? { location: appointment.address } : {}),
-        start: {
-          dateTime: startDate.toISOString(),
-          timeZone: 'America/Los_Angeles',
+    const res = await fetch(
+      `${CALENDAR_API}/calendars/${encodeURIComponent(b.calendarId)}/events/${eventId}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${b.accessToken}`,
+          'Content-Type': 'application/json',
         },
-        end: {
-          dateTime: endDate.toISOString(),
-          timeZone: 'America/Los_Angeles',
-        },
-        extendedProperties: {
-          private: {
-            firestoreId: appointment.id,
-            source: 'patient-portal',
-          },
-        },
+        body: JSON.stringify(buildEventBody(appointment, patientName, patientPhone)),
       },
-    });
-
+    );
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      logger.error('Calendar update failed', { status: res.status, body: text.slice(0, 200) });
+      return false;
+    }
     logger.info(`Calendar event updated: ${eventId}`);
     return true;
   } catch (error: any) {
-    logger.error('Error updating calendar event:', {
-      message: error.message,
-      code: error.code,
-    });
+    logger.error('Error updating calendar event:', { message: error.message });
     return false;
   }
 }
 
-/**
- * Delete a Google Calendar event
- */
 export async function deleteCalendarEvent(eventId: string): Promise<boolean> {
+  const b = await bind();
+  if (!b) return false;
   try {
-    const calendar = await getCalendarClient();
-    const calendarId = getCalendarId();
-
-    await calendar.events.delete({
-      calendarId,
-      eventId,
-    });
-
-    logger.info(`Calendar event deleted: ${eventId}`);
-    return true;
-  } catch (error: any) {
-    // 410 Gone means event already deleted
-    if (error.code === 410 || error.status === 410) {
-      logger.info(`Calendar event already deleted: ${eventId}`);
+    const res = await fetch(
+      `${CALENDAR_API}/calendars/${encodeURIComponent(b.calendarId)}/events/${eventId}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${b.accessToken}` } },
+    );
+    // 410 Gone = already deleted
+    if (res.ok || res.status === 410) {
+      logger.info(`Calendar event deleted: ${eventId}`);
       return true;
     }
-    logger.error('Error deleting calendar event:', {
-      message: error.message,
-      code: error.code,
-    });
+    const text = await res.text().catch(() => '');
+    logger.error('Calendar delete failed', { status: res.status, body: text.slice(0, 200) });
+    return false;
+  } catch (error: any) {
+    logger.error('Error deleting calendar event:', { message: error.message });
     return false;
   }
 }
 
-/**
- * Get busy time ranges for a specific date using FreeBusy API
- * Returns array of { start, end } representing booked slots
- */
 export async function getFreeBusySlots(date: string): Promise<{ start: Date; end: Date }[]> {
+  const b = await bind();
+  if (!b) return [];
   try {
-    const calendar = await getCalendarClient();
-    const calendarId = getCalendarId();
-
-    // Build day boundaries in PST
-    // Use -07:00 for PDT (March-November) and -08:00 for PST
-    // Simpler: query a wide window and let the FreeBusy API handle timezone
     const dayStart = new Date(`${date}T00:00:00-08:00`);
     const dayEnd = new Date(`${date}T23:59:59-07:00`);
-
-    const response = await calendar.freebusy.query({
-      requestBody: {
+    const res = await fetch(`${CALENDAR_API}/freeBusy`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${b.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         timeMin: dayStart.toISOString(),
         timeMax: dayEnd.toISOString(),
         timeZone: 'America/Los_Angeles',
-        items: [{ id: calendarId }],
-      },
+        items: [{ id: b.calendarId }],
+      }),
     });
-
-    const busySlots = response.data.calendars?.[calendarId]?.busy || [];
-
-    return busySlots
-      .filter((slot): slot is { start: string; end: string } => !!slot.start && !!slot.end)
-      .map(slot => ({
-        start: new Date(slot.start!),
-        end: new Date(slot.end!),
-      }));
+    if (!res.ok) {
+      logger.error('FreeBusy query failed', { status: res.status });
+      return [];
+    }
+    const data = await res.json();
+    const busy = (data.calendars?.[b.calendarId]?.busy ?? []) as Array<{ start?: string; end?: string }>;
+    return busy
+      .filter((s): s is { start: string; end: string } => !!s.start && !!s.end)
+      .map((s) => ({ start: new Date(s.start), end: new Date(s.end) }));
   } catch (error: any) {
-    logger.error('Error fetching free/busy slots:', {
-      message: error.message,
-      code: error.code,
-    });
+    logger.error('Error fetching free/busy slots:', { message: error.message });
     return [];
   }
 }
 
 /**
- * Get changed events since last sync using incremental sync tokens.
- * On first call (no syncToken), fetches all events. Subsequent calls get only changes.
+ * Minimal event shape returned by `getChangedEvents`. index.ts callers
+ * only read these fields; keeping the type tight avoids pulling in
+ * `googleapis` just for `Schema$Event`.
  */
+export interface ChangedEvent {
+  id?: string;
+  status?: string;
+  start?: { dateTime?: string };
+  extendedProperties?: { private?: Record<string, string> };
+}
+
 export async function getChangedEvents(syncToken?: string): Promise<{
-  events: calendar_v3.Schema$Event[];
+  events: ChangedEvent[];
   nextSyncToken: string | null;
 }> {
+  const b = await bind();
+  if (!b) return { events: [], nextSyncToken: null };
+
   try {
-    const calendar = await getCalendarClient();
-    const calendarId = getCalendarId();
-
-    const params: calendar_v3.Params$Resource$Events$List = {
-      calendarId,
-      singleEvents: true,
-    };
-
-    if (syncToken) {
-      params.syncToken = syncToken;
-    } else {
-      // First sync: get events from last 30 days forward
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      params.timeMin = thirtyDaysAgo.toISOString();
-    }
-
-    const allEvents: calendar_v3.Schema$Event[] = [];
+    const all: ChangedEvent[] = [];
     let pageToken: string | undefined;
     let nextSyncToken: string | null = null;
 
     do {
-      if (pageToken) params.pageToken = pageToken;
-
-      const response = await calendar.events.list(params);
-      const events = response.data.items || [];
-      allEvents.push(...events);
-
-      pageToken = response.data.nextPageToken || undefined;
-      if (response.data.nextSyncToken) {
-        nextSyncToken = response.data.nextSyncToken;
+      const params = new URLSearchParams({ singleEvents: 'true' });
+      if (syncToken) {
+        params.set('syncToken', syncToken);
+      } else {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        params.set('timeMin', thirtyDaysAgo.toISOString());
       }
+      if (pageToken) params.set('pageToken', pageToken);
+
+      const res = await fetch(
+        `${CALENDAR_API}/calendars/${encodeURIComponent(b.calendarId)}/events?${params}`,
+        { headers: { Authorization: `Bearer ${b.accessToken}` } },
+      );
+      if (!res.ok) {
+        // 410 Gone → sync token expired; retry without it for a full re-sync.
+        if (res.status === 410 && syncToken) {
+          logger.warn('Sync token expired, performing full sync');
+          return getChangedEvents();
+        }
+        const text = await res.text().catch(() => '');
+        logger.error('Calendar list failed', { status: res.status, body: text.slice(0, 200) });
+        return { events: [], nextSyncToken: null };
+      }
+      const data = await res.json();
+      all.push(...((data.items as ChangedEvent[]) ?? []));
+      pageToken = (data.nextPageToken as string) || undefined;
+      if (data.nextSyncToken) nextSyncToken = data.nextSyncToken as string;
     } while (pageToken);
 
-    return { events: allEvents, nextSyncToken };
+    return { events: all, nextSyncToken };
   } catch (error: any) {
-    // 410 Gone means sync token expired — need full re-sync
-    if (error.code === 410 || error.status === 410) {
-      logger.warn('Sync token expired, performing full sync');
-      return getChangedEvents(); // Retry without sync token
-    }
-
-    logger.error('Error fetching changed events:', {
-      message: error.message,
-      code: error.code,
-    });
+    logger.error('Error fetching changed events:', { message: error.message });
     return { events: [], nextSyncToken: null };
   }
 }
 
-/**
- * Store/retrieve the sync token in Firestore
- */
 export async function getSyncToken(): Promise<string | undefined> {
   const doc = await db.collection('system').doc('calendarSyncToken').get();
   return doc.exists ? doc.data()?.token : undefined;
@@ -353,4 +301,13 @@ export async function saveSyncToken(token: string): Promise<void> {
     token,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+}
+
+/**
+ * True when the integration doc has a calendar configured. Used by the
+ * scheduled sync job to skip cleanly when Google Workspace isn't set up.
+ */
+export async function hasCalendarConfigured(): Promise<boolean> {
+  const i = await loadIntegration();
+  return !!(i && i.status === 'active' && i.calendarId && i.enabledServices?.includes('calendar'));
 }

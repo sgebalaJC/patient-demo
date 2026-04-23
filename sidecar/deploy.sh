@@ -4,7 +4,7 @@ set -euo pipefail
 # Deploy patient-sidecar to the host that runs it.
 #
 # Supports two transports:
-#   1. Plain SSH/SCP (default — Vultr/Hetzner/any generic Linux host)
+#   1. Plain SSH/SCP (default — any generic Linux host)
 #      Set SIDECAR_HOST to an IP/hostname; optionally SIDECAR_SSH_USER
 #      (default: root) and SIDECAR_SSH_KEY (default: ~/.ssh/id_ed25519).
 #   2. gcloud compute (GCE VMs)
@@ -20,8 +20,8 @@ REMOTE_BIN="/root/patient-sidecar"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── Per-fork configuration ──────────────────────────────────────────────
-# The demo host runs on Vultr at 5.78.123.70. For GCE VMs, blank SIDECAR_HOST
-# and set the three GCE_* vars below.
+# The demo AI agent runs on a Hetzner VPS at 5.78.123.70. For GCE VMs, blank
+# SIDECAR_HOST and set the three GCE_* vars below.
 SIDECAR_HOST="${SIDECAR_HOST:-5.78.123.70}"        # ★ hostname or IP (empty → use gcloud)
 SIDECAR_SSH_USER="${SIDECAR_SSH_USER:-root}"
 SIDECAR_SSH_KEY="${SIDECAR_SSH_KEY:-$HOME/.ssh/kitt-hetzner}"

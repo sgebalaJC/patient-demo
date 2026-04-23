@@ -6,6 +6,7 @@
  */
 import { getDb } from "../lib/firebase.js";
 import { runSendOutboundFax, type SendOutboundFaxArgs } from "../lib/signalwire.js";
+import { ALLOWED_INBOUND_PATCH_FIELDS } from "../lib/fax-schema.js";
 
 const INBOUND = "inbound-faxes";
 const OUTBOUND = "outbound-faxes";
@@ -47,16 +48,6 @@ export async function realFaxGet(faxSid: string): Promise<Response> {
   if (!snap.exists) return json({ error: "Fax not found" }, 404);
   return json({ faxSid, ...snap.data() });
 }
-
-const ALLOWED_INBOUND_PATCH_FIELDS = [
-  "status",
-  "extracted",
-  "matchedPatient",
-  "drchronoDocumentId",
-  "aurelia",
-  "emailDraft",
-  "notes",
-];
 
 export async function realFaxPatch(faxSid: string, request: Request): Promise<Response> {
   const ref = getDb().doc(`${INBOUND}/${faxSid}`);

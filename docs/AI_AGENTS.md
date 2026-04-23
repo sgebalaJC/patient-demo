@@ -13,7 +13,7 @@ QMD memory enabled (local BM25 + vector search, 5-min refresh, embedding model u
 
 ## Host (per customer)
 
-Each customer runs its own host with OpenClaw + the sidecar. The reference deployment is a GCE `e2-medium` in us-central1-a, but Vultr and other providers work too — adjust `sidecar/deploy.sh` constants accordingly.
+Each customer runs its own host with OpenClaw + the sidecar. The reference deployment is a GCE `e2-medium` in us-central1-a, but any Linux VPS works — adjust `sidecar/deploy.sh` constants accordingly.
 
 **Minimum specs:** `e2-medium` class (2 shared vCPU, 4 GB RAM, 4 GB swap). `e2-small` (2 GB) is **not** enough — the gateway hangs during cold-start under CPU pressure.
 
@@ -129,7 +129,7 @@ Bun binary on the host (`sidecar/`). HTTP API for chat proxy, file ops, config r
 
 `getStatus()` derives `running`/`stopped` from `checkGatewayHealth()` (hitting `http://localhost:18789/healthz`).
 
-**Deploy:** `cd sidecar && ./deploy.sh`. Edit the GCE constants inside the script for your host (`GCE_VM`, `GCE_ZONE`, `GCE_PROJECT`). A `TARGET=vultr ./deploy.sh` escape hatch is available for Vultr-based installs.
+**Deploy:** `cd sidecar && ./deploy.sh`. Edit the GCE constants inside the script for your host (`GCE_VM`, `GCE_ZONE`, `GCE_PROJECT`), or set `SIDECAR_HOST` for a plain SSH target on any Linux VPS.
 
 ## Health checks
 
@@ -190,7 +190,7 @@ Patient Firebase tokens are **NOT** forwarded to the sidecar for patient-facing 
 
 ## Host bring-up gotchas
 
-- `vultr-setup.sh` (if using Vultr) installs `qmd` (wrong) instead of `@tobilu/qmd`. Use `bun install -g @tobilu/qmd`.
+- The QMD npm package is `@tobilu/qmd`, not `qmd`. Install with `bun install -g @tobilu/qmd`.
 - Debian 12 default image lacks `dbus-user-session` — without it, `systemctl --user` can't talk to root's user systemd and `openclaw gateway install` fails with `Transport endpoint is not connected`. `apt-get install dbus-user-session && systemctl restart user@0.service`.
 - `lsof` is not installed on Debian 12 by default — OpenClaw uses it to scan for stale processes on port 18789. `apt-get install lsof`.
 - Root linger is required: `loginctl enable-linger root`.
@@ -226,4 +226,4 @@ admin UI, subscription lifecycle, and top-up flow are fully functional.
 
 ## OpenClaw update
 
-`./scripts/openclaw-update.sh [tag]` — creates a backup on the host, uploads to GCS, runs `openclaw update`. `--dry-run` to preview. **Always recompile the web-chat plugin after an update** (it's patched for agent-scoped routing).
+SSH to the host and run `openclaw update` (optionally `--tag <version>`). Back up `/root/.openclaw/` first if you want a rollback point.

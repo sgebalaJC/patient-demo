@@ -16,15 +16,18 @@
  */
 
 import type {Request, Response} from "express";
-import {defineSecret} from "firebase-functions/params";
 import {logger} from "firebase-functions";
 import {onRequest} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import * as crypto from "crypto";
+import {
+  signalwireProjectId,
+  signalwireAuthToken,
+  signalwireSigningKey,
+  computeSignalwireSignature,
+} from "./lib/signalwire-helpers.js";
 
-export const signalwireProjectId = defineSecret("SIGNALWIRE_PROJECT_ID");
-export const signalwireAuthToken = defineSecret("SIGNALWIRE_AUTH_TOKEN");
-export const signalwireSigningKey = defineSecret("SIGNALWIRE_SIGNING_KEY");
+// Re-export the secrets so existing imports from this module keep working.
+export {signalwireProjectId, signalwireAuthToken, signalwireSigningKey};
 
 const SIDECAR_URL = process.env.SIDECAR_URL || "";
 const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || "";
@@ -36,21 +39,10 @@ function db() {
 }
 
 // ---------------------------------------------------------------------------
-// Signature verification (Twilio-compatible — SignalWire LaML uses same algo)
+// Signature verification — algorithm lives in lib/signalwire-helpers.ts.
+// This wrapper iterates multiple candidate tokens/URLs because Cloud
+// Functions v2 routing can mangle the path seen by the container.
 // ---------------------------------------------------------------------------
-
-function computeExpectedSignature(
-  authToken: string,
-  url: string,
-  params: Record<string, string>,
-): string {
-  const sortedKeys = Object.keys(params).sort();
-  let data = url;
-  for (const key of sortedKeys) {
-    data += key + params[key];
-  }
-  return crypto.createHmac("sha1", authToken).update(data).digest("base64");
-}
 
 function verifySignalWireSignature(
   signature: string | undefined,
@@ -64,7 +56,7 @@ function verifySignalWireSignature(
     const tok = authTokens[i];
     if (!tok) continue;
     for (const url of candidateUrls) {
-      const expected = computeExpectedSignature(tok, url, params);
+      const expected = computeSignalwireSignature(tok, url, params);
       lastExpected = expected;
       if (expected === signature) return {ok: true, expected, matchedUrl: url, matchedTokenIdx: i};
     }

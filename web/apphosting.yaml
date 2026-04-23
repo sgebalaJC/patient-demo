@@ -38,6 +38,9 @@ env:
   # App config
   - variable: VITE_APP_ENV
     value: demo
+  # ★ PER-FORK: replace with the practice's Stripe publishable key (pk_live_…
+  # in production, pk_test_… for staging). This is a public key so `value:`
+  # is fine; only the secret key goes through Secret Manager.
   - variable: VITE_STRIPE_PUBLIC_KEY
     value: pk_test_replace_me
 
@@ -46,5 +49,9 @@ env:
   # function reads SIDECAR_URL + SIDECAR_API_KEY from Secret Manager
   # (see functions/src/index.ts:2587). Without this var the /support
   # chat and /admin/agent dashboard render "Offline".
+  #
+  # ★ PER-FORK: replace with the customer project's sidecarProxy Cloud Run
+  # URL — find it after the first `firebase deploy --only functions` with
+  # `gcloud run services describe sidecarproxy --region=<region> --format='value(status.url)'`.
   - variable: VITE_SIDECAR_PROXY_URL
     value: https://sidecarproxy-yyyd7cxnba-uw.a.run.app

@@ -104,6 +104,62 @@ function isOperatorAuthorized(request: Request): boolean {
   return request.headers.get("x-operator-authorized") === "true";
 }
 
+// ---------------------------------------------------------------------------
+// EHR pass-through registry
+// ---------------------------------------------------------------------------
+
+type EhrSim = (method: string, path: string, searchParams: URLSearchParams, request?: Request) => Promise<Response>;
+type EhrProxy = (method: string, path: string, searchParams: URLSearchParams, request: Request) => Promise<Response>;
+
+interface EhrHandlers {
+  sim: EhrSim;
+  assertReady: () => Promise<void>;
+  proxy: EhrProxy;
+  displayName: string;
+  sampleResource: string;
+}
+
+const EHR_REGISTRY: Record<string, EhrHandlers> = {
+  drchrono: { sim: simDrChrono, assertReady: assertDrChronoReady, proxy: proxyDrChrono, displayName: "DrChrono",        sampleResource: "patients" },
+  athena:   { sim: simAthena,   assertReady: assertAthenaReady,   proxy: proxyAthena,   displayName: "Athena",          sampleResource: "patients" },
+  elation:  { sim: simElation,  assertReady: assertElationReady,  proxy: proxyElation,  displayName: "Elation",         sampleResource: "patients" },
+  ecw:      { sim: simEcw,      assertReady: assertEcwReady,      proxy: proxyEcw,      displayName: "eCW",             sampleResource: "Patient"  },
+  nextgen:  { sim: simNextGen,  assertReady: assertNextGenReady,  proxy: proxyNextGen,  displayName: "NextGen",         sampleResource: "patients" },
+  tebra:    { sim: simTebra,    assertReady: assertTebraReady,    proxy: proxyTebra,    displayName: "Tebra",           sampleResource: "patients" },
+  greenway: { sim: simGreenway, assertReady: assertGreenwayReady, proxy: proxyGreenway, displayName: "Greenway",        sampleResource: "patients" },
+  pfusion:  { sim: simPfusion,  assertReady: assertPfusionReady,  proxy: proxyPfusion,  displayName: "Practice Fusion", sampleResource: "patients" },
+  cerner:   { sim: simCerner,   assertReady: assertCernerReady,   proxy: proxyCerner,   displayName: "Cerner",          sampleResource: "Patient"  },
+  epic:     { sim: simEpic,     assertReady: assertEpicReady,     proxy: proxyEpic,     displayName: "Epic",            sampleResource: "Patient"  },
+};
+
+/**
+ * Dispatch an EHR pass-through call. Sim mode → seeded sandbox (no EHR token
+ * required); real mode → OAuth-backed proxy after enabled/authorized checks.
+ * One place to add metrics, request-id propagation, or rate-limit handling.
+ */
+async function ehrRoute(
+  resource: string,
+  method: string,
+  parts: string[],
+  url: URL,
+  request: Request,
+  handlers: EhrHandlers,
+): Promise<Response> {
+  const ehrPath = parts.slice(1).join("/");
+  if (!ehrPath) {
+    return error(`${handlers.displayName} path required (e.g. /admin-api/${resource}/${handlers.sampleResource})`, 400);
+  }
+  if (await isSimulationOn()) {
+    return await handlers.sim(method, ehrPath, url.searchParams, request);
+  }
+  try {
+    await handlers.assertReady();
+  } catch (err: any) {
+    return error(err.message, 403);
+  }
+  return await handlers.proxy(method, ehrPath, url.searchParams, request);
+}
+
 /**
  * Sim-aware collection ref for native Firestore collections (users,
  * appointments, refills, etc). When `system/settings.simulationMode` is on,
@@ -1079,6 +1135,11 @@ export async function handleAdminApi(
   const action = parts[2];
 
   try {
+    // EHR pass-throughs are handled uniformly via the registry — one branch,
+    // one place to bolt on metrics / request-id / sim-flag logic.
+    const ehr = EHR_REGISTRY[resource];
+    if (ehr) return await ehrRoute(resource, method, parts, url, request, ehr);
+
     switch (resource) {
       // ── Patients (NO DELETE — forbidden) ──
       case "patients":
@@ -1145,189 +1206,9 @@ export async function handleAdminApi(
         if (method === "PATCH" && id) return await updateSpecialistRequest(db, id, request);
         break;
 
-      // ── DrChrono (generic pass-through) ──
-      // Path: /admin-api/drchrono/<drchrono-path>[?...]
-      // Only active when integrations/drchrono { enabled: true, status: active }.
-      // In sim mode the call goes to the sandbox instead — no DrChrono token
-      // required, and Aurelia sees the same data the UI does.
-      case "drchrono": {
-        const drchronoPath = parts.slice(1).join("/");
-        if (!drchronoPath) {
-          return error("DrChrono path required (e.g. /admin-api/drchrono/patients)", 400);
-        }
-        if (await isSimulationOn()) {
-          return await simDrChrono(method, drchronoPath, url.searchParams, request);
-        }
-        try {
-          await assertDrChronoReady();
-        } catch (err: any) {
-          return error(err.message, 403);
-        }
-        return await proxyDrChrono(method, drchronoPath, url.searchParams, request);
-      }
-
-      // ── Athenahealth (generic pass-through) ──
-      // Path: /admin-api/athena/<athena-path>[?...]
-      // Only active when integrations/athena { enabled: true, status: active }.
-      case "athena": {
-        const athenaPath = parts.slice(1).join("/");
-        if (!athenaPath) {
-          return error("Athena path required (e.g. /admin-api/athena/patients)", 400);
-        }
-        if (await isSimulationOn()) {
-          return await simAthena(method, athenaPath, url.searchParams);
-        }
-        try {
-          await assertAthenaReady();
-        } catch (err: any) {
-          return error(err.message, 403);
-        }
-        return await proxyAthena(method, athenaPath, url.searchParams, request);
-      }
-
-      // ── Elation Health (generic pass-through) ──
-      // Path: /admin-api/elation/<elation-path>[?...]
-      // Only active when integrations/elation { enabled: true, status: active }.
-      case "elation": {
-        const elationPath = parts.slice(1).join("/");
-        if (!elationPath) {
-          return error("Elation path required (e.g. /admin-api/elation/patients)", 400);
-        }
-        if (await isSimulationOn()) {
-          return await simElation(method, elationPath, url.searchParams);
-        }
-        try {
-          await assertElationReady();
-        } catch (err: any) {
-          return error(err.message, 403);
-        }
-        return await proxyElation(method, elationPath, url.searchParams, request);
-      }
-
-      // ── eClinicalWorks (FHIR R4 pass-through) ──
-      // Path: /admin-api/ecw/<fhir-resource>[?...]
-      // Only active when integrations/ecw { enabled: true, status: active }.
-      case "ecw": {
-        const ecwPath = parts.slice(1).join("/");
-        if (!ecwPath) {
-          return error("eCW path required (e.g. /admin-api/ecw/Patient)", 400);
-        }
-        if (await isSimulationOn()) {
-          return await simEcw(method, ecwPath, url.searchParams);
-        }
-        try {
-          await assertEcwReady();
-        } catch (err: any) {
-          return error(err.message, 403);
-        }
-        return await proxyEcw(method, ecwPath, url.searchParams, request);
-      }
-
-      // ── NextGen Healthcare (generic pass-through) ──
-      case "nextgen": {
-        const nextgenPath = parts.slice(1).join("/");
-        if (!nextgenPath) {
-          return error("NextGen path required (e.g. /admin-api/nextgen/patients)", 400);
-        }
-        if (await isSimulationOn()) {
-          return await simNextGen(method, nextgenPath, url.searchParams);
-        }
-        try {
-          await assertNextGenReady();
-        } catch (err: any) {
-          return error(err.message, 403);
-        }
-        return await proxyNextGen(method, nextgenPath, url.searchParams, request);
-      }
-
-      // ── Tebra (generic pass-through) ──
-      case "tebra": {
-        const tebraPath = parts.slice(1).join("/");
-        if (!tebraPath) {
-          return error("Tebra path required (e.g. /admin-api/tebra/patients)", 400);
-        }
-        if (await isSimulationOn()) {
-          return await simTebra(method, tebraPath, url.searchParams);
-        }
-        try {
-          await assertTebraReady();
-        } catch (err: any) {
-          return error(err.message, 403);
-        }
-        return await proxyTebra(method, tebraPath, url.searchParams, request);
-      }
-
-      // ── Greenway Health (generic pass-through) ──
-      // Path: /admin-api/greenway/<path>[?...]
-      case "greenway": {
-        const greenwayPath = parts.slice(1).join("/");
-        if (!greenwayPath) {
-          return error("Greenway path required (e.g. /admin-api/greenway/patients)", 400);
-        }
-        if (await isSimulationOn()) {
-          return await simGreenway(method, greenwayPath, url.searchParams);
-        }
-        try {
-          await assertGreenwayReady();
-        } catch (err: any) {
-          return error(err.message, 403);
-        }
-        return await proxyGreenway(method, greenwayPath, url.searchParams, request);
-      }
-
-      // ── Practice Fusion (generic pass-through) ──
-      // Path: /admin-api/pfusion/<path>[?...]
-      case "pfusion": {
-        const pfusionPath = parts.slice(1).join("/");
-        if (!pfusionPath) {
-          return error("Practice Fusion path required (e.g. /admin-api/pfusion/patients)", 400);
-        }
-        if (await isSimulationOn()) {
-          return await simPfusion(method, pfusionPath, url.searchParams);
-        }
-        try {
-          await assertPfusionReady();
-        } catch (err: any) {
-          return error(err.message, 403);
-        }
-        return await proxyPfusion(method, pfusionPath, url.searchParams, request);
-      }
-
-      // ── Cerner / Oracle Health (FHIR R4 pass-through) ──
-      // Path: /admin-api/cerner/<fhir-resource>[?...]
-      case "cerner": {
-        const cernerPath = parts.slice(1).join("/");
-        if (!cernerPath) {
-          return error("Cerner path required (e.g. /admin-api/cerner/Patient)", 400);
-        }
-        if (await isSimulationOn()) {
-          return await simCerner(method, cernerPath, url.searchParams);
-        }
-        try {
-          await assertCernerReady();
-        } catch (err: any) {
-          return error(err.message, 403);
-        }
-        return await proxyCerner(method, cernerPath, url.searchParams, request);
-      }
-
-      // ── Epic (FHIR R4 pass-through) ──
-      // Path: /admin-api/epic/<fhir-resource>[?...]
-      case "epic": {
-        const epicPath = parts.slice(1).join("/");
-        if (!epicPath) {
-          return error("Epic path required (e.g. /admin-api/epic/Patient)", 400);
-        }
-        if (await isSimulationOn()) {
-          return await simEpic(method, epicPath, url.searchParams);
-        }
-        try {
-          await assertEpicReady();
-        } catch (err: any) {
-          return error(err.message, 403);
-        }
-        return await proxyEpic(method, epicPath, url.searchParams, request);
-      }
+      // ── EHR pass-throughs (drchrono/athena/elation/ecw/nextgen/tebra/
+      //    greenway/pfusion/cerner/epic) are resolved via EHR_REGISTRY
+      //    above the switch — see ehrRoute().
 
       // ── Faxes ──
       // Path: /admin-api/faxes/<action>

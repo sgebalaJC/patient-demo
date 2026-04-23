@@ -39,3 +39,40 @@ export function assertMaxLength(
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Legacy field-limit helpers used by the callables in functions/src/index.ts.
+// Mirrors web/src/lib/validation.ts so client + server reject identically.
+// ---------------------------------------------------------------------------
+
+export const FIELD_LIMITS = {
+  firstName: {min: 2, max: 100},
+  lastName: {min: 2, max: 100},
+  email: {max: 254},
+  phoneNumber: {max: 20},
+  password: {min: 8, max: 128},
+  role: {max: 20},
+} as const;
+
+export const VALID_ROLES = ["patient", "admin"] as const;
+
+/**
+ * Trim + length-check a string field. Throws a plain Error (not HttpsError)
+ * because callers may handle the message in ways that expect plain errors.
+ * Prefer `assertMaxLength` inside new callables.
+ */
+export function validateStringField(
+  value: unknown,
+  fieldName: string,
+  limits: { min?: number; max?: number },
+): string {
+  if (typeof value !== "string") throw new Error(`${fieldName} must be a string`);
+  const trimmed = value.trim();
+  if (limits.min && trimmed.length < limits.min) {
+    throw new Error(`${fieldName} must be at least ${limits.min} characters`);
+  }
+  if (limits.max && trimmed.length > limits.max) {
+    throw new Error(`${fieldName} must be less than ${limits.max} characters`);
+  }
+  return trimmed;
+}

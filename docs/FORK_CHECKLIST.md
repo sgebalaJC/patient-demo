@@ -134,9 +134,9 @@ firebase apphosting:rollouts:create web-patient --git-branch main
 
 ## 9. AI agent (optional — see [AI_AGENTS.md](AI_AGENTS.md))
 
-- [ ] Provision VPS
+- [ ] Provision VPS (or GCE VM)
+- [ ] Install Node.js 22 + Bun + OpenClaw + QMD on the host
 - [ ] Rewrite `{{PLACEHOLDER}}` tokens in `openclaw/` workspace markdown
-- [ ] Run `scripts/vultr-setup.sh <ip> <ssh-key>`
 - [ ] Drop the Firebase service-account key at `/root/.openclaw/credentials/google-sa-key.json` (firebase-admin reads it; sidecar sim + signalwire + chart-gap-check all reuse that path)
 - [ ] Fill `/root/sidecar.env` with, at minimum:
       ```

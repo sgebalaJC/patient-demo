@@ -44,6 +44,7 @@ import * as admin from "firebase-admin";
 import Stripe from "stripe";
 import {FUNCTIONS_BRANDING} from "./branding.js";
 import {assertAdmin} from "./superAdmins.js";
+import {makeStripeInstance, verifyWebhookSignature} from "./lib/stripe-helpers.js";
 
 const PLATFORM_STRIPE_SECRET_KEY = defineSecret("PLATFORM_STRIPE_SECRET_KEY");
 const PLATFORM_STRIPE_WEBHOOK_SECRET = defineSecret("PLATFORM_STRIPE_WEBHOOK_SECRET");
@@ -64,14 +65,10 @@ const ALL_PLATFORM_SECRETS = [
 const DEFAULT_TOPUP_BONUS_TOKENS = 2_500_000;
 
 function getStripe(): Stripe {
-  const key = PLATFORM_STRIPE_SECRET_KEY.value();
-  if (!key) {
-    throw new HttpsError(
-      "failed-precondition",
-      "PLATFORM_STRIPE_SECRET_KEY is not set. Add it to functions/.env or set via firebase functions:secrets:set.",
-    );
-  }
-  return new Stripe(key, {apiVersion: "2024-12-18.acacia" as any});
+  return makeStripeInstance(
+    PLATFORM_STRIPE_SECRET_KEY.value(),
+    "PLATFORM_STRIPE_SECRET_KEY",
+  );
 }
 
 const SUB_DOC = () => admin.firestore().doc("platform/subscription");
@@ -308,23 +305,20 @@ export const resumePlatformSubscription = onCall({secrets: ALL_PLATFORM_SECRETS}
  * Idempotency via `platform-stripe-events/{eventId}` write-once.
  */
 export const platformStripeWebhook = onRequest({secrets: ALL_PLATFORM_SECRETS}, async (req, res) => {
-  const signature = req.headers["stripe-signature"];
-  const webhookSecret = PLATFORM_STRIPE_WEBHOOK_SECRET.value();
-  if (!signature || !webhookSecret) {
-    res.status(400).send("Missing signature or webhook secret");
-    return;
-  }
-
   const stripe = getStripe();
-  let event: Stripe.Event;
-  try {
-    const rawBody = (req as any).rawBody || req.body;
-    event = stripe.webhooks.constructEvent(rawBody, signature as string, webhookSecret);
-  } catch (err: any) {
-    logger.error("platform stripe webhook signature verification failed", err.message);
-    res.status(400).send(`Webhook Error: ${err.message}`);
+  const rawBody = (req as any).rawBody || req.body;
+  const verified = verifyWebhookSignature(
+    stripe,
+    rawBody,
+    req.headers["stripe-signature"],
+    PLATFORM_STRIPE_WEBHOOK_SECRET.value(),
+    "platform stripe webhook",
+  );
+  if (!verified.event) {
+    res.status(verified.errorResponse!.status).send(verified.errorResponse!.body);
     return;
   }
+  const event = verified.event;
 
   const db = admin.firestore();
   const eventRef = db.collection("platform-stripe-events").doc(event.id);

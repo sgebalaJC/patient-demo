@@ -2,6 +2,11 @@
 
 Open items we've consciously deferred. Each entry: what the risk is, why we're accepting it for now, and what moves us off it.
 
+> **Fork note.** The values below (`5.78.123.70`, `patient-demo-project`,
+> `kitt-hetzner` SSH key, `firebase-adminsdk-fbsvc@…`) are the current demo
+> deployment. Replace them with the customer's VPS IP, Firebase project,
+> SSH key, and SA email when forking.
+
 ## Long-lived SA key on the sidecar VPS
 
 **What.** `/root/.openclaw/credentials/google-sa-key.json` on `5.78.123.70` holds a JSON key for `firebase-adminsdk-fbsvc@patient-demo-project.iam.gserviceaccount.com`. The SA has Firebase Admin SDK privileges (full Firestore R/W, custom token signing) plus `roles/secretmanager.secretAccessor`.

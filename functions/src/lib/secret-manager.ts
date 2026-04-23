@@ -97,3 +97,61 @@ export async function deleteEhrClientSecret(provider: string): Promise<void> {
   }
   cache.delete(name);
 }
+
+// ── Google Workspace service-account key ──────────────────────────────
+//
+// Lives here (not in the Firestore doc) because the private key is
+// sensitive and long-lived — same reasoning as EHR client secrets. The
+// integration doc holds only the service-account email + subject + calendar
+// id; the JSON key itself is fetched per-request from Secret Manager.
+
+const GOOGLE_SA_KEY_NAME = "google_workspace_sa_key";
+
+export async function getGoogleServiceAccountKey(): Promise<string | undefined> {
+  const now = Date.now();
+  const cached = cache.get(GOOGLE_SA_KEY_NAME);
+  if (cached && cached.expiresAt > now) return cached.value;
+  try {
+    const [ver] = await client.accessSecretVersion({
+      name: `projects/${projectId()}/secrets/${GOOGLE_SA_KEY_NAME}/versions/latest`,
+    });
+    const value = ver.payload?.data?.toString("utf8") ?? "";
+    cache.set(GOOGLE_SA_KEY_NAME, { value, expiresAt: now + CACHE_TTL_MS });
+    return value;
+  } catch (err: any) {
+    const code = (err && (err.code || err.status)) as number | string | undefined;
+    if (code === 5 || code === "NOT_FOUND") return undefined;
+    throw err;
+  }
+}
+
+export async function setGoogleServiceAccountKey(value: string): Promise<void> {
+  const parent = `projects/${projectId()}`;
+  try {
+    await client.createSecret({
+      parent,
+      secretId: GOOGLE_SA_KEY_NAME,
+      secret: { replication: { automatic: {} } },
+    });
+  } catch (err: any) {
+    const code = (err && (err.code || err.status)) as number | string | undefined;
+    if (code !== 6 && code !== "ALREADY_EXISTS") throw err;
+  }
+  await client.addSecretVersion({
+    parent: `${parent}/secrets/${GOOGLE_SA_KEY_NAME}`,
+    payload: { data: Buffer.from(value, "utf8") },
+  });
+  cache.delete(GOOGLE_SA_KEY_NAME);
+}
+
+export async function deleteGoogleServiceAccountKey(): Promise<void> {
+  try {
+    await client.deleteSecret({
+      name: `projects/${projectId()}/secrets/${GOOGLE_SA_KEY_NAME}`,
+    });
+  } catch (err: any) {
+    const code = (err && (err.code || err.status)) as number | string | undefined;
+    if (code !== 5 && code !== "NOT_FOUND") throw err;
+  }
+  cache.delete(GOOGLE_SA_KEY_NAME);
+}

@@ -10,14 +10,19 @@ import {FUNCTIONS_BRANDING} from "./branding.js";
 import {isSuperAdminEmail, assertAdmin as assertCallerIsAdmin} from "./superAdmins.js";
 import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail, refillStatusEmail} from "./email.js";
 import {setGlobalOptions} from "firebase-functions/v2";
-import {defineSecret} from "firebase-functions/params";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onCall, onRequest} from "firebase-functions/v2/https";
+import {corsOptions, isProduction} from "./lib/cors.js";
+import {normalizePhoneNumber, toE164} from "./lib/phone.js";
+import {FIELD_LIMITS, VALID_ROLES, validateStringField} from "./lib/validation.js";
+import {checkRateLimit, clientIp} from "./lib/rate-limit.js";
 
-// Sidecar binding secrets — bound to functions that need to call the sidecar
-// running on the customer-owned VPS.
-const SIDECAR_URL_SECRET = defineSecret("SIDECAR_URL");
-const SIDECAR_API_KEY_SECRET = defineSecret("SIDECAR_API_KEY");
+import {
+  SIDECAR_URL_SECRET,
+  SIDECAR_API_KEY_SECRET,
+  sidecarUrlEnv,
+  sidecarApiKeyEnv,
+} from "./lib/sidecar.js";
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
@@ -58,14 +63,11 @@ export {
   platformStripeWebhook,
 } from "./platformStripe.js";
 
-// Google Workspace service account JSON is passed via the GOOGLE_SA_KEY
-// environment variable (set in functions/.env for local emulator or via
-// `firebase functions:config:set` / runtime env for production). Switch to
-// `defineSecret` + Secret Manager once you're ready to accept the
-// per-secret-version monthly cost.
-
-// Environment variables are automatically available in Firebase Functions
-// No need to load from .env files since we use runtime detection
+// Google Workspace auth is configured via the admin Integrations UI and
+// stored on `integrations/google-workspace`. Service-account keys live in
+// Secret Manager; OAuth refresh tokens (encrypted) live in the doc. No env
+// vars for GOOGLE_CALENDAR_ID / GOOGLE_SA_KEY / GOOGLE_CALENDAR_SUBJECT —
+// everything flows through the integration doc.
 
 // Initialize Firebase Admin
 admin.initializeApp();
@@ -76,126 +78,8 @@ const db = admin.firestore();
 // Twilio client
 const twilio = require("twilio");
 
-// Simple environment detection for Firebase Functions
-const isProduction = () => {
-  const isEmulator = !!(process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.FUNCTIONS_EMULATOR);
-  return !isEmulator;
-};
-
-// CORS allow-list.
-// Production origins come from FUNCTIONS_BRANDING (portalUrl + additionalOrigins)
-// plus an optional ALLOWED_ORIGINS env var (comma-separated) for per-env overrides.
-// Local dev keeps localhost.
-const devOrigins = [
-  'http://localhost:3001',
-  'https://localhost:3001',
-  'http://localhost:5173',
-];
-const envOrigins = (process.env.ALLOWED_ORIGINS || '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-const brandingOrigins = [
-  FUNCTIONS_BRANDING.portalUrl,
-  ...(FUNCTIONS_BRANDING.additionalOrigins ?? []),
-].filter(Boolean);
-const corsOptions = isProduction()
-  ? Array.from(new Set([...brandingOrigins, ...envOrigins]))
-  : Array.from(new Set([...devOrigins, ...brandingOrigins, ...envOrigins]));
-
-// Field length limits — must match web/src/lib/validation.ts
-const FIELD_LIMITS = {
-  firstName: { min: 2, max: 100 },
-  lastName: { min: 2, max: 100 },
-  email: { max: 254 },
-  phoneNumber: { max: 20 },
-  password: { min: 8, max: 128 },
-  role: { max: 20 },
-} as const;
-
-const VALID_ROLES = ['patient', 'admin'] as const;
-
-function validateStringField(value: unknown, fieldName: string, limits: { min?: number; max?: number }): string {
-  if (typeof value !== 'string') throw new Error(`${fieldName} must be a string`);
-  const trimmed = value.trim();
-  if (limits.min && trimmed.length < limits.min) throw new Error(`${fieldName} must be at least ${limits.min} characters`);
-  if (limits.max && trimmed.length > limits.max) throw new Error(`${fieldName} must be less than ${limits.max} characters`);
-  return trimmed;
-}
-
-/**
- * Simple rate limiter using Firestore.
- * Tracks calls per uid per action within a time window.
- */
-async function checkRateLimit(uid: string, action: string, maxCalls: number, windowMinutes: number): Promise<void> {
-  const now = Date.now();
-  const windowMs = windowMinutes * 60 * 1000;
-  const rateLimitRef = db.collection('rate-limits').doc(`${uid}_${action}`);
-
-  const doc = await rateLimitRef.get();
-  if (doc.exists) {
-    const data = doc.data()!;
-    const windowStart = data.windowStart?.toMillis?.() || data.windowStart || 0;
-    const count = data.count || 0;
-
-    if (now - windowStart < windowMs) {
-      if (count >= maxCalls) {
-        throw new Error(`Rate limit exceeded. Please wait before trying again.`);
-      }
-      await rateLimitRef.update({ count: count + 1 });
-      return;
-    }
-  }
-
-  // New window
-  await rateLimitRef.set({
-    windowStart: admin.firestore.Timestamp.fromMillis(now),
-    count: 1,
-  });
-}
-
-/**
- * Best-effort client IP from an onCall v2 request. Trusts the first
- * x-forwarded-for entry (Cloud Run sets this from the load balancer), and
- * falls back to the socket's remoteAddress. Returns 'unknown' if neither is
- * present so we still bucket abuse attempts from unidentifiable callers.
- */
-function clientIp(req: { rawRequest?: { headers?: any; ip?: string; socket?: any } } | undefined): string {
-  const raw = req?.rawRequest;
-  const xff = raw?.headers?.['x-forwarded-for'];
-  if (typeof xff === 'string' && xff.length > 0) {
-    return xff.split(',')[0].trim();
-  }
-  return raw?.ip || raw?.socket?.remoteAddress || 'unknown';
-}
-
-/**
- * Normalize raw input to canonical US 10-digit form (`"4425004657"`).
- * This is the stored format in `users.phoneNumber` and all Firestore
- * collections. Mirrors web/src/lib/phone.ts `normalizePhoneNumber`.
- *
- * Empty → `""`. Anything that doesn't reduce to 10 digits (or 11 starting
- * with `1`) throws — callers surface the error back to the client.
- */
-function normalizePhoneNumber(phoneNumber: string): string {
-    const trimmed = (phoneNumber || '').trim();
-    if (!trimmed) return '';
-    const digits = trimmed.replace(/\D/g, '');
-    if (digits.length === 10) return digits;
-    if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
-    throw new Error(`Invalid US phone number: ${JSON.stringify(trimmed)}. Expected 10 digits.`);
-}
-
-/**
- * Convert a canonical 10-digit phone to E.164 (`+1XXXXXXXXXX`) for
- * external APIs (Twilio send, Firebase Auth create/update user).
- */
-function toE164(phone10: string): string {
-    const digits = (phone10 || '').replace(/\D/g, '');
-    if (digits.length === 10) return `+1${digits}`;
-    if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
-    throw new Error(`Invalid US phone number for E.164: ${JSON.stringify(phone10)}`);
-}
+// CORS, validation, phone normalization, rate limiting, and client-IP
+// helpers are all imported from ./lib/*.
 
 
 /**
@@ -1247,6 +1131,7 @@ import {
   getChangedEvents,
   getSyncToken,
   saveSyncToken,
+  hasCalendarConfigured,
 } from './google-calendar';
 
 /**
@@ -1259,11 +1144,6 @@ export const onAppointmentWrite = onDocumentWritten({
     const appointmentId = event.params.appointmentId;
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
-
-    // Skip if Calendar ID not configured
-    if (!process.env.GOOGLE_CALENDAR_ID) {
-      return;
-    }
 
     // Skip if change came from Calendar sync (prevent loop)
     if (after?.lastSyncSource === 'calendar') {
@@ -1412,8 +1292,8 @@ export const syncCalendarChanges = onSchedule({
   schedule: '*/5 * * * *',
   timeZone: process.env.TZ || 'America/Los_Angeles',
 }, async () => {
-  if (!process.env.GOOGLE_CALENDAR_ID) {
-    logger.info('GOOGLE_CALENDAR_ID not set, skipping Calendar sync');
+  if (!(await hasCalendarConfigured())) {
+    logger.info('Google Workspace calendar not configured, skipping Calendar sync');
     return;
   }
 
@@ -1539,11 +1419,8 @@ export const getAvailableSlots = onCall({
       throw new Error('Valid date (YYYY-MM-DD) is required');
     }
 
-    // Get busy times from Google Calendar
-    let busySlots: { start: Date; end: Date }[] = [];
-    if (process.env.GOOGLE_CALENDAR_ID) {
-      busySlots = await getFreeBusySlots(date);
-    }
+    // Get busy times from Google Calendar (empty if integration not configured)
+    const busySlots = await getFreeBusySlots(date);
 
     // Query a wide window (full day UTC) to catch all appointments for this date
     // regardless of PST/PDT offset. The overlap check below handles precision.
@@ -1643,8 +1520,8 @@ export const validateAppointmentSlot = onCall({
     const slotStart = new Date(appointmentDate);
     const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
 
-    // Check Google Calendar FreeBusy
-    if (process.env.GOOGLE_CALENDAR_ID) {
+    // Check Google Calendar FreeBusy (getFreeBusySlots returns [] when unconfigured)
+    {
       const dateStr = slotStart.toISOString().split('T')[0];
       const busySlots = await getFreeBusySlots(dateStr);
       const calendarConflict = busySlots.some(busy =>
@@ -1843,7 +1720,7 @@ export const verifyPhoneCode = onCall({
     await verificationRef.delete();
 
     // If phone number actually changed, update upcoming Calendar events
-    if (oldPhone !== newPhone && process.env.GOOGLE_CALENDAR_ID) {
+    if (oldPhone !== newPhone && (await hasCalendarConfigured())) {
       await updateCalendarEventsForPhoneChange(context.uid, newPhone);
     }
 
@@ -2406,177 +2283,9 @@ export const serveFile = onRequest({
 
 
 // =============================================================================
-// Sidecar Proxy (keeps API key server-side)
+// Sidecar Proxy (moved to proxy.ts — admin-authenticated fetch forwarder)
 // =============================================================================
-
-// Read at call time so the values reflect the runtime-bound secret rather
-// than whatever was in the env at module init.
-const sidecarUrlEnv = () => process.env.SIDECAR_URL || 'http://YOUR_VPS_IP:8081';
-const sidecarApiKeyEnv = () => process.env.SIDECAR_API_KEY || '';
-
-/**
- * HTTP proxy for the sidecar API. Admin-only.
- * Client sends: GET/POST/PUT/DELETE /sidecarProxy?path=/chat
- *   Authorization: Bearer <firebase-id-token>
- * Proxy forwards to sidecar with the server-side API key.
- */
-export const sidecarProxy = onRequest({
-  cors: corsOptions,
-  timeoutSeconds: 120,
-  memory: '512MiB',
-  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
-}, async (req, res) => {
-  try {
-    // Verify Firebase auth
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
-
-    let decodedToken;
-    try {
-      decodedToken = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
-    } catch {
-      res.status(401).json({ error: 'Invalid token' });
-      return;
-    }
-
-    // Super admin: identified by email, no Firestore doc — treat as admin.
-    let userRole: string;
-    let userData: admin.firestore.DocumentData;
-    if (isSuperAdminEmail(decodedToken.email)) {
-      userRole = 'admin';
-      userData = {role: 'admin', firstName: 'Super', lastName: 'Admin', email: decodedToken.email};
-    } else {
-      const userDoc = await db.collection('users').doc(decodedToken.uid).get();
-      if (!userDoc.exists) {
-        res.status(403).json({error: 'User not found'});
-        return;
-      }
-      userData = userDoc.data()!;
-      userRole = userData.role as string;
-      const isActive = userData.isActive !== false;
-      if (!isActive) {
-        res.status(403).json({error: 'Account is inactive'});
-        return;
-      }
-    }
-
-    // Non-admins (patients) can only access /chat and /healthz.
-    // Admin-scoped paths require role === 'admin'.
-    const sidecarPath = (req.query.path as string) || '/healthz';
-    const nonAdminAllowed = ['/chat', '/healthz'];
-    if (userRole !== 'admin' && !nonAdminAllowed.includes(sidecarPath)) {
-      res.status(403).json({ error: 'Access denied' });
-      return;
-    }
-
-    // Special case: /slack/auth-test — handled locally, NOT forwarded to the
-    // sidecar. Slack's Web API rejects browser preflight requests that carry
-    // an Authorization header, so the browser cannot call auth.test directly.
-    // We proxy it here (admin-only) where there is no CORS restriction.
-    if (sidecarPath === '/slack/auth-test') {
-      if (userRole !== 'admin') {
-        res.status(403).json({ error: 'Admin access required' });
-        return;
-      }
-      const botToken = (req.body as { botToken?: string })?.botToken;
-      if (!botToken || typeof botToken !== 'string') {
-        res.status(400).json({ error: 'botToken required' });
-        return;
-      }
-      try {
-        const slackRes = await fetch('https://slack.com/api/auth.test', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${botToken}` },
-        });
-        const data = (await slackRes.json()) as {
-          ok: boolean;
-          team?: string;
-          team_id?: string;
-          error?: string;
-        };
-        res.status(200).json(data);
-      } catch (err: any) {
-        logger.error('slack auth.test failed:', { message: err.message });
-        res.status(502).json({ error: `Could not reach Slack: ${err.message}` });
-      }
-      return;
-    }
-
-    const sidecarUrl = sidecarUrlEnv();
-    const sidecarApiKey = sidecarApiKeyEnv();
-    if (!sidecarApiKey) {
-      res.status(503).json({ error: 'Sidecar not configured' });
-      return;
-    }
-
-    const userName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Unknown';
-
-    // Tell the sidecar we want SSE for /chat. Other endpoints are JSON.
-    const wantsStream = sidecarPath === '/chat';
-
-    const sidecarRes = await fetch(`${sidecarUrl}${sidecarPath}`, {
-      method: req.method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(wantsStream ? { Accept: 'text/event-stream' } : {}),
-        'Authorization': `Bearer ${sidecarApiKey}`,
-        'X-User-Uid': decodedToken.uid,
-        'X-User-Role': userRole,
-        'X-User-Name': userName,
-      },
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
-    });
-
-    const contentType = sidecarRes.headers.get('content-type') || '';
-
-    // SSE pass-through — pipe upstream chunks straight to the client. Cloud
-    // Run supports streaming responses; we must flush headers before write
-    // so the browser gets the first chunk without buffering the whole reply.
-    if (contentType.includes('text/event-stream') && sidecarRes.body) {
-      res.status(sidecarRes.status);
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache, no-transform');
-      res.setHeader('Connection', 'keep-alive');
-      res.setHeader('X-Accel-Buffering', 'no');
-      res.flushHeaders?.();
-      const reader = sidecarRes.body.getReader();
-      try {
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          if (value) {
-            res.write(Buffer.from(value));
-            // Encourage immediate flush; node defaults to Nagle-ish buffering.
-            (res as any).flush?.();
-          }
-        }
-      } finally {
-        res.end();
-      }
-      return;
-    }
-
-    if (contentType.includes('application/json')) {
-      const data = await sidecarRes.json();
-      res.status(sidecarRes.status).json(data);
-    } else {
-      const text = await sidecarRes.text();
-      res.status(sidecarRes.status).send(text);
-    }
-  } catch (error: any) {
-    logger.error('Sidecar proxy error:', {
-      message: error.message,
-      code: error.code,
-      cause: error.cause?.message,
-      stack: error.stack?.slice(0, 200),
-      sidecarUrl: sidecarUrlEnv(),
-    });
-    res.status(502).json({ error: `Sidecar unreachable: ${error.message}` });
-  }
-});
+export {sidecarProxy} from "./proxy.js";
 
 
 // =============================================================================
@@ -2741,10 +2450,19 @@ import {encrypt} from "./encryption.js";
 import {
   getGoogleAuthUrl,
   exchangeCodeForTokens,
-  refreshAccessToken,
+  resolveAccessToken,
   detectServices,
+  verifyCalendarAccess,
+  loadIntegration,
+  allScopesForServices,
+  getServiceAccountAccessToken,
   type GoogleService,
+  type GoogleWorkspaceIntegration,
 } from "./google-workspace.js";
+import {
+  setGoogleServiceAccountKey,
+  deleteGoogleServiceAccountKey,
+} from "./lib/secret-manager.js";
 import {
   listInboxMessages,
   getFullMessage,
@@ -2766,20 +2484,37 @@ import {
 } from "./google-drive-workspace.js";
 
 /**
- * googleWorkspaceAuthorize — Admin-only callable function.
- * Returns a Google OAuth URL for the requested services.
- * Creates a signed JWT "state" param so the callback can validate the round-trip.
+ * googleWorkspaceAuthorize — Admin-only callable.
+ * Starts the OAuth handshake (mode B). Refuses if a service-account
+ * integration is already active — the admin must explicitly disconnect
+ * first so the two modes remain mutually exclusive.
+ *
+ * `calendarId` is required: we don't want to mint tokens only to discover
+ * later that the admin forgot to say which calendar to use. `services` is
+ * the set of Google surfaces the agent should be granted — at minimum
+ * Calendar must be present (reminders depend on it).
  */
 export const googleWorkspaceAuthorize = onCall({}, async (request) => {
-  // Admin-only
   if (!request.auth) throw new Error('Authentication required');
   await assertCallerIsAdmin(request.auth);
 
-  const services = ((request.data?.services as string) || 'gmail')
+  const services = ((request.data?.services as string) || 'gmail,calendar,drive')
     .split(',').filter(Boolean) as GoogleService[];
+  const calendarId = (request.data?.calendarId as string || '').trim();
   const returnUrl = (request.data?.returnUrl as string) || null;
 
-  // Create signed state JWT (10 min expiry)
+  if (!calendarId) throw new Error('calendarId is required');
+  if (!services.includes('calendar')) {
+    throw new Error('Calendar must be among the enabled services');
+  }
+
+  // Enforce mode exclusivity — refuse if a service-account integration
+  // is already active. Disconnect-then-reconnect is the intended flow.
+  const existing = await db.collection('integrations').doc('google-workspace').get();
+  if (existing.exists && existing.data()?.authMode === 'service-account') {
+    throw new Error('A service-account integration is already active. Disconnect it first.');
+  }
+
   const encKey = process.env.GOOGLE_WORKSPACE_ENCRYPTION_KEY;
   if (!encKey) throw new Error('GOOGLE_WORKSPACE_ENCRYPTION_KEY not configured');
   const secret = new TextEncoder().encode(encKey);
@@ -2787,6 +2522,7 @@ export const googleWorkspaceAuthorize = onCall({}, async (request) => {
   const state = await new SignJWT({
     userId: request.auth.uid,
     services,
+    calendarId,
     ...(returnUrl ? {returnUrl} : {}),
   })
     .setProtectedHeader({alg: 'HS256'})
@@ -2806,9 +2542,9 @@ export const googleWorkspaceAuthorize = onCall({}, async (request) => {
 export const googleWorkspaceCallback = onRequest({
   cors: true,
 }, async (req, res) => {
-  // Determine the frontend URL for redirects
+  // Redirect target: the configured portal URL in prod, local Vite in dev.
   const frontendUrl = isProduction()
-    ? 'https://patient.example.com'
+    ? FUNCTIONS_BRANDING.portalUrl
     : 'http://localhost:3001';
   const redirectBase = `${frontendUrl}/admin/agent`;
 
@@ -2829,6 +2565,7 @@ export const googleWorkspaceCallback = onRequest({
   // Verify state JWT
   let userId: string;
   let requestedServices: GoogleService[];
+  let calendarId: string;
   let returnUrl: string | null = null;
   try {
     const encKey = process.env.GOOGLE_WORKSPACE_ENCRYPTION_KEY;
@@ -2837,8 +2574,9 @@ export const googleWorkspaceCallback = onRequest({
     const {payload} = await jwtVerify(state, secret);
     userId = payload.userId as string;
     requestedServices = (payload.services as GoogleService[]) || ['gmail'];
+    calendarId = (payload.calendarId as string) || '';
     returnUrl = (payload.returnUrl as string) || null;
-    if (!userId) throw new Error('Invalid state');
+    if (!userId || !calendarId) throw new Error('Invalid state');
   } catch {
     res.redirect(`${redirectBase}?tab=integrations&gws_error=invalid_state`);
     return;
@@ -2854,7 +2592,19 @@ export const googleWorkspaceCallback = onRequest({
     const services = requestedServices.filter((s) => grantedServices.includes(s));
     if (services.length === 0) services.push(...grantedServices);
 
-    // Encrypt refresh token and store in Firestore
+    // Verify the authorizing user can actually read the chosen calendar.
+    // If not, the integration would look healthy but every reminder + agent
+    // call would fail at runtime — better to refuse to save.
+    try {
+      await verifyCalendarAccess(tokens.accessToken, calendarId);
+    } catch (err: any) {
+      logger.warn('[google-workspace] Calendar access check failed:', err.message);
+      res.redirect(
+        `${finalRedirect}?tab=integrations&gws_error=${encodeURIComponent('calendar_not_shared')}`
+      );
+      return;
+    }
+
     const encryptedCredentials = encrypt(
       JSON.stringify({refreshToken: tokens.refreshToken, expiresAt: tokens.expiresAt})
     );
@@ -2862,7 +2612,9 @@ export const googleWorkspaceCallback = onRequest({
     await db.collection('integrations').doc('google-workspace').set({
       provider: 'google-workspace',
       status: 'active',
+      authMode: 'oauth',
       email: tokens.email,
+      calendarId,
       refreshTokenCipher: encryptedCredentials,
       enabledServices: services,
       grantedScopes: tokens.grantedScopes,
@@ -2887,6 +2639,105 @@ export const googleWorkspaceCallback = onRequest({
 });
 
 /**
+ * saveGoogleWorkspaceServiceAccount — Admin-only callable (mode A setup).
+ *
+ * Validates the uploaded service-account JSON key, tests that it can
+ * impersonate the given subject and read the chosen calendar, then stores
+ * the key in Secret Manager and the non-secret metadata on the
+ * integration doc. Refuses if an OAuth integration is already active —
+ * the two modes are mutually exclusive.
+ */
+export const saveGoogleWorkspaceServiceAccount = onCall({}, async (request) => {
+  if (!request.auth) throw new Error('Authentication required');
+  await assertCallerIsAdmin(request.auth);
+
+  const saKeyJson = (request.data?.saKeyJson as string) || '';
+  const subject = ((request.data?.subject as string) || '').trim();
+  const calendarId = ((request.data?.calendarId as string) || '').trim();
+  const servicesIn = (request.data?.services as string[]) || ['gmail', 'calendar', 'drive'];
+
+  if (!saKeyJson) throw new Error('Service-account JSON key is required');
+  if (!subject) throw new Error('Subject email is required');
+  if (!calendarId) throw new Error('calendarId is required');
+
+  // Sanity-parse the key so we don't write garbage into Secret Manager.
+  let saClientEmail: string;
+  try {
+    const key = JSON.parse(saKeyJson) as {client_email?: string; private_key?: string; type?: string};
+    if (!key.client_email || !key.private_key) {
+      throw new Error('Key is missing client_email or private_key');
+    }
+    if (key.type && key.type !== 'service_account') {
+      throw new Error(`Key type must be 'service_account', got '${key.type}'`);
+    }
+    saClientEmail = key.client_email;
+  } catch (err: any) {
+    throw new Error(`Invalid service-account JSON: ${err.message}`);
+  }
+
+  // Enforce mode exclusivity
+  const existing = await db.collection('integrations').doc('google-workspace').get();
+  if (existing.exists && existing.data()?.authMode === 'oauth') {
+    throw new Error('An OAuth integration is already active. Disconnect it first.');
+  }
+
+  const services = servicesIn as GoogleService[];
+  if (!services.includes('calendar')) {
+    throw new Error('Calendar must be among the enabled services');
+  }
+
+  // Stash the key FIRST so the access-token mint can find it. We'll roll
+  // it back if the access check fails so no half-saved state lingers.
+  await setGoogleServiceAccountKey(saKeyJson);
+
+  try {
+    const accessToken = await getServiceAccountAccessToken(subject, allScopesForServices(services));
+    await verifyCalendarAccess(accessToken, calendarId);
+  } catch (err: any) {
+    await deleteGoogleServiceAccountKey().catch(() => {});
+    throw new Error(`Service-account setup failed: ${err.message}`);
+  }
+
+  const doc: GoogleWorkspaceIntegration & Record<string, unknown> = {
+    provider: 'google-workspace',
+    status: 'active',
+    authMode: 'service-account',
+    saClientEmail,
+    subject,
+    calendarId,
+    enabledServices: services,
+    grantedScopes: allScopesForServices(services),
+    connectedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    connectedBy: request.auth.uid,
+  };
+  await db.collection('integrations').doc('google-workspace').set(doc);
+
+  return {success: true, email: subject, services};
+});
+
+/**
+ * disconnectGoogleWorkspace — Admin-only callable. Removes the integration
+ * doc and, for service-account mode, deletes the Secret Manager secret so
+ * a re-connect starts clean. OAuth mode stores the refresh-token cipher
+ * in-doc, which goes away with the doc deletion.
+ */
+export const disconnectGoogleWorkspace = onCall({}, async (request) => {
+  if (!request.auth) throw new Error('Authentication required');
+  await assertCallerIsAdmin(request.auth);
+
+  const ref = db.collection('integrations').doc('google-workspace');
+  const snap = await ref.get();
+  const mode = snap.exists ? (snap.data()?.authMode as string | undefined) : undefined;
+
+  if (mode === 'service-account') {
+    await deleteGoogleServiceAccountKey();
+  }
+  await ref.delete();
+  return {success: true};
+});
+
+/**
  * googleWorkspaceProxy — API-key-authenticated HTTPS endpoint.
  * Called by the OpenClaw agent via curl. Routes to Gmail, Calendar, or Drive
  * handlers based on the {service, action} in the request body.
@@ -2904,22 +2755,23 @@ export const googleWorkspaceProxy = onRequest({
       return;
     }
 
-    // Read integration from Firestore
-    const integrationDoc = await db.collection('integrations').doc('google-workspace').get();
-    if (!integrationDoc.exists || integrationDoc.data()?.status !== 'active') {
+    // Resolve a bearer token via whichever auth mode is active
+    // (service-account DWD or OAuth). `identity` is the email the token
+    // operates as — used as the From: header on sendEmail/reply.
+    const integration = await loadIntegration();
+    if (!integration || integration.status !== 'active') {
       res.status(404).json({error: 'Google Workspace not connected'});
       return;
     }
-
-    const integration = integrationDoc.data()!;
-
-    // Refresh access token
     let accessToken: string;
+    let identity: string;
     try {
-      const result = await refreshAccessToken(integration.refreshTokenCipher);
-      accessToken = result.accessToken;
-    } catch {
-      res.status(401).json({error: 'Google token expired — reconnect Google Workspace'});
+      const resolved = await resolveAccessToken(integration);
+      accessToken = resolved.accessToken;
+      identity = resolved.identity;
+    } catch (err: any) {
+      logger.error('[gws-proxy] token resolution failed:', err.message);
+      res.status(401).json({error: 'Google token not available — reconnect Google Workspace'});
       return;
     }
 
@@ -2936,12 +2788,17 @@ export const googleWorkspaceProxy = onRequest({
     const service = body.service as string;
     const action = body.action as string;
 
+    // For calendar actions, default the calendarId to the one on the
+    // integration doc. The agent can override per-request if it needs to
+    // touch a different calendar (e.g. listing a shared room's schedule).
+    const integrationCalendarId = integration.calendarId;
+
     switch (service) {
     case 'gmail':
-      res.json(await handleGmailAction(accessToken, action, body, integration.email));
+      res.json(await handleGmailAction(accessToken, action, body, identity));
       break;
     case 'calendar':
-      res.json(await handleCalendarAction(accessToken, action, body));
+      res.json(await handleCalendarAction(accessToken, action, body, integrationCalendarId));
       break;
     case 'drive':
       res.json(await handleDriveAction(accessToken, action, body));
@@ -2994,8 +2851,9 @@ async function handleCalendarAction(
   accessToken: string,
   action: string,
   body: Record<string, unknown>,
+  defaultCalendarId: string,
 ) {
-  const calendarId = (body.calendarId as string) || 'primary';
+  const calendarId = (body.calendarId as string) || defaultCalendarId;
   switch (action) {
   case 'list': {
     const timeMin = (body.timeMin as string) || new Date().toISOString();

@@ -11,6 +11,11 @@ import { GATEWAY_URL } from "./paths.js";
 const OPENCLAW_BIN = "/usr/bin/openclaw";
 const OPENCLAW_ENV = { ...process.env, HOME: "/root" };
 
+// SAFETY CONTRACT: `command` is ALWAYS a hard-coded literal from the callers
+// below ("gateway restart", "--version", etc). NEVER accept user input here —
+// execSync runs through a shell, so any interpolation becomes a shell-injection
+// hole. If a new caller needs variable arguments, switch to
+// spawnSync(OPENCLAW_BIN, argv, ...) which bypasses the shell entirely.
 function runOpenclaw(command: string, timeoutMs: number): string {
   return execSync(`${OPENCLAW_BIN} ${command}`, {
     timeout: timeoutMs,

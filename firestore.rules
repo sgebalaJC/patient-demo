@@ -249,18 +249,19 @@ service cloud.firestore {
       allow list, update: if false;
     }
 
-    // Integrations — super-admin-only read/delete for platform-level EHR
-    // integrations (DrChrono, Athena, Elation, eCW, …). Practice admins
-    // must not see them; only the super admin operates credentials.
-    // Create/update flow through Cloud Functions that write via Admin SDK
-    // (bypassing these rules).
+    // Integrations — super-admin-only read/delete for platform-level
+    // integrations (DrChrono, Athena, Elation, eCW, google-workspace, …).
+    // Practice admins must not see them; only the super admin operates
+    // credentials. Create/update flow through Cloud Functions that write
+    // via Admin SDK (bypassing these rules).
     //
     // The public doc at `integrations/{id}` holds non-secret metadata
     // (clientId, status, enabled, redirectUri, practiceId/sandbox/etc).
-    // OAuth secrets + tokens live in the `private/credentials` subdoc, which
-    // ALL clients (including super admin) are blocked from reading so a
-    // compromised browser session cannot exfiltrate tokens. Only Admin SDK
-    // (Cloud Functions + sidecar) touches the private subdoc.
+    // OAuth secrets + tokens (and the Google service-account SA key
+    // reference) live either in Secret Manager or in the `private/*`
+    // subcollection, which ALL clients (including super admin) are blocked
+    // from reading so a compromised browser session cannot exfiltrate
+    // tokens. Only Admin SDK (Cloud Functions + sidecar) touches private.
     match /integrations/{integrationId} {
       allow read, delete: if isSuperAdmin();
       allow create, update: if false;

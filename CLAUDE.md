@@ -63,7 +63,7 @@ Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000
 ## Key Patterns
 
 - **Branding:** Single source of truth is `web/src/config/branding.ts` (web), `mobile/lib/config/branding.dart` (mobile), `functions/src/branding.ts` (functions). These three must stay in sync — Functions cannot import from the web workspace. Never hardcode the practice name in new code; import `BRANDING` and template it.
-- **Auth:** Firebase Auth (email/password, Google OAuth, email link, phone OTP). Roles: `patient`, `admin`, `super_admin`. **Passwordless by default** — admin-created users sign in via email link, Google OAuth, or phone OTP.
+- **Auth:** Firebase Auth (email/password, Google OAuth, email link, phone OTP). Roles: `patient`, `admin`, `super_admin`, plus `assistant` (used only by the sidecar auth layer — agents calling back in; never granted admin scope by Firestore rules). **Passwordless by default** — admin-created users sign in via email link, Google OAuth, or phone OTP.
 - **App Settings:** Global knobs in `system/settings` Firestore doc (`registrationEnabled`, `paginationSize`, `bootstrapped`). Publicly readable, admin-only write. `AppSettingsProvider` + `useAppSettings()` hook. `registrationEnabled: false` by default — self-signup blocked at every chokepoint when off.
 - **Bootstrap first admin:** WordPress-style. `AuthPage` renders `BootstrapAdminForm` when `system/settings.bootstrapped === false`. Client writes `bootstrap-requests/{uuid}`, `onBootstrapRequestCreated` Firestore trigger processes it and writes a custom token back, client signs in via `signInWithCustomToken`. **Firestore trigger, not `onCall`** — GCP orgs with `iam.allowedPolicyMemberDomains` (HIPAA-hardened) block public Cloud Run invocation. Trigger auto-heals by flipping `bootstrapped: true` if any user exists.
 - **Admin invites:** `createUserWithAuth` creates passwordless users; `UserForm` then calls `sendInviteLink()` from the admin's browser. Optional welcome SMS via Twilio.
@@ -105,7 +105,7 @@ Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000
 - **Functions:** `firebase deploy --only functions`
 - **Firestore rules + indexes:** `firebase deploy --only firestore:rules,firestore:indexes`
 - **Sidecar:** `cd sidecar && ./deploy.sh` (GCE default, edit constants for host)
-- **OpenClaw update:** `./scripts/openclaw-update.sh [tag]`
+- **OpenClaw update:** SSH to host → `openclaw update`
 - **Mobile:** Customize package id in `mobile/android/app/build.gradle.kts` and iOS bundle id before building.
 
 ## Per-fork setup

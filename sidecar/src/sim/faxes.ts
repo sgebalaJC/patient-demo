@@ -5,6 +5,7 @@
  */
 import { getDb } from "../lib/firebase.js";
 import { Timestamp } from "firebase-admin/firestore";
+import { ALLOWED_INBOUND_PATCH_FIELDS } from "../lib/fax-schema.js";
 
 /** Reserved US "555" range, never routable. */
 export const SIM_FAX_NUMBER = "+15559990000";
@@ -36,16 +37,6 @@ export async function simFaxGet(faxSid: string): Promise<Response> {
   if (!snap.exists) return json({ error: "Fax not found" }, 404);
   return json(snap.data());
 }
-
-const ALLOWED_INBOUND_PATCH_FIELDS = [
-  "status",
-  "extracted",
-  "matchedPatient",
-  "drchronoDocumentId",
-  "aurelia",
-  "emailDraft",
-  "notes",
-];
 
 /** PATCH an inbound fax row. Mirrors the real fax-actions endpoints. */
 export async function simFaxPatch(faxSid: string, request: Request): Promise<Response> {

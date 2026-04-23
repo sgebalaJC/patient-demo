@@ -17,7 +17,6 @@ import {onCall, onRequest, HttpsError} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
-import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import type {Request, Response} from "express";
@@ -26,7 +25,9 @@ import {
   signalwireProjectId,
   signalwireAuthToken,
   signalwireSigningKey,
-} from "./signalwire-webhook.js";
+  computeSignalwireSignature,
+  requireFaxAdmin,
+} from "./lib/signalwire-helpers.js";
 import {FUNCTIONS_BRANDING} from "./branding.js";
 
 const signalwireSpaceUrl = defineSecret("SIGNALWIRE_SPACE_URL");
@@ -93,19 +94,6 @@ let _db: admin.firestore.Firestore;
 function db() {
   if (!_db) _db = admin.firestore();
   return _db;
-}
-
-async function requireAdmin(
-  auth: { uid: string; token?: { email?: string } } | undefined,
-): Promise<string> {
-  if (!auth?.uid) throw new HttpsError("unauthenticated", "Sign-in required");
-  const {isSuperAdminEmail} = await import("./superAdmins.js");
-  if (isSuperAdminEmail(auth.token?.email)) return auth.uid;
-  const userDoc = await db().collection("users").doc(auth.uid).get();
-  if (!userDoc.exists || userDoc.data()?.role !== "admin") {
-    throw new HttpsError("permission-denied", "Admin access required");
-  }
-  return auth.uid;
 }
 
 // Accept only canonical E.164 — same normalization the web form does. Reject
@@ -529,7 +517,7 @@ export const sendOutboundFax = onCall(
     memory: "512MiB",
   },
   async (request) => {
-    const uid = await requireAdmin(request.auth as any);
+    const uid = await requireFaxAdmin(request.auth as any);
     return runSendOutboundFax(request.data as SendOutboundFaxArgs, uid);
   },
 );
@@ -537,17 +525,6 @@ export const sendOutboundFax = onCall(
 // ---------------------------------------------------------------------------
 // signalwireFaxStatusWebhook — SignalWire POSTs status updates here
 // ---------------------------------------------------------------------------
-
-function computeExpectedSignature(
-  authToken: string,
-  url: string,
-  params: Record<string, string>,
-): string {
-  const sortedKeys = Object.keys(params).sort();
-  let data = url;
-  for (const key of sortedKeys) data += key + params[key];
-  return crypto.createHmac("sha1", authToken).update(data).digest("base64");
-}
 
 async function handleStatus(req: Request, res: Response): Promise<void> {
   if (req.method !== "POST") {
@@ -588,7 +565,7 @@ async function handleStatus(req: Request, res: Response): Promise<void> {
     outer: for (const tok of [authToken, signingKey]) {
       if (!tok) continue;
       for (const u of candidates) {
-        if (computeExpectedSignature(tok, u, body) === signature) {
+        if (computeSignalwireSignature(tok, u, body) === signature) {
           sigOk = true;
           break outer;
         }
@@ -646,7 +623,7 @@ export const signalwireFaxStatusWebhook = onRequest(
 // ---------------------------------------------------------------------------
 
 export const deleteOutboundFax = onCall({timeoutSeconds: 60}, async (request) => {
-  const uid = await requireAdmin(request.auth as any);
+  const uid = await requireFaxAdmin(request.auth as any);
   const {faxSid} = request.data as {faxSid: string};
   if (!faxSid || typeof faxSid !== "string" || faxSid.length > 80) {
     throw new HttpsError("invalid-argument", "invalid faxSid");

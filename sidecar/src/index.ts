@@ -1,7 +1,7 @@
 /**
  * Patient Portal Sidecar API
  *
- * Lightweight management API running on the Vultr VPS alongside OpenClaw.
+ * Lightweight management API running on the OpenClaw host.
  * Provides chat proxy, workspace file ops, process management, config, and backup/restore.
  *
  * Auth: Bearer token from SIDECAR_API_KEY env var, optionally with user context headers

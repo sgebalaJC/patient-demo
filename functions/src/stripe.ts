@@ -40,19 +40,13 @@ import {defineSecret} from "firebase-functions/params";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
 import Stripe from "stripe";
+import {makeStripeInstance, verifyWebhookSignature} from "./lib/stripe-helpers.js";
 
 const STRIPE_SECRET_KEY = defineSecret("STRIPE_SECRET_KEY");
 const STRIPE_WEBHOOK_SECRET = defineSecret("STRIPE_WEBHOOK_SECRET");
 
 function getStripe(): Stripe {
-  const key = STRIPE_SECRET_KEY.value();
-  if (!key) {
-    throw new HttpsError(
-      "failed-precondition",
-      "STRIPE_SECRET_KEY is not set. Run `firebase functions:secrets:set STRIPE_SECRET_KEY`.",
-    );
-  }
-  return new Stripe(key, {apiVersion: "2024-12-18.acacia" as any});
+  return makeStripeInstance(STRIPE_SECRET_KEY.value(), "STRIPE_SECRET_KEY");
 }
 
 /**
@@ -175,23 +169,21 @@ export const cancelSubscription = onCall(
 export const stripeWebhook = onRequest(
   {secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET]},
   async (req, res) => {
-    const signature = req.headers["stripe-signature"];
-    const webhookSecret = STRIPE_WEBHOOK_SECRET.value();
-    if (!signature || !webhookSecret) {
-      res.status(400).send("Missing signature or webhook secret");
-      return;
-    }
     const stripe = getStripe();
-    let event: Stripe.Event;
-    try {
-      // firebase-functions passes the raw body buffer in `rawBody`
-      const rawBody = (req as any).rawBody || req.body;
-      event = stripe.webhooks.constructEvent(rawBody, signature as string, webhookSecret);
-    } catch (err: any) {
-      logger.error("stripe webhook signature verification failed", err.message);
-      res.status(400).send(`Webhook Error: ${err.message}`);
+    // firebase-functions passes the raw body buffer in `rawBody`
+    const rawBody = (req as any).rawBody || req.body;
+    const verified = verifyWebhookSignature(
+      stripe,
+      rawBody,
+      req.headers["stripe-signature"],
+      STRIPE_WEBHOOK_SECRET.value(),
+      "stripe webhook",
+    );
+    if (!verified.event) {
+      res.status(verified.errorResponse!.status).send(verified.errorResponse!.body);
       return;
     }
+    const event = verified.event;
 
     const db = admin.firestore();
 

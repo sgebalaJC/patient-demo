@@ -104,8 +104,8 @@ HIPAA posture clearer (no shared database). When you onboard a new customer:
      - `GOOGLE_SA_KEY` (for Calendar sync, if using)
 
 7. **Stand up the AI agent (optional)**
-   - Provision a VPS (the template defaults to Vultr but any Linux box works)
-   - Run `scripts/vultr-setup.sh <ip> <ssh-key>` to install OpenClaw + the sidecar
+   - Provision a VPS (any Linux box works) or a GCE VM
+   - Install Node.js 22 + Bun + OpenClaw + QMD on the host
    - Edit the OpenClaw markdown templates under `openclaw/workspace/` and
      `openclaw/agents/patient-support/workspace/` — replace every
      `{{PRACTICE_NAME}}`, `{{ADMIN_AGENT_NAME}}`, `{{PATIENT_AGENT_NAME}}`, etc.

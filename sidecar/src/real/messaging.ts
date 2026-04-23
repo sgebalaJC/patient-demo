@@ -23,14 +23,20 @@ function normalizePhone(raw: string): string {
   return "";
 }
 
+// Cached once on first call — env doesn't change under us, so we don't
+// need to re-read process.env per-request. Stays lazy so a sim-only
+// deployment without Twilio creds doesn't fail at import time.
+let _twilioAuth: { sid: string; token: string; from: string } | null = null;
 function twilioAuth(): { sid: string; token: string; from: string } {
+  if (_twilioAuth) return _twilioAuth;
   const sid = process.env.TWILIO_ACCOUNT_SID || "";
   const token = process.env.TWILIO_AUTH_TOKEN || "";
   const from = process.env.TWILIO_PHONE_NUMBER || "";
   if (!sid || !token || !from) {
     throw new Error("Twilio credentials missing (TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER)");
   }
-  return { sid, token, from };
+  _twilioAuth = { sid, token, from };
+  return _twilioAuth;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,8 +126,10 @@ export async function inboundSmsWebhook(request: Request): Promise<Response> {
   const params: Record<string, string> = {};
   for (const [k, v] of new URLSearchParams(raw)) params[k] = v;
 
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  if (!token) {
+  let token: string;
+  try {
+    token = twilioAuth().token;
+  } catch {
     console.error("[sms-inbound] TWILIO_AUTH_TOKEN missing — cannot verify");
     return new Response("Server misconfigured", { status: 500 });
   }

@@ -99,7 +99,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
           await new Promise(resolve => setTimeout(resolve, 100));
 
-          const profileResponse = await userOperations.getUser(fbUser.uid, simProfile);
+          let profileResponse = await userOperations.getUser(fbUser.uid, simProfile);
+          // Legacy impersonation records (set before we stamped `simulated`
+          // on them) skip the sim path and miss seeded users. Fall back to
+          // the sim collection when impersonating + real lookup fails — the
+          // banner depends on having a profile, so without this the user
+          // gets stuck unable to tell who they're signed in as on reload.
+          if (
+            !simProfile &&
+            isImpersonating &&
+            (!profileResponse.success || !profileResponse.data)
+          ) {
+            const fallback = await userOperations.getUser(fbUser.uid, true);
+            if (fallback.success && fallback.data) {
+              profileResponse = fallback;
+              simProfile = true;
+            }
+          }
           if (profileResponse.success && profileResponse.data && !profileResponse.data.role) {
             logger.warn('User document missing role, retrying...');
             await new Promise(resolve => setTimeout(resolve, 200));

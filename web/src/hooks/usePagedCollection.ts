@@ -6,12 +6,16 @@ import {
   orderBy,
   query,
   startAfter,
+  where,
   type DocumentData,
   type OrderByDirection,
   type QueryDocumentSnapshot,
+  type WhereFilterOp,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useSimulationMode } from './useSimulationMode';
+
+export type WhereClause = [field: string, op: WhereFilterOp, value: unknown];
 
 /**
  * Cursor-based paginated Firestore read.
@@ -46,6 +50,13 @@ export interface UsePagedCollectionOptions<T> {
   enabled?: boolean;
   /** When true, only fetches in sim mode — real mode yields empty rows. */
   simOnly?: boolean;
+  /**
+   * Server-side `where` predicates applied before `orderBy`. Each combination
+   * of field + orderBy needs a composite index in `firestore.indexes.json`.
+   * When this array changes identity, the paginator resets to page 1 and
+   * discards cached cursors (they only make sense for the prior query shape).
+   */
+  whereClauses?: WhereClause[];
   mapDoc: (doc: QueryDocumentSnapshot<DocumentData>) => T;
   onError?: (err: unknown) => void;
 }
@@ -72,7 +83,7 @@ export function usePagedCollection<T>(
   const {
     real, sim, orderField, orderDir = 'desc',
     pageSize = 25, enabled = true, simOnly = false,
-    mapDoc, onError,
+    whereClauses, mapDoc, onError,
   } = opts;
   const { enabled: simulated } = useSimulationMode();
 
@@ -80,6 +91,14 @@ export function usePagedCollection<T>(
     if (!simulated) return real;
     return sim || `simulation/${real}`;
   }, [simulated, real, sim]);
+
+  // Serialize whereClauses so the fetch effect re-runs when they change.
+  // Callers typically derive `whereClauses` inline; a stringified key avoids
+  // requiring them to memo the array identity.
+  const whereKey = useMemo(
+    () => JSON.stringify(whereClauses ?? []),
+    [whereClauses],
+  );
 
   // cursors[i] is the startAfter doc for page (i+2). cursors[0] is always
   // the last doc of page 1 — used to enter page 2. Built as the user advances
@@ -91,8 +110,10 @@ export function usePagedCollection<T>(
   const [hasNext, setHasNext] = useState<boolean>(false);
   const mapDocRef = useRef(mapDoc);
   const onErrorRef = useRef(onError);
+  const whereRef = useRef<WhereClause[] | undefined>(whereClauses);
   mapDocRef.current = mapDoc;
   onErrorRef.current = onError;
+  whereRef.current = whereClauses;
 
   const fetchPage = useCallback(async (targetPage: number) => {
     if (!enabled || (simOnly && !simulated)) {
@@ -105,9 +126,13 @@ export function usePagedCollection<T>(
     try {
       const cursor = targetPage === 1 ? undefined : cursorsRef.current[targetPage - 2];
       const coll = collection(db, path);
-      const q = cursor
-        ? query(coll, orderBy(orderField, orderDir), startAfter(cursor), fLimit(pageSize + 1))
-        : query(coll, orderBy(orderField, orderDir), fLimit(pageSize + 1));
+      const constraints = [
+        ...(whereRef.current ?? []).map(([f, op, v]) => where(f, op, v)),
+        orderBy(orderField, orderDir),
+        ...(cursor ? [startAfter(cursor)] : []),
+        fLimit(pageSize + 1),
+      ];
+      const q = query(coll, ...constraints);
       const snap = await getDocs(q);
       const docs = snap.docs;
       const more = docs.length > pageSize;
@@ -127,11 +152,14 @@ export function usePagedCollection<T>(
     } finally {
       setLoading(false);
     }
-  }, [enabled, simOnly, simulated, path, orderField, orderDir, pageSize]);
+    // whereKey is the stable identity for whereClauses — fetchPage reads the
+    // current value off whereRef, so we depend on the key (not the array) to
+    // avoid forcing callers to memo their where arrays.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, simOnly, simulated, path, orderField, orderDir, pageSize, whereKey]);
 
-  // Reset cursors + reload when the effective path/order/pageSize changes.
-  // Otherwise a user on page 3 of sms-outbound would try to reuse those
-  // cursors after flipping simulationMode — they don't exist in the new path.
+  // Reset cursors + reload when the effective path / order / pageSize / filters
+  // change. Cached cursors are only valid for the prior query shape.
   useEffect(() => {
     cursorsRef.current = [];
     void fetchPage(1);

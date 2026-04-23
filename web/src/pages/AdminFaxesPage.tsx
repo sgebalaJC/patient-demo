@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Timestamp } from 'firebase/firestore';
@@ -21,7 +21,8 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { formatDateTime } from '../lib/date-helpers';
 import { isAdminRole } from '../lib/roles';
-import { usePagedCollection } from '../hooks/usePagedCollection';
+import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
+import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import { faxes as faxesApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
 
@@ -144,16 +145,41 @@ const STATUS_BADGE: Record<FaxStatus, { label: string; className: string; icon: 
 export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
   const isAdminUser = !!user && isAdminRole(userProfile?.role);
+  const [filter, setFilter] = useState<'all' | FaxStatus>('all');
+
+  // Server-side status filter — needs composite (status, receivedAt) index,
+  // declared in firestore.indexes.json for both `inbound-faxes` and the
+  // simulation/faxes/inbound collection-group.
+  const whereClauses = useMemo<WhereClause[] | undefined>(
+    () => (filter === 'all' ? undefined : [['status', '==', filter]]),
+    [filter],
+  );
+
   const paged = usePagedCollection<InboundFax>({
     enabled: isAdminUser,
     real: 'inbound-faxes',
     sim: 'simulation/faxes/inbound',
     orderField: 'receivedAt',
     pageSize: 25,
+    whereClauses,
     mapDoc: (d) => ({ faxSid: d.id, ...(d.data() as Omit<InboundFax, 'faxSid'>) }),
   });
   const { rows: faxes, loading, simulated } = paged;
-  const [filter, setFilter] = useState<'all' | FaxStatus>('all');
+
+  const countsPredicates = useMemo(() => ({
+    all: [] as [string, '==', string][],
+    needs_review: [['status', '==', 'needs_review']] as [string, '==', string][],
+    pending: [['status', '==', 'pending']] as [string, '==', string][],
+    processing: [['status', '==', 'processing']] as [string, '==', string][],
+    failed: [['status', '==', 'failed']] as [string, '==', string][],
+    completed: [['status', '==', 'completed']] as [string, '==', string][],
+  }), []);
+  const { counts } = useCollectionCounts({
+    enabled: isAdminUser,
+    real: 'inbound-faxes',
+    sim: 'simulation/faxes/inbound',
+    predicates: countsPredicates,
+  });
   const [selectedFaxSid, setSelectedFaxSid] = useState<string | null>(null);
   const [inlineDeleteTarget, setInlineDeleteTarget] = useState<InboundFax | null>(null);
   const [inlineDeleting, setInlineDeleting] = useState(false);
@@ -188,20 +214,10 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
   if (authLoading) return <LoadingSpinner />;
   if (!user || !isAdminRole(userProfile?.role)) return <AccessDenied />;
 
-  const counts = {
-    all: faxes.length,
-    pending: faxes.filter((f) => f.status === 'pending').length,
-    processing: faxes.filter((f) => f.status === 'processing').length,
-    needs_review: faxes.filter((f) => f.status === 'needs_review').length,
-    completed: faxes.filter((f) => f.status === 'completed').length,
-    failed: faxes.filter((f) => f.status === 'failed').length,
-  };
-
-  // Filter applies to the current page only — cursor paging can't run a
-  // server-side status filter without a composite (status, receivedAt) index.
-  // For now, users page forward to find older faxes in a given status; the
-  // StatsGrid/tab counts above reflect the visible page.
-  const filtered = filter === 'all' ? faxes : faxes.filter((f) => f.status === filter);
+  // Pagination already applies the status filter server-side, so `faxes` is
+  // already the filtered set. `counts` come from useCollectionCounts (server
+  // aggregation queries), not from the current page — so the stats grid and
+  // tab counts are accurate across the whole dataset.
   const selected = faxes.find((f) => f.faxSid === selectedFaxSid) || null;
 
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) =>
@@ -255,7 +271,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
         )}
       </div>
 
-      {loading ? <LoadingSpinner /> : filtered.length === 0 ? (
+      {loading ? <LoadingSpinner /> : faxes.length === 0 ? (
         <EmptyState icon={Inbox} title="No faxes" description="Inbound faxes will appear here." />
       ) : (
         <Card className="overflow-hidden p-0">
@@ -273,7 +289,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
                 </tr>
               </thead>
               <tbody className="divide-y divide-secondary-200/60">
-                {filtered.map((f) => {
+                {faxes.map((f) => {
                   const badge = STATUS_BADGE[f.status];
                   const Icon = badge.icon;
                   return (

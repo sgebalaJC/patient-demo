@@ -144,9 +144,23 @@ curl -s -X POST "{{GOOGLE_WORKSPACE_PROXY_URL}}" \
   -d '{"service": "drive", "action": "create", "name": "notes.txt", "content": "File content here", "mimeType": "text/plain"}'
 ```
 
-## Guidelines
+---
 
-- Send emails directly when the user gives clear instructions
-- Create, update, or delete calendar events when given clear instructions
-- For large Drive files, summarize rather than outputting full content
-- Use the user's timezone for calendar operations
+## Safety + workflow rules
+
+- **In interactive chat:** Show a draft (recipient, subject, body) and get
+  explicit approval **before** sending an email. Do the same for calendar
+  events (title, time, location, attendees) and Drive file creation.
+- **In workflows or automated tasks:** If the instruction includes complete
+  parameters, execute immediately without asking for confirmation — the human
+  approval already happened upstream.
+- For replies, show the original email context so the user knows what they're
+  replying to.
+- Send sends; reply replies. Never use `send` to fake a reply (it loses
+  threading and the "Re:" header).
+- For large Drive files, summarize rather than outputting the full content.
+- Use the user's timezone for calendar operations (default Pacific:
+  `-07:00` / `-08:00` depending on DST).
+- The connected account is whatever the admin authorized in
+  Agent → Integrations → Google Workspace. There is no per-call account
+  override — to switch users, reconnect with that account.

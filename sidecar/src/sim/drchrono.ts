@@ -69,6 +69,22 @@ export async function simDrChrono(
     return json({ results: snap.docs.map((d) => d.data()) });
   }
 
+  // Chart-read endpoints used by Aurelia's chart-summarization skill. The
+  // sandbox doesn't seed clinical content (allergies, problems, meds, notes,
+  // documents) — return empty {results:[]} so the skill reports "none on
+  // file" instead of hitting the 501 fallback.
+  if (method === "GET" && (
+    path === "allergies" ||
+    path === "problems" ||
+    path === "medications" ||
+    path === "clinical_notes" ||
+    path === "documents" ||
+    path === "vitals" ||
+    path === "labs"
+  )) {
+    return json({ results: [] });
+  }
+
   // /drchrono/patient-lookup — unified aggregator (sidecar-specific path,
   // mirrors the Cloud Function simulator's patient_lookup op).
   if (method === "GET" && path === "patient-lookup") {

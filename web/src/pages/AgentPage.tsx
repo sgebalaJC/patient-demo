@@ -35,7 +35,7 @@ const ALL_NAV_ITEMS: { key: Tab; label: string; icon: React.ElementType; superAd
 
 const IntegrationsPanel: React.FC = () => (
   <div className="flex-1 overflow-y-auto p-6">
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-secondary-900">EHR Integrations</h2>
         <p className="text-sm text-secondary-500 mt-1">

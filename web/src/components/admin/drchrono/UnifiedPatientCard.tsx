@@ -159,7 +159,7 @@ export const UnifiedPatientCard: React.FC<Props> = ({
           href={chartUrl(patient.drchronoId)}
           target="_blank"
           rel="noopener noreferrer"
-          className="shrink-0 text-xs px-3 py-1.5 rounded-md bg-primary-600 text-white hover:bg-primary-700 inline-flex items-center gap-1"
+          className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-primary-600 text-primary-700 hover:bg-primary-50 inline-flex items-center gap-1"
         >
           <ExternalLink className="h-3.5 w-3.5" />
           Open chart

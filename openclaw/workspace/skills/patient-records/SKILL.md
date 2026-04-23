@@ -15,7 +15,11 @@ admin-api GET /patients
 admin-api GET /patients?search=Smith
 admin-api GET /patients?status=active
 admin-api GET /patients?status=inactive&limit=10
+admin-api GET /patients?search=Jo&limit=5&after=LAST_DOC_ID
 ```
+
+`search` is a prefix match on `lastName` (case-sensitive). Pagination via
+`after=LAST_DOC_ID` from the previous page.
 
 ## Patient stats
 
@@ -28,6 +32,9 @@ admin-api GET /patients/stats
 ```bash
 admin-api GET /patients/PATIENT_ID
 ```
+
+Returns: name, email, phone, DOB, gender, blood type, allergies, medical
+history, emergency contact, insurance, active status.
 
 ## Update patient
 

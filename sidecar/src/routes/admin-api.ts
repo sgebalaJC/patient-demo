@@ -104,6 +104,17 @@ function isOperatorAuthorized(request: Request): boolean {
   return request.headers.get("x-operator-authorized") === "true";
 }
 
+/**
+ * Sim-aware collection ref for native Firestore collections (users,
+ * appointments, refills, etc). When `system/settings.simulationMode` is on,
+ * routes to `simulation/native/<name>` so Aurelia sees the seeded sandbox
+ * without any change to her skills. When off, returns the real collection.
+ */
+async function nc(db: Db, name: string): Promise<FirebaseFirestore.CollectionReference> {
+  const sim = await isSimulationOn();
+  return sim ? db.collection(`simulation/native/${name}`) : db.collection(name);
+}
+
 // ---------------------------------------------------------------------------
 // Patients
 // ---------------------------------------------------------------------------
@@ -113,13 +124,13 @@ async function listPatients(db: Db, url: URL): Promise<Response> {
   const search = url.searchParams.get("search")?.trim();
   const statusFilter = url.searchParams.get("status");
 
-  let query: FirebaseFirestore.Query = db.collection("users")
+  let query: FirebaseFirestore.Query = (await nc(db, "users"))
     .where("role", "==", "patient")
     .orderBy("lastName")
     .limit(limit);
 
   if (search) {
-    query = db.collection("users")
+    query = (await nc(db, "users"))
       .where("role", "==", "patient")
       .where("lastName", ">=", search)
       .where("lastName", "<=", search + "\uf8ff")
@@ -136,7 +147,7 @@ async function listPatients(db: Db, url: URL): Promise<Response> {
 
   const after = url.searchParams.get("after");
   if (after) {
-    const cursor = await db.collection("users").doc(after).get();
+    const cursor = await (await nc(db, "users")).doc(after).get();
     if (cursor.exists) query = query.startAfter(cursor);
   }
 
@@ -159,7 +170,7 @@ async function listPatients(db: Db, url: URL): Promise<Response> {
 }
 
 async function getPatient(db: Db, id: string): Promise<Response> {
-  const doc = await db.collection("users").doc(id).get();
+  const doc = await (await nc(db, "users")).doc(id).get();
   if (!doc.exists) return error("Patient not found", 404);
 
   const d = doc.data()!;
@@ -185,7 +196,7 @@ async function getPatient(db: Db, id: string): Promise<Response> {
 }
 
 async function updatePatient(db: Db, id: string, req: Request): Promise<Response> {
-  const doc = await db.collection("users").doc(id).get();
+  const doc = await (await nc(db, "users")).doc(id).get();
   if (!doc.exists || doc.data()!.role !== "patient") return error("Patient not found", 404);
 
   const body = await req.json() as Record<string, any>;
@@ -204,13 +215,13 @@ async function updatePatient(db: Db, id: string, req: Request): Promise<Response
     if (key in body) updates[key] = body[key];
   }
 
-  await db.collection("users").doc(id).update(updates);
+  await (await nc(db, "users")).doc(id).update(updates);
   return json({ success: true, patientId: id });
 }
 
 async function patientStats(db: Db): Promise<Response> {
-  const allSnap = await db.collection("users").where("role", "==", "patient").count().get();
-  const activeSnap = await db.collection("users").where("role", "==", "patient").where("isActive", "==", true).count().get();
+  const allSnap = await (await nc(db, "users")).where("role", "==", "patient").count().get();
+  const activeSnap = await (await nc(db, "users")).where("role", "==", "patient").where("isActive", "==", true).count().get();
   const total = allSnap.data().count;
   const active = activeSnap.data().count;
   return json({ total, active, inactive: total - active });
@@ -224,12 +235,12 @@ async function listAppointments(db: Db, url: URL): Promise<Response> {
   const limit = parseLimit(url);
   const status = url.searchParams.get("status");
 
-  let query = db.collection("appointments")
+  let query = (await nc(db, "appointments"))
     .orderBy("appointmentDate", "desc")
     .limit(limit);
 
   if (status) {
-    query = db.collection("appointments")
+    query = (await nc(db, "appointments"))
       .where("status", "==", status)
       .orderBy("appointmentDate", "desc")
       .limit(limit);
@@ -237,7 +248,7 @@ async function listAppointments(db: Db, url: URL): Promise<Response> {
 
   const after = url.searchParams.get("after");
   if (after) {
-    const cursor = await db.collection("appointments").doc(after).get();
+    const cursor = await (await nc(db, "appointments")).doc(after).get();
     if (cursor.exists) query = query.startAfter(cursor);
   }
 
@@ -274,7 +285,7 @@ async function createAppointment(db: Db, req: Request): Promise<Response> {
   if (!body.patientId) return error("patientId is required");
   if (!body.appointmentDate) return error("appointmentDate is required (ISO-8601 UTC timestamp)");
 
-  const patientDoc = await db.collection("users").doc(body.patientId).get();
+  const patientDoc = await (await nc(db, "users")).doc(body.patientId).get();
   if (!patientDoc.exists || patientDoc.data()!.role !== "patient") {
     return error("Patient not found", 404);
   }
@@ -286,7 +297,7 @@ async function createAppointment(db: Db, req: Request): Promise<Response> {
   const validStatuses = ["scheduled", "confirmed"];
   const status = validStatuses.includes(body.status) ? body.status : "scheduled";
 
-  const ref = await db.collection("appointments").add({
+  const ref = await (await nc(db, "appointments")).add({
     patientId: body.patientId,
     appointmentDate: Timestamp.fromDate(apptDate),
     duration,
@@ -311,7 +322,7 @@ async function appointmentSlots(db: Db, url: URL): Promise<Response> {
 
   const dayStart = new Date(`${date}T00:00:00Z`);
   const dayEnd = new Date(`${date}T23:59:59Z`);
-  const snap = await db.collection("appointments")
+  const snap = await (await nc(db, "appointments"))
     .where("appointmentDate", ">=", Timestamp.fromDate(dayStart))
     .where("appointmentDate", "<", Timestamp.fromDate(dayEnd))
     .get();
@@ -342,7 +353,7 @@ async function appointmentSlots(db: Db, url: URL): Promise<Response> {
 async function upcomingAppointments(db: Db): Promise<Response> {
   const now = Timestamp.now();
   // Include both "scheduled" and "confirmed" — either status means the appointment is upcoming
-  const snap = await db.collection("appointments")
+  const snap = await (await nc(db, "appointments"))
     .where("appointmentDate", ">=", now)
     .where("status", "in", ["scheduled", "confirmed"])
     .orderBy("appointmentDate", "asc")
@@ -368,7 +379,7 @@ async function upcomingAppointments(db: Db): Promise<Response> {
 
 async function patientAppointments(db: Db, patientId: string, url: URL): Promise<Response> {
   const limit = parseLimit(url);
-  const snap = await db.collection("appointments")
+  const snap = await (await nc(db, "appointments"))
     .where("patientId", "==", patientId)
     .orderBy("appointmentDate", "desc")
     .limit(limit)
@@ -391,7 +402,7 @@ async function patientAppointments(db: Db, patientId: string, url: URL): Promise
 }
 
 async function getAppointment(db: Db, id: string): Promise<Response> {
-  const doc = await db.collection("appointments").doc(id).get();
+  const doc = await (await nc(db, "appointments")).doc(id).get();
   if (!doc.exists) return error("Appointment not found", 404);
 
   const d = doc.data()!;
@@ -413,7 +424,7 @@ async function getAppointment(db: Db, id: string): Promise<Response> {
 }
 
 async function updateAppointment(db: Db, id: string, req: Request): Promise<Response> {
-  const doc = await db.collection("appointments").doc(id).get();
+  const doc = await (await nc(db, "appointments")).doc(id).get();
   if (!doc.exists) return error("Appointment not found", 404);
 
   const body = await req.json() as Record<string, any>;
@@ -431,7 +442,7 @@ async function updateAppointment(db: Db, id: string, req: Request): Promise<Resp
     if (key in body) updates[key] = body[key];
   }
 
-  await db.collection("appointments").doc(id).update(updates);
+  await (await nc(db, "appointments")).doc(id).update(updates);
   return json({ success: true, appointmentId: id });
 }
 
@@ -443,19 +454,19 @@ async function listThreads(db: Db, url: URL): Promise<Response> {
   const limit = parseLimit(url);
   const filter = url.searchParams.get("filter");
 
-  let query = db.collection("message-threads")
+  let query = (await nc(db, "message-threads"))
     .where("isActive", "==", true)
     .orderBy("updatedAt", "desc")
     .limit(limit);
 
   if (filter === "unread") {
-    query = db.collection("message-threads")
+    query = (await nc(db, "message-threads"))
       .where("isActive", "==", true)
       .where("unreadForAdmin", "==", true)
       .orderBy("updatedAt", "desc")
       .limit(limit);
   } else if (filter === "priority") {
-    query = db.collection("message-threads")
+    query = (await nc(db, "message-threads"))
       .where("isActive", "==", true)
       .where("priority", "==", "high")
       .orderBy("updatedAt", "desc")
@@ -464,7 +475,7 @@ async function listThreads(db: Db, url: URL): Promise<Response> {
 
   const after = url.searchParams.get("after");
   if (after) {
-    const cursor = await db.collection("message-threads").doc(after).get();
+    const cursor = await (await nc(db, "message-threads")).doc(after).get();
     if (cursor.exists) query = query.startAfter(cursor);
   }
 
@@ -491,11 +502,11 @@ async function listThreads(db: Db, url: URL): Promise<Response> {
 }
 
 async function getThread(db: Db, threadId: string, url: URL): Promise<Response> {
-  const threadDoc = await db.collection("message-threads").doc(threadId).get();
+  const threadDoc = await (await nc(db, "message-threads")).doc(threadId).get();
   if (!threadDoc.exists) return error("Thread not found", 404);
 
   const limit = parseLimit(url, 50, 100);
-  const snap = await db.collection("thread-messages")
+  const snap = await (await nc(db, "thread-messages"))
     .where("threadId", "==", threadId)
     .orderBy("createdAt", "asc")
     .limit(limit)
@@ -532,7 +543,7 @@ async function getThread(db: Db, threadId: string, url: URL): Promise<Response> 
 }
 
 async function sendMessage(db: Db, threadId: string, req: Request): Promise<Response> {
-  const threadDoc = await db.collection("message-threads").doc(threadId).get();
+  const threadDoc = await (await nc(db, "message-threads")).doc(threadId).get();
   if (!threadDoc.exists) return error("Thread not found", 404);
 
   const body = await req.json() as Record<string, any>;
@@ -543,7 +554,7 @@ async function sendMessage(db: Db, threadId: string, req: Request): Promise<Resp
   const senderName = req.headers.get("x-user-name");
   if (!senderId || !senderName) return error("Missing X-User-Uid or X-User-Name headers", 401);
 
-  const msgRef = await db.collection("thread-messages").add({
+  const msgRef = await (await nc(db, "thread-messages")).add({
     threadId,
     senderId,
     senderName,
@@ -553,7 +564,7 @@ async function sendMessage(db: Db, threadId: string, req: Request): Promise<Resp
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  db.collection("message-threads").doc(threadId).update({
+  (await nc(db, "message-threads")).doc(threadId).update({
     lastMessage: content.slice(0, 100),
     lastMessageAt: FieldValue.serverTimestamp(),
     unreadForPatient: true,
@@ -569,12 +580,12 @@ async function createThread(db: Db, req: Request): Promise<Response> {
   if (!body.patientId) return error("patientId is required");
   if (!body.subject?.trim()) return error("subject is required");
 
-  const patientDoc = await db.collection("users").doc(body.patientId).get();
+  const patientDoc = await (await nc(db, "users")).doc(body.patientId).get();
   if (!patientDoc.exists || patientDoc.data()!.role !== "patient") {
     return error("Patient not found", 404);
   }
 
-  const threadRef = await db.collection("message-threads").add({
+  const threadRef = await (await nc(db, "message-threads")).add({
     patientId: body.patientId,
     subject: String(body.subject).trim().slice(0, 200),
     status: "open",
@@ -594,7 +605,7 @@ async function createThread(db: Db, req: Request): Promise<Response> {
     const msgSenderName = req.headers.get("x-user-name");
     if (!msgSenderId || !msgSenderName) return error("Missing X-User-Uid or X-User-Name headers", 401);
 
-    await db.collection("thread-messages").add({
+    await (await nc(db, "thread-messages")).add({
       threadId: threadRef.id,
       senderId: msgSenderId,
       senderName: msgSenderName,
@@ -609,7 +620,7 @@ async function createThread(db: Db, req: Request): Promise<Response> {
 }
 
 async function updateThread(db: Db, threadId: string, req: Request): Promise<Response> {
-  const doc = await db.collection("message-threads").doc(threadId).get();
+  const doc = await (await nc(db, "message-threads")).doc(threadId).get();
   if (!doc.exists) return error("Thread not found", 404);
 
   const body = await req.json() as Record<string, any>;
@@ -630,7 +641,7 @@ async function updateThread(db: Db, threadId: string, req: Request): Promise<Res
     updates.tags = body.tags;
   }
 
-  await db.collection("message-threads").doc(threadId).update(updates);
+  await (await nc(db, "message-threads")).doc(threadId).update(updates);
   return json({ success: true, threadId });
 }
 
@@ -642,12 +653,12 @@ async function listRefills(db: Db, url: URL): Promise<Response> {
   const limit = parseLimit(url);
   const status = url.searchParams.get("status");
 
-  let query = db.collection("prescription-refills")
+  let query = (await nc(db, "prescription-refills"))
     .orderBy("createdAt", "desc")
     .limit(limit);
 
   if (status) {
-    query = db.collection("prescription-refills")
+    query = (await nc(db, "prescription-refills"))
       .where("status", "==", status)
       .orderBy("createdAt", "desc")
       .limit(limit);
@@ -655,7 +666,7 @@ async function listRefills(db: Db, url: URL): Promise<Response> {
 
   const after = url.searchParams.get("after");
   if (after) {
-    const cursor = await db.collection("prescription-refills").doc(after).get();
+    const cursor = await (await nc(db, "prescription-refills")).doc(after).get();
     if (cursor.exists) query = query.startAfter(cursor);
   }
 
@@ -681,7 +692,7 @@ async function listRefills(db: Db, url: URL): Promise<Response> {
 }
 
 async function getRefill(db: Db, id: string): Promise<Response> {
-  const doc = await db.collection("prescription-refills").doc(id).get();
+  const doc = await (await nc(db, "prescription-refills")).doc(id).get();
   if (!doc.exists) return error("Refill not found", 404);
 
   const d = doc.data()!;
@@ -707,7 +718,7 @@ async function getRefill(db: Db, id: string): Promise<Response> {
 
 async function patientRefills(db: Db, patientId: string, url: URL): Promise<Response> {
   const limit = parseLimit(url);
-  const snap = await db.collection("prescription-refills")
+  const snap = await (await nc(db, "prescription-refills"))
     .where("patientId", "==", patientId)
     .orderBy("createdAt", "desc")
     .limit(limit)
@@ -731,7 +742,7 @@ async function patientRefills(db: Db, patientId: string, url: URL): Promise<Resp
 }
 
 async function updateRefill(db: Db, id: string, req: Request): Promise<Response> {
-  const doc = await db.collection("prescription-refills").doc(id).get();
+  const doc = await (await nc(db, "prescription-refills")).doc(id).get();
   if (!doc.exists) return error("Refill not found", 404);
 
   const body = await req.json() as Record<string, any>;
@@ -745,7 +756,7 @@ async function updateRefill(db: Db, id: string, req: Request): Promise<Response>
   if ("doctorNotes" in body) updates.doctorNotes = String(body.doctorNotes).slice(0, 2000);
   if ("notes" in body) updates.notes = String(body.notes).slice(0, 2000);
 
-  await db.collection("prescription-refills").doc(id).update(updates);
+  await (await nc(db, "prescription-refills")).doc(id).update(updates);
   return json({ success: true, refillId: id, status: updates.status ?? doc.data()!.status });
 }
 
@@ -756,7 +767,7 @@ async function updateRefill(db: Db, id: string, req: Request): Promise<Response>
 async function patientDocuments(db: Db, patientId: string, url: URL): Promise<Response> {
   const type = url.searchParams.get("type");
 
-  let query: FirebaseFirestore.Query = db.collection("patient-documents")
+  let query: FirebaseFirestore.Query = (await nc(db, "patient-documents"))
     .where("patientId", "==", patientId)
     .where("isActive", "==", true);
 
@@ -789,7 +800,7 @@ async function patientDocuments(db: Db, patientId: string, url: URL): Promise<Re
 
 async function documentStatus(db: Db, patientId: string): Promise<Response> {
   const required = ["drivers_license", "insurance_card_front", "insurance_card_back"];
-  const snap = await db.collection("patient-documents")
+  const snap = await (await nc(db, "patient-documents"))
     .where("patientId", "==", patientId)
     .where("isActive", "==", true)
     .get();
@@ -816,12 +827,12 @@ async function listIntakeForms(db: Db, url: URL): Promise<Response> {
   const limit = parseLimit(url);
   const formStatus = url.searchParams.get("status");
 
-  let query = db.collection("patient-intake-forms")
+  let query = (await nc(db, "patient-intake-forms"))
     .orderBy("updatedAt", "desc")
     .limit(limit);
 
   if (formStatus) {
-    query = db.collection("patient-intake-forms")
+    query = (await nc(db, "patient-intake-forms"))
       .where("status", "==", formStatus)
       .orderBy("updatedAt", "desc")
       .limit(limit);
@@ -848,7 +859,7 @@ async function listIntakeForms(db: Db, url: URL): Promise<Response> {
 }
 
 async function getIntakeForm(db: Db, patientId: string): Promise<Response> {
-  const snap = await db.collection("patient-intake-forms")
+  const snap = await (await nc(db, "patient-intake-forms"))
     .where("patientId", "==", patientId)
     .orderBy("createdAt", "desc")
     .limit(1)
@@ -888,13 +899,13 @@ async function getIntakeForm(db: Db, patientId: string): Promise<Response> {
 }
 
 async function approveIntakeForm(db: Db, formId: string, req: Request): Promise<Response> {
-  const doc = await db.collection("patient-intake-forms").doc(formId).get();
+  const doc = await (await nc(db, "patient-intake-forms")).doc(formId).get();
   if (!doc.exists) return error("Form not found", 404);
 
   const reviewedBy = req.headers.get("x-user-uid");
   if (!reviewedBy) return error("Missing X-User-Uid header", 401);
 
-  await db.collection("patient-intake-forms").doc(formId).update({
+  await (await nc(db, "patient-intake-forms")).doc(formId).update({
     status: "approved",
     reviewedBy,
     reviewedAt: FieldValue.serverTimestamp(),
@@ -905,7 +916,7 @@ async function approveIntakeForm(db: Db, formId: string, req: Request): Promise<
 }
 
 async function sendBackIntakeForm(db: Db, formId: string, req: Request): Promise<Response> {
-  const doc = await db.collection("patient-intake-forms").doc(formId).get();
+  const doc = await (await nc(db, "patient-intake-forms")).doc(formId).get();
   if (!doc.exists) return error("Form not found", 404);
 
   const reviewedBy = req.headers.get("x-user-uid");
@@ -914,7 +925,7 @@ async function sendBackIntakeForm(db: Db, formId: string, req: Request): Promise
   const body = await req.json() as Record<string, any>;
   if (!body.reviewNotes?.trim()) return error("reviewNotes is required");
 
-  await db.collection("patient-intake-forms").doc(formId).update({
+  await (await nc(db, "patient-intake-forms")).doc(formId).update({
     status: "in_progress",
     reviewedBy,
     reviewNotes: String(body.reviewNotes).trim().slice(0, 2000),
@@ -931,7 +942,7 @@ async function sendBackIntakeForm(db: Db, formId: string, req: Request): Promise
 
 async function listNotifications(db: Db, url: URL): Promise<Response> {
   const limit = parseLimit(url, 20, 50);
-  const snap = await db.collection("notifications")
+  const snap = await (await nc(db, "notifications"))
     .where("recipientRole", "==", "admin")
     .orderBy("createdAt", "desc")
     .limit(limit)
@@ -961,7 +972,7 @@ async function createNotification(db: Db, req: Request): Promise<Response> {
   const validRoles = ["admin", "assistant", "patient"];
   const recipientRole = validRoles.includes(body.recipientRole) ? body.recipientRole : "admin";
 
-  const ref = await db.collection("notifications").add({
+  const ref = await (await nc(db, "notifications")).add({
     recipientRole,
     ...(body.recipientId ? { recipientId: body.recipientId } : {}),
     type: body.type ?? "general",
@@ -982,7 +993,7 @@ async function createNotification(db: Db, req: Request): Promise<Response> {
 
 async function listSpecialistRequests(db: Db, url: URL): Promise<Response> {
   const limit = parseLimit(url);
-  const snap = await db.collection("specialist-requests")
+  const snap = await (await nc(db, "specialist-requests"))
     .orderBy("createdAt", "desc")
     .limit(limit)
     .get();
@@ -1005,7 +1016,7 @@ async function listSpecialistRequests(db: Db, url: URL): Promise<Response> {
 }
 
 async function updateSpecialistRequest(db: Db, id: string, req: Request): Promise<Response> {
-  const doc = await db.collection("specialist-requests").doc(id).get();
+  const doc = await (await nc(db, "specialist-requests")).doc(id).get();
   if (!doc.exists) return error("Request not found", 404);
 
   const body = await req.json() as Record<string, any>;
@@ -1017,7 +1028,7 @@ async function updateSpecialistRequest(db: Db, id: string, req: Request): Promis
   }
   if ("notes" in body) updates.notes = String(body.notes).slice(0, 2000);
 
-  await db.collection("specialist-requests").doc(id).update(updates);
+  await (await nc(db, "specialist-requests")).doc(id).update(updates);
   return json({ success: true, requestId: id });
 }
 

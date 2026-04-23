@@ -15,6 +15,9 @@ admin-api GET /documents/patient/PATIENT_ID
 admin-api GET /documents/patient/PATIENT_ID?type=insurance_card_front
 ```
 
+Document types: `drivers_license`, `insurance_card_front`,
+`insurance_card_back`, plus any custom types defined per practice.
+
 ## Check required docs
 
 ```bash

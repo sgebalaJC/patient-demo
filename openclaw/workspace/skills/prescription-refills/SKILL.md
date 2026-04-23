@@ -14,7 +14,10 @@ Manage refill requests via the `admin-api` CLI.
 admin-api GET /refills
 admin-api GET /refills?status=pending
 admin-api GET /refills?status=approved&limit=10
+admin-api GET /refills?limit=20&after=LAST_DOC_ID
 ```
+
+Statuses: `pending`, `approved`, `denied`, `completed`, `cancelled`.
 
 ## By patient
 
@@ -35,6 +38,9 @@ admin-api PATCH /refills/REFILL_ID '{"status":"approved","doctorNotes":"Approved
 admin-api PATCH /refills/REFILL_ID '{"status":"denied","doctorNotes":"Schedule a follow-up first"}'
 admin-api PATCH /refills/REFILL_ID '{"status":"completed"}'
 ```
+
+Updatable fields: `status`, `doctorNotes`, `notes`. `doctorNotes` is
+patient-visible; `notes` is admin-only.
 
 ## Safety
 

@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, Check, Copy, ExternalLink } from 'lucide-react';
+import { Loader2, Check, Copy, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   getIntegrationStatus,
   saveIntegrationCredentials,
@@ -53,6 +53,7 @@ export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
   );
   const [showEdit, setShowEdit] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   // ── OAuth callback param handling ────────────────────────────
   useEffect(() => {
@@ -61,6 +62,7 @@ export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
     if (errParam) setError(decodeURIComponent(errParam));
     if (statusParam === 'connected') setSuccess(`${provider.name} connected successfully`);
     if (errParam || statusParam) {
+      setExpanded(true);
       const next = new URLSearchParams(searchParams);
       next.delete(errParamKey);
       next.delete(statusParamKey);
@@ -227,7 +229,13 @@ export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
 
   return (
     <div className="card overflow-hidden">
-      <div className="p-4 flex items-center gap-4">
+      <div
+        className="p-4 flex items-center gap-4 cursor-pointer hover:bg-secondary-50/50"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="shrink-0 text-secondary-400">
+          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </div>
         <div className="shrink-0 bg-secondary-50 rounded-lg p-2">
           <Icon className="w-6 h-6 text-primary-600" />
         </div>
@@ -264,7 +272,7 @@ export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
             {isAuthorized ? provider.activeDescription : provider.description}
           </p>
         </div>
-        <div className="shrink-0 flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {isAuthorized && (
             <label className="inline-flex items-center cursor-pointer">
               <input
@@ -295,14 +303,14 @@ export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
         </div>
       </div>
 
-      {error && (
+      {expanded && error && (
         <div className="border-t border-secondary-200 px-4 py-2 text-xs text-red-600 bg-red-50">{error}</div>
       )}
-      {success && (
+      {expanded && success && (
         <div className="border-t border-secondary-200 px-4 py-2 text-xs text-green-600 bg-green-50">{success}</div>
       )}
 
-      {showEdit && (
+      {expanded && showEdit && (
         <div className="border-t border-secondary-200 p-4 bg-secondary-50/50 space-y-3">
           {provider.setupHelp && (
             <div>
@@ -365,7 +373,7 @@ export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
         </div>
       )}
 
-      {hasCreds && !showEdit && (
+      {expanded && hasCreds && !showEdit && (
         <div className="border-t border-secondary-200 p-4 bg-secondary-50/50 space-y-3">
           {integration?.redirectUri && (
             <div>

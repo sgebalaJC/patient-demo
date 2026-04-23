@@ -1,21 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  addDoc, collection, limit, onSnapshot, orderBy, query, serverTimestamp, Timestamp,
-} from 'firebase/firestore';
 import { MessageCircle, Send, X, Volume2, VolumeX, Bell, Maximize2, Minimize2 } from 'lucide-react';
-import { db } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
+import { useFirestoreListener } from '../../hooks/useFirestoreListener';
 import { isAdminRole } from '../../lib/roles';
 import { formatDateTime } from '../../lib/date-helpers';
 import { BRANDING } from '../../config/branding';
-
-interface AdminChannelMessage {
-  id: string;
-  senderId: string;
-  senderName: string;
-  text: string;
-  createdAt?: Timestamp | null;
-}
+import {
+  subscribeAdminChannel,
+  sendAdminChannelMessage,
+  type AdminChannelMessage,
+} from '../../lib/firestore/admin-channel';
 
 const MUTE_KEY = 'admin-channel-muted';
 const LAST_SEEN_KEY = 'admin-channel-last-seen';
@@ -58,7 +52,6 @@ export const AdminChannelWidget: React.FC = () => {
 
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [messages, setMessages] = useState<AdminChannelMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [muted, setMuted] = useState<boolean>(() => localStorage.getItem(MUTE_KEY) === '1');
@@ -75,39 +68,31 @@ export const AdminChannelWidget: React.FC = () => {
     typeof document !== 'undefined' ? document.hasFocus() : true,
   );
 
-  useEffect(() => {
-    if (!isAdmin) return;
-    const q = query(
-      collection(db, 'admin-channel-messages'),
-      orderBy('createdAt', 'desc'),
-      limit(MAX_MESSAGES),
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const next: AdminChannelMessage[] = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<AdminChannelMessage, 'id'>),
-      }));
-      next.reverse();
-      const prev = messagesRef.current;
+  // Live subscription. `new-message` side-effects (chime / title flash / OS
+  // notification) run inside an effect on the latest snapshot so the
+  // subscription itself stays pure data.
+  const { data: messages = [] } = useFirestoreListener<AdminChannelMessage[]>(
+    (onData, onError) => subscribeAdminChannel(MAX_MESSAGES, onData, onError),
+    { enabled: isAdmin, initial: [], deps: [isAdmin] },
+  );
 
-      if (!firstLoadRef.current && next.length > 0) {
-        const latest = next[next.length - 1];
-        const prevLatestId = prev.length ? prev[prev.length - 1].id : null;
-        const isGenuinelyNew = latest.id !== prevLatestId;
-        const isOwnMessage = latest.senderId === user?.uid;
-        if (isGenuinelyNew && !isOwnMessage) {
-          if (!muted) playChime();
-          maybeShowOsNotification(latest);
-          flashTitle();
-          setOpen(true);
-        }
+  useEffect(() => {
+    const prev = messagesRef.current;
+    if (!firstLoadRef.current && messages.length > 0) {
+      const latest = messages[messages.length - 1];
+      const prevLatestId = prev.length ? prev[prev.length - 1].id : null;
+      const isGenuinelyNew = latest.id !== prevLatestId;
+      const isOwnMessage = latest.senderId === user?.uid;
+      if (isGenuinelyNew && !isOwnMessage) {
+        if (!muted) playChime();
+        maybeShowOsNotification(latest);
+        flashTitle();
+        setOpen(true);
       }
-      firstLoadRef.current = false;
-      messagesRef.current = next;
-      setMessages(next);
-    });
-    return unsub;
-  }, [isAdmin, user?.uid, muted]);
+    }
+    firstLoadRef.current = false;
+    messagesRef.current = messages;
+  }, [messages, user?.uid, muted]);
 
   useEffect(() => {
     const onFocus = () => {
@@ -198,12 +183,7 @@ export const AdminChannelWidget: React.FC = () => {
       userProfile.email ||
       'Admin';
     try {
-      await addDoc(collection(db, 'admin-channel-messages'), {
-        senderId: user.uid,
-        senderName,
-        text,
-        createdAt: serverTimestamp(),
-      });
+      await sendAdminChannelMessage(user.uid, senderName, text);
       setDraft('');
     } catch (err) {
       // eslint-disable-next-line no-console

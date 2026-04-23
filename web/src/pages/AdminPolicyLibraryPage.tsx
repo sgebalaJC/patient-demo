@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ClipboardCheck, RefreshCw, ExternalLink } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
+import { useFirestoreListener } from '../hooks/useFirestoreListener';
 import { isAdminRole } from '../lib/roles';
 import {
   subscribeToPayers,
@@ -20,25 +21,17 @@ import type { Payer, PayerPolicy } from '../types/prior-auth';
 
 export const AdminPolicyLibraryPage: React.FC = () => {
   const { userProfile } = useAuth();
-  const [payers, setPayers] = useState<Payer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isAdminRole(userProfile?.role)) return;
-    const unsub = subscribeToPayers(
-      (r) => {
-        setPayers(r);
-        setLoading(false);
-      },
-      (err) => {
-        setMsg(`Load error: ${err.message}`);
-        setLoading(false);
-      },
-    );
-    return unsub;
-  }, [userProfile?.role]);
+  const isAdmin = isAdminRole(userProfile?.role);
+  const { data: payers = [], loading, error } = useFirestoreListener<Payer[]>(
+    (onData, onError) => subscribeToPayers(onData, onError),
+    { enabled: isAdmin, initial: [], deps: [isAdmin] },
+  );
+  React.useEffect(() => {
+    if (error) setMsg(`Load error: ${error.message}`);
+  }, [error]);
 
   async function refreshAll(): Promise<void> {
     setRefreshing(true);
@@ -111,20 +104,14 @@ export const AdminPolicyLibraryPage: React.FC = () => {
 };
 
 const PayerCard: React.FC<{ payer: Payer }> = ({ payer }) => {
-  const [policies, setPolicies] = useState<PayerPolicy[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsub = subscribeToPoliciesByPayer(
+  const { data: policies = [], loading } = useFirestoreListener<PayerPolicy[]>(
+    (onData, onError) => subscribeToPoliciesByPayer(
       payer.id,
-      (rows) => {
-        setPolicies(rows.sort((a, b) => a.cptCode.localeCompare(b.cptCode)));
-        setLoading(false);
-      },
-      () => setLoading(false),
-    );
-    return unsub;
-  }, [payer.id]);
+      (rows) => onData(rows.sort((a, b) => a.cptCode.localeCompare(b.cptCode))),
+      onError,
+    ),
+    { initial: [], deps: [payer.id] },
+  );
 
   const statusColor = payer.adapterStatus === 'implemented'
     ? 'bg-green-100 text-green-700'

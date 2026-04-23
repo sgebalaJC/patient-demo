@@ -171,24 +171,26 @@ export const PatientLookupPanel: React.FC = () => {
 
       {!loading && result?.status === 'no-match' && (
         <Card className="p-5 border-amber-200 bg-amber-50">
-          <p className="text-sm text-amber-800 inline-flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            No matching patient in DrChrono
-            {result.candidatesCount > 0 && ` (${result.candidatesCount} near candidates).`}
-          </p>
-          {query && (query.firstName || query.lastName) && (
-            <a
-              href={`https://app.drchrono.com/patients/?search_query=${encodeURIComponent(
-                [query.firstName, query.lastName].filter(Boolean).join(' '),
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 text-xs text-primary-700 hover:text-primary-800 inline-flex items-center gap-1"
-            >
-              <ExternalLink className="h-3 w-3" />
-              Search manually in DrChrono
-            </a>
-          )}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p className="text-sm text-amber-800 inline-flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              No matching patient in DrChrono
+              {result.candidatesCount > 0 && ` (${result.candidatesCount} near candidates).`}
+            </p>
+            {query && (query.firstName || query.lastName) && (
+              <a
+                href={`https://app.drchrono.com/patients/?search_query=${encodeURIComponent(
+                  [query.firstName, query.lastName].filter(Boolean).join(' '),
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-primary-700 hover:text-primary-800 inline-flex items-center gap-1"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Search manually in DrChrono
+              </a>
+            )}
+          </div>
         </Card>
       )}
 

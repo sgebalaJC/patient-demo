@@ -72,81 +72,55 @@ export async function simDrChrono(
   // /drchrono/patient-lookup — unified aggregator (sidecar-specific path,
   // mirrors the Cloud Function simulator's patient_lookup op).
   if (method === "GET" && path === "patient-lookup") {
-    const firstName = searchParams.get("firstName") || undefined;
-    const lastName = searchParams.get("lastName") || undefined;
-    const email = searchParams.get("email") || undefined;
-    const phone = searchParams.get("phone") || undefined;
-    const drchronoId = searchParams.get("drchronoId") || undefined;
+    const q = {
+      firstName: searchParams.get("firstName") || undefined,
+      lastName: searchParams.get("lastName") || undefined,
+      email: searchParams.get("email") || undefined,
+      phone: searchParams.get("phone") || undefined,
+      drchronoId: searchParams.get("drchronoId") || undefined,
+    };
+    return json(await lookupOne(db, q));
+  }
 
-    if (drchronoId) {
-      const snap = await db.doc(`${PATIENTS}/${drchronoId}`).get();
-      if (!snap.exists) {
-        return json({
-          status: "no-match",
-          matched: false,
-          candidatesCount: 0,
-          exactMatchesCount: 0,
-          patient: null,
-          candidates: [],
-          errorMessage: null,
-        });
-      }
-      const p = toUnified(snap.data());
-      return json({
-        status: "matched",
-        matched: true,
-        candidatesCount: 1,
-        exactMatchesCount: 1,
-        patient: p,
-        candidates: [p],
-        errorMessage: null,
-      });
-    }
+  // /drchrono/patient-batch — run N lookups in one round-trip. Body:
+  // {items:[{id, query:{firstName?,lastName?,email?,phone?,drchronoId?}}]}
+  if (method === "POST" && path === "patient-batch") {
+    const body = await readJsonBody();
+    const items: Array<{ id: string; query: any }> = Array.isArray(body?.items) ? body.items : [];
+    const results = await Promise.all(
+      items.map(async (it) => ({
+        id: it.id,
+        query: it.query || {},
+        result: await lookupOne(db, it.query || {}),
+      })),
+    );
+    return json({ results });
+  }
 
-    const snap = await db.collection(PATIENTS).limit(500).get();
-    const all = snap.docs.map((d) => d.data());
-    const first = firstName?.toLowerCase();
-    const last = lastName?.toLowerCase();
-    const emailLc = email?.toLowerCase();
-    const phoneDigits = phone?.replace(/\D/g, "");
-    const matches = all.filter((p: any) => {
-      if (emailLc && (p.email || "").toLowerCase() !== emailLc) return false;
-      if (phoneDigits && (p.cell_phone || "").replace(/\D/g, "") !== phoneDigits) return false;
-      if (first && !(p.first_name || "").toLowerCase().startsWith(first)) return false;
-      if (last && !(p.last_name || "").toLowerCase().startsWith(last)) return false;
-      return true;
-    });
-    const candidates = matches.map(toUnified);
-    if (candidates.length === 0) {
-      return json({
-        status: "no-match",
-        matched: false,
-        candidatesCount: 0,
-        exactMatchesCount: 0,
-        patient: null,
-        candidates: [],
-        errorMessage: null,
-      });
-    }
-    if (candidates.length === 1) {
-      return json({
-        status: "matched",
-        matched: true,
-        candidatesCount: 1,
-        exactMatchesCount: 1,
-        patient: candidates[0],
-        candidates,
-        errorMessage: null,
-      });
-    }
+  // /drchrono/patient-details?drchronoId=X — returns allergies/problems/
+  // appointments stub pulled from the sandbox. Shape parity with real.
+  if (method === "GET" && path === "patient-details") {
+    const drchronoId = searchParams.get("drchronoId");
+    if (!drchronoId) return json({ detail: "drchronoId required" }, 400);
+    const apptSnap = await db
+      .collection(APPOINTMENTS)
+      .where("patient", "==", Number(drchronoId))
+      .limit(50)
+      .get();
     return json({
-      status: "skipped-multi",
-      matched: false,
-      candidatesCount: candidates.length,
-      exactMatchesCount: 0,
-      patient: null,
-      candidates,
-      errorMessage: null,
+      allergies: [],
+      problems: [],
+      appointments: apptSnap.docs.map((d) => {
+        const a: any = d.data();
+        return {
+          id: Number(a.id),
+          date: a.scheduled_time || null,
+          reason: a.reason || null,
+          status: a.status || null,
+          duration: typeof a.duration === "number" ? a.duration : null,
+          notesLocked: false,
+        };
+      }),
     });
   }
 
@@ -283,6 +257,82 @@ export async function simDrChrono(
   );
 }
 
+
+async function lookupOne(
+  db: FirebaseFirestore.Firestore,
+  q: { firstName?: string; lastName?: string; email?: string; phone?: string; drchronoId?: string },
+) {
+  if (q.drchronoId) {
+    const snap = await db.doc(`${PATIENTS}/${q.drchronoId}`).get();
+    if (!snap.exists) {
+      return {
+        status: "no-match",
+        matched: false,
+        candidatesCount: 0,
+        exactMatchesCount: 0,
+        patient: null,
+        candidates: [],
+        errorMessage: null,
+      };
+    }
+    const p = toUnified(snap.data());
+    return {
+      status: "matched",
+      matched: true,
+      candidatesCount: 1,
+      exactMatchesCount: 1,
+      patient: p,
+      candidates: [p],
+      errorMessage: null,
+    };
+  }
+
+  const snap = await db.collection(PATIENTS).limit(500).get();
+  const all = snap.docs.map((d) => d.data());
+  const first = q.firstName?.toLowerCase();
+  const last = q.lastName?.toLowerCase();
+  const emailLc = q.email?.toLowerCase();
+  const phoneDigits = q.phone?.replace(/\D/g, "");
+  const matches = all.filter((p: any) => {
+    if (emailLc && (p.email || "").toLowerCase() !== emailLc) return false;
+    if (phoneDigits && (p.cell_phone || "").replace(/\D/g, "") !== phoneDigits) return false;
+    if (first && !(p.first_name || "").toLowerCase().startsWith(first)) return false;
+    if (last && !(p.last_name || "").toLowerCase().startsWith(last)) return false;
+    return true;
+  });
+  const candidates = matches.map(toUnified);
+  if (candidates.length === 0) {
+    return {
+      status: "no-match",
+      matched: false,
+      candidatesCount: 0,
+      exactMatchesCount: 0,
+      patient: null,
+      candidates: [],
+      errorMessage: null,
+    };
+  }
+  if (candidates.length === 1) {
+    return {
+      status: "matched",
+      matched: true,
+      candidatesCount: 1,
+      exactMatchesCount: 1,
+      patient: candidates[0],
+      candidates,
+      errorMessage: null,
+    };
+  }
+  return {
+    status: "skipped-multi",
+    matched: false,
+    candidatesCount: candidates.length,
+    exactMatchesCount: 0,
+    patient: null,
+    candidates,
+    errorMessage: null,
+  };
+}
 
 function toUnified(p: any) {
   return {

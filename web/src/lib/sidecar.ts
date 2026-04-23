@@ -429,13 +429,13 @@ class SidecarClient {
 
   async getDrChronoPatientDetails(drchronoId: number): Promise<DrChronoPatientDetails> {
     const qs = new URLSearchParams({ drchronoId: String(drchronoId) });
-    return this.request(`/admin-api/drchrono-patient-details?${qs}`);
+    return this.request(`/admin-api/drchrono/patient-details?${qs}`);
   }
 
   async lookupDrChronoPatientsBatch(items: { id: string; query: DrChronoLookupQuery }[]): Promise<{
     results: { id: string; query: DrChronoLookupQuery; result: DrChronoLookupResult }[];
   }> {
-    return this.request('/admin-api/drchrono-patient-batch', {
+    return this.request('/admin-api/drchrono/patient-batch', {
       method: 'POST',
       body: JSON.stringify({ items }),
     });

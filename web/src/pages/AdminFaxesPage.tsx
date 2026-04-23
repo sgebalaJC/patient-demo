@@ -413,9 +413,13 @@ const FaxDetailDrawer: React.FC<{ fax: InboundFax; onClose: () => void }> = ({ f
         // (showing its dark "Open" prompt) regardless of
         // Content-Disposition. A blob: URL has the app's origin, so the
         // built-in PDF viewer renders it in-place.
+        // Force the MIME type when wrapping — GCS response may carry
+        // application/octet-stream depending on bucket settings, which
+        // makes Chrome's PDF viewer fall back to the download prompt.
         const r = await fetch(res.url);
         if (!r.ok) throw new Error(`PDF fetch ${r.status}`);
-        const blob = await r.blob();
+        const buf = await r.arrayBuffer();
+        const blob = new Blob([buf], { type: 'application/pdf' });
         const blobUrl = URL.createObjectURL(blob);
         revokeUrl = blobUrl;
         if (!cancelled) setPdfUrl(blobUrl);

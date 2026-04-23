@@ -62,7 +62,10 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
       try {
         const r = await fetch(previewDocument.fileUrl);
         if (!r.ok) throw new Error(`Fetch ${r.status}`);
-        const blob = await r.blob();
+        const buf = await r.arrayBuffer();
+        // Force application/pdf so Chrome's PDF viewer takes the blob
+        // URL even when the upstream Content-Type was octet-stream.
+        const blob = new Blob([buf], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         revoke = url;
         if (!cancelled) setPdfBlobUrl(url);

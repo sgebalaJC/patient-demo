@@ -483,10 +483,12 @@ const OutboundFaxDrawer: React.FC<{ fax: OutboundFax; onClose: () => void }> = (
         // Re-host as a same-origin blob URL — Chrome refuses to render
         // cross-origin PDFs inline in <iframe> (shows the dark "Open"
         // prompt instead). A blob: URL inherits the app's origin so the
-        // built-in PDF viewer renders it inline.
+        // built-in PDF viewer renders it inline. Force application/pdf
+        // since GCS may serve octet-stream depending on metadata.
         const r = await fetch(res.url);
         if (!r.ok) throw new Error(`PDF fetch ${r.status}`);
-        const blob = await r.blob();
+        const buf = await r.arrayBuffer();
+        const blob = new Blob([buf], { type: 'application/pdf' });
         const blobUrl = URL.createObjectURL(blob);
         revokeUrl = blobUrl;
         if (!cancelled) setPdfUrl(blobUrl);

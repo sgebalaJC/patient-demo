@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { isAdminRole } from '../lib/roles';
-import { intakeFormOperations, userOperations } from '../lib/firestore';
+import { intakeFormOperations, prescriptionRefillOperations } from '../lib/firestore';
 import { PatientIntakeForm, PatientInfoForm, MedicalHistoryForm, ConsentForm, ConciergeAgreement } from '../types';
 import {
   FileText,
@@ -12,6 +12,7 @@ import {
   User,
   AlertTriangle,
   Eye,
+  RefreshCw,
 } from 'lucide-react';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -20,8 +21,14 @@ import { FilterTabs } from '../components/ui/FilterTabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
+import { Button } from '../components/ui/Button';
+import { PaginationBar } from '../components/ui/PaginationBar';
 import { formatDate } from '../lib/date-helpers';
+import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
+import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import logger from '../lib/logger';
+
+const ADMIN_STATUSES = ['completed', 'approved', 'in_progress'] as const;
 
 const SECTION_LABELS: Record<string, string> = {
   patientInfo: 'Patient Information',
@@ -302,8 +309,7 @@ const FormDataViewer: React.FC<{ form: PatientIntakeForm }> = ({ form }) => {
 
 export const AdminIntakeFormsPage: React.FC = () => {
   const { user, userProfile } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [forms, setForms] = useState<PatientIntakeForm[]>([]);
+  const isAdminUser = !!user && isAdminRole(userProfile?.role);
   const [patientNames, setPatientNames] = useState<Record<string, { firstName: string; lastName: string }>>({});
   const [filter, setFilter] = useState<'all' | 'completed' | 'in_progress' | 'approved'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -311,51 +317,56 @@ export const AdminIntakeFormsPage: React.FC = () => {
   const [sendBackId, setSendBackId] = useState<string | null>(null);
   const [sendBackNotes, setSendBackNotes] = useState('');
 
+  const whereClauses = useMemo<WhereClause[] | undefined>(
+    () => filter === 'all'
+      ? [['status', 'in', [...ADMIN_STATUSES]]]
+      : [['status', '==', filter]],
+    [filter],
+  );
+
+  const paged = usePagedCollection<PatientIntakeForm>({
+    enabled: isAdminUser,
+    real: 'patient-intake-forms',
+    orderField: 'updatedAt',
+    pageSize: 10,
+    whereClauses,
+    mapDoc: (d) => ({ ...(d.data() as PatientIntakeForm), id: d.id }),
+  });
+  const filtered = paged.rows;
+  const loading = paged.loading;
+
+  const countsPredicates = useMemo(() => ({
+    all: [['status', 'in', [...ADMIN_STATUSES]]] as [string, 'in', string[]][],
+    completed: [['status', '==', 'completed']] as [string, '==', string][],
+    in_progress: [['status', '==', 'in_progress']] as [string, '==', string][],
+    approved: [['status', '==', 'approved']] as [string, '==', string][],
+  }), []);
+  const { counts: statusCounts, refresh: refreshCounts } = useCollectionCounts({
+    enabled: isAdminUser,
+    real: 'patient-intake-forms',
+    predicates: countsPredicates,
+  });
+
+  // Fetch names only for patients on the current page.
   useEffect(() => {
-    if (user && isAdminRole(userProfile?.role)) {
-      loadForms();
-    }
-  }, [user, userProfile]);
-
-  const loadForms = async () => {
-    setLoading(true);
-    try {
-      const response = await intakeFormOperations.getAllSubmittedForms();
-      if (response.success && response.data) {
-        setForms(response.data);
-
-        // Load patient names
-        const ids = [...new Set(response.data.map(f => f.patientId))];
-        if (ids.length > 0) {
-          const namesMap: Record<string, { firstName: string; lastName: string }> = {};
-          // Batch fetch users (10 at a time)
-          for (let i = 0; i < ids.length; i += 10) {
-            const batch = ids.slice(i, i + 10);
-            for (const pid of batch) {
-              const uRes = await userOperations.getUser(pid);
-              if (uRes.success && uRes.data) {
-                namesMap[pid] = {
-                  firstName: uRes.data.firstName,
-                  lastName: uRes.data.lastName,
-                };
-              }
-            }
-          }
-          setPatientNames(namesMap);
-        }
+    const ids = [...new Set(filtered.map((f) => f.patientId))].filter(
+      (id) => !(id in patientNames),
+    );
+    if (ids.length === 0) return;
+    prescriptionRefillOperations.getPatientNamesByIds(ids).then((res) => {
+      if (res.success && res.data) {
+        setPatientNames((prev) => ({ ...prev, ...res.data }));
       }
-    } catch (error) {
-      logger.error('Error loading intake forms:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    }).catch((err) => logger.error('patient-name lookup failed', err));
+  }, [filtered, patientNames]);
+
+  const refreshAll = () => { paged.refresh(); refreshCounts(); };
 
   const handleApprove = async (formId: string) => {
     if (!user) return;
     try {
       await intakeFormOperations.approveIntakeForm(formId, user.uid);
-      loadForms();
+      refreshAll();
     } catch (error) {
       logger.error('Error approving form:', error);
     }
@@ -367,20 +378,11 @@ export const AdminIntakeFormsPage: React.FC = () => {
     try {
       await intakeFormOperations.sendBackIntakeForm(formId, user.uid, sendBackNotes || undefined);
       setSendBackNotes('');
-      loadForms();
+      refreshAll();
     } catch (error) {
       logger.error('Error sending back form:', error);
     }
     setSendBackId(null);
-  };
-
-  const filtered = filter === 'all' ? forms : forms.filter(f => f.status === filter);
-
-  const statusCounts = {
-    all: forms.length,
-    completed: forms.filter(f => f.status === 'completed').length,
-    in_progress: forms.filter(f => f.status === 'in_progress').length,
-    approved: forms.filter(f => f.status === 'approved').length,
   };
 
   const getStatusColorClass = (status: string) => {
@@ -423,15 +425,24 @@ export const AdminIntakeFormsPage: React.FC = () => {
         onChange={(f) => setFilter(f as typeof filter)}
       />
 
-      {loading ? (
+      <div className="flex justify-end">
+        <Button onClick={refreshAll} loading={loading} variant="secondary" size="sm">
+          <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh
+        </Button>
+      </div>
+
+      {loading && filtered.length === 0 && paged.page === 1 ? (
         <LoadingSpinner />
-      ) : filtered.length === 0 ? (
+      ) : (
+      <div className={`transition-opacity duration-150 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
+      {filtered.length === 0 && !loading ? (
         <EmptyState
           icon={FileText}
           title="No intake forms"
           description={filter === 'all' ? 'No patients have started intake forms yet.' : `No forms with status "${getStatusLabel(filter)}".`}
         />
       ) : (
+        <>
         <div className="space-y-3">
           {filtered.map((form) => {
             const name = patientNames[form.patientId];
@@ -531,6 +542,18 @@ export const AdminIntakeFormsPage: React.FC = () => {
             );
           })}
         </div>
+        <PaginationBar
+          currentPage={paged.page}
+          pageSize={paged.pageSize}
+          totalItems={(paged.page - 1) * paged.pageSize + filtered.length + (paged.hasNext ? 1 : 0)}
+          hasMore={paged.hasNext}
+          onPreviousPage={paged.prev}
+          onNextPage={paged.next}
+          label="intake forms"
+        />
+        </>
+      )}
+      </div>
       )}
 
       {/* Approve confirmation */}

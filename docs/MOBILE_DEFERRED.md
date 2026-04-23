@@ -9,13 +9,10 @@ template ship.
 
 When we return to mobile, the highest-leverage path is:
 
-1. **Item #1 — Documents screen parity (M)**: biggest perceived-quality
-   gap. A demo viewer who uploads an ID on web then opens mobile sees a
-   broken-looking list.
-2. **Item #4 — Mobile dashboard skeletons (XS)**: quick polish; the web
+1. **Item #4 — Mobile dashboard skeletons (XS)**: quick polish; the web
    Skeleton primitive pattern now exists (`web/src/components/ui/Skeleton.tsx`),
    mobile can mirror it.
-3. **Item #6 — Release prep (S-M, per-fork)**: only when a fork commits
+2. **Item #6 — Release prep (S-M, per-fork)**: only when a fork commits
    to a mobile launch date.
 
 Context notes for the next session:
@@ -28,23 +25,17 @@ Context notes for the next session:
   `mobile/lib/screens/dashboard_screen.dart` `_buildVerifyPhoneBanner`
   and already uses the branded primary color — no port needed.
 
-## 1. Documents screen parity (M)
+## 1. ~~Documents screen parity (M)~~ — DONE
 
-**What:** `mobile/lib/screens/documents/documents_screen.dart` is far behind
-web. Tapping a tile is a no-op; no preview modal, no delete, no grouping
-by document type, no file size / uploaded-at line. Web (`DocumentsPage.tsx`)
-has grouped lists, image zoom+rotate, PDF iframe, delete confirm.
-
-**Fix sketch:**
-- `mobile/lib/screens/documents/documents_screen.dart` — group by
-  `documentType`, add size + uploadedAt line, wire `onTap` to preview.
-- `mobile/lib/services/firestore/documents_service.dart` — add `delete()`.
-- New `mobile/lib/screens/documents/document_preview_screen.dart` —
-  image view (use `photo_view` or `InteractiveViewer`), PDF via
-  `url_launcher` or `flutter_pdfview`.
-
-**Why deferred:** biggest-ticket mobile gap (~half day). Won't block
-a real customer who primarily manages docs from web.
+`documents_screen.dart` now groups by `documentType` (same order as web),
+shows file size + uploadedAt on each row, has a red delete icon with a
+confirm dialog, and taps open a new `document_preview_screen.dart`.
+Preview uses `InteractiveViewer` for images (pinch-zoom + pan + rotate)
+and falls back to `url_launcher` (`LaunchMode.externalApplication`) for
+PDFs and other types. Upload also now writes a proper MIME type
+(`image/jpeg`, `application/pdf`, etc.) instead of the old
+`application/${extension}` nonsense, so the preview can detect images
+correctly. `documents_service.deleteDocument` was already present.
 
 ---
 

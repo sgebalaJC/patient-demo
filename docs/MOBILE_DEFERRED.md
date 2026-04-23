@@ -9,15 +9,13 @@ template ship.
 
 When we return to mobile, the highest-leverage path is:
 
-1. **Item #3 — New-message attachment race (S)**: actual bug with an
-   explicit TODO in the code, has data-integrity implications. Fix first.
-2. **Item #1 — Documents screen parity (M)**: biggest perceived-quality
+1. **Item #1 — Documents screen parity (M)**: biggest perceived-quality
    gap. A demo viewer who uploads an ID on web then opens mobile sees a
    broken-looking list.
-3. **Item #4 — Mobile dashboard skeletons (XS)**: quick polish; the web
+2. **Item #4 — Mobile dashboard skeletons (XS)**: quick polish; the web
    Skeleton primitive pattern now exists (`web/src/components/ui/Skeleton.tsx`),
    mobile can mirror it.
-4. **Item #6 — Release prep (S-M, per-fork)**: only when a fork commits
+3. **Item #6 — Release prep (S-M, per-fork)**: only when a fork commits
    to a mobile launch date.
 
 Context notes for the next session:
@@ -68,27 +66,14 @@ user-reported issue.
 
 ---
 
-## 3. New-message attachment race (S)
+## 3. ~~New-message attachment race (S)~~ — DONE
 
-**What:** `mobile/lib/screens/messages/new_message_sheet.dart:120` has an
-explicit self-doc TODO. Attachments upload under a path keyed by
-`DateTime.now().millisecondsSinceEpoch` *before* the thread is created,
-then the placeholder is never rewritten to the real threadId. Orphaned
-files; URLs may live outside the thread's auth scope.
-
-**Fix sketch:**
-- `mobile/lib/services/firestore/messages_service.dart` — split thread
-  creation into two steps: create empty thread → return id → upload
-  attachments under `message-attachments/{threadId}/...` → patch the
-  first message with the real URLs.
-- `mobile/lib/services/storage_service.dart` — if needed, a helper that
-  takes the final threadId.
-- `mobile/lib/screens/messages/new_message_sheet.dart` — use the new
-  flow.
-
-**Why deferred:** it's a real bug with no field reports yet (demo has
-~zero mobile message traffic). Worth fixing before a first paying patient
-sends attachments; until then, risk is negligible.
+Fixed by splitting `createThread` into `createEmptyThread` + existing
+`sendMessage`. `new_message_sheet.dart` now creates the thread shell
+first, uploads attachments under the real threadId (which is what
+`storage.rules` requires), then sends the first message. On upload or
+send failure the empty thread is best-effort deleted via
+`MessagesService.deleteThread`.
 
 ---
 

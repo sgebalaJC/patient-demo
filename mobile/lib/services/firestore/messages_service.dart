@@ -112,54 +112,43 @@ class MessagesService {
             snapshot.docs.map((doc) => ThreadMessage.fromFirestore(doc)).toList());
   }
 
-  /// Create a new thread
-  Future<String> createThread({
+  /// Create a thread shell with no messages yet. Returns the real threadId so
+  /// attachments can be uploaded under `messages/{threadId}/attachments/*`
+  /// (which is what storage.rules requires — the rule calls `firestore.get`
+  /// on `message-threads/{threadId}` and checks `patientId`). Caller is
+  /// expected to follow up with [sendMessage] for the first message so the
+  /// thread's lastMessage / unreadForAdmin flags update in one step.
+  Future<String> createEmptyThread({
     required String patientId,
     required String patientName,
     required String subject,
-    required String firstMessage,
-    required String senderId,
-    required String senderName,
     String priority = 'normal',
-    List<Map<String, dynamic>>? attachments,
   }) async {
-    final hasAttachments = attachments != null && attachments.isNotEmpty;
-    final lastMessage = firstMessage.isNotEmpty
-        ? firstMessage
-        : hasAttachments
-            ? '[Attachment]'
-            : firstMessage;
-
-    final threadRef = await _threads.add({
+    final ref = await _threads.add({
       'patientId': patientId,
       'patientName': patientName,
       'subject': subject,
-      'lastMessage': lastMessage,
+      'lastMessage': '',
       'lastMessageAt': FieldValue.serverTimestamp(),
-      'lastMessageSenderId': senderId,
+      'lastMessageSenderId': patientId,
       'isActive': true,
       'unreadForPatient': false,
-      'unreadForAdmin': true,
+      'unreadForAdmin': false,
       'priority': priority,
       'status': 'open',
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    return ref.id;
+  }
 
-    // Add first message
-    await _db.collection('thread-messages').add({
-      'threadId': threadRef.id,
-      'senderId': senderId,
-      'senderName': senderName,
-      'senderRole': 'patient',
-      'content': firstMessage,
-      'attachments': attachments ?? [],
-      'createdAt': FieldValue.serverTimestamp(),
-      'readBy': {senderId: FieldValue.serverTimestamp()},
-      'isEdited': false,
-    });
-
-    return threadRef.id;
+  /// Best-effort cleanup for an empty thread when the follow-up upload or
+  /// first-message send fails. Swallows errors — worst case the user sees
+  /// an empty thread they can retry from.
+  Future<void> deleteThread(String threadId) async {
+    try {
+      await _threads.doc(threadId).delete();
+    } catch (_) {}
   }
 
   /// Send a message in a thread

@@ -113,48 +113,48 @@ class _NewMessageSheetState extends State<NewMessageSheet> {
       _error = null;
     });
 
+    final subject = _subjectController.text.trim();
+    final message = _messageController.text.trim();
+
+    String? threadId;
     try {
-      final subject = _subjectController.text.trim();
-      final message = _messageController.text.trim();
-
-      // Upload attachments — we need a temporary threadId placeholder
-      // Since thread doesn't exist yet, we'll create thread first then upload
-      // Actually, let's create thread first with no attachments, get threadId,
-      // then upload and update. Or simpler: create a unique folder key.
-      List<Map<String, dynamic>>? attachments;
-
-      if (_selectedFiles.isNotEmpty) {
-        // Use a temp key for upload path, then create thread
-        final tempKey = DateTime.now().millisecondsSinceEpoch.toString();
-        attachments = [];
-        for (final file in _selectedFiles) {
-          final name = p.basename(file.path);
-          final url = await _storageService.uploadMessageAttachment(
-            file: file,
-            threadId: tempKey,
-          );
-          attachments.add({
-            'id': '${DateTime.now().millisecondsSinceEpoch}_$name',
-            'name': name,
-            'url': url,
-            'type': _mimeType(file.path),
-            'size': file.lengthSync(),
-          });
-        }
-      }
-
-      await _service.createThread(
+      threadId = await _service.createEmptyThread(
         patientId: uid,
         patientName: profile.fullName,
         subject: subject,
-        firstMessage: message,
-        senderId: uid,
-        senderName: profile.fullName,
         priority: _priority,
-        attachments: attachments,
       );
 
-      // Notify admins
+      final attachments = <Map<String, dynamic>>[];
+      for (final file in _selectedFiles) {
+        final name = p.basename(file.path);
+        final url = await _storageService.uploadMessageAttachment(
+          file: file,
+          threadId: threadId,
+        );
+        attachments.add({
+          'id': '${DateTime.now().millisecondsSinceEpoch}_$name',
+          'name': name,
+          'url': url,
+          'type': _mimeType(file.path),
+          'size': file.lengthSync(),
+        });
+      }
+
+      final content = message.isNotEmpty
+          ? message
+          : attachments.isNotEmpty
+              ? '[Attachment]'
+              : message;
+
+      await _service.sendMessage(
+        threadId: threadId,
+        senderId: uid,
+        senderName: profile.fullName,
+        content: content,
+        attachments: attachments.isNotEmpty ? attachments : null,
+      );
+
       final preview = message.isNotEmpty
           ? (message.length > 60 ? '${message.substring(0, 60)}...' : message)
           : '[Attachment]';
@@ -170,6 +170,9 @@ class _NewMessageSheetState extends State<NewMessageSheet> {
         widget.onSent?.call();
       }
     } catch (e) {
+      if (threadId != null) {
+        await _service.deleteThread(threadId);
+      }
       setState(() {
         _error = 'Failed to send message';
         _submitting = false;

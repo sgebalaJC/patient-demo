@@ -11,7 +11,7 @@ import {isSuperAdminEmail} from "../superAdmins.js";
 import {seedFaxes} from "./simulators/faxes.js";
 import {seedSms} from "./simulators/messaging.js";
 import {seedWorkspace} from "./simulators/workspace.js";
-import {seedNative, NATIVE_SIM_PATHS} from "./simulators/native.js";
+import {seedNative, NATIVE_SIM_PATHS, type DemoPatient} from "./simulators/native.js";
 
 function assertSuperAdmin(auth: {uid: string; token?: {email?: string}} | undefined) {
   if (!auth) throw new HttpsError("unauthenticated", "Sign-in required");
@@ -31,9 +31,6 @@ function rand(seed: number): () => number {
   };
 }
 
-const FIRST_NAMES = ["Alice", "Ben", "Carla", "Diego", "Emma", "Faisal", "Grace", "Hiro", "Ivy", "Jamal"];
-const LAST_NAMES = ["Rivera", "Chen", "Okafor", "Patel", "Nguyen", "Silva", "Kim", "Garcia", "Hassan", "Müller"];
-
 async function wipeCollection(db: admin.firestore.Firestore, path: string) {
   const snap = await db.collection(path).limit(500).get();
   if (snap.empty) return;
@@ -42,28 +39,41 @@ async function wipeCollection(db: admin.firestore.Firestore, path: string) {
   await batch.commit();
 }
 
-async function seedDrChronoPatients(db: admin.firestore.Firestore): Promise<number[]> {
+/**
+ * Seeds `simulation/drchrono/patients` as a 1:1 mirror of the native demo
+ * patients so every integration (DrChrono, Athena, Elation, etc.) shows the
+ * same people the admin sees in Users / Appointments / Refills. Each native
+ * patient gets a deterministic numeric `drchrono_id` (1001, 1002, ...) and
+ * we stamp that back on the native user doc so cross-lookups work.
+ */
+async function seedDrChronoPatients(
+  db: admin.firestore.Firestore,
+  demoPatients: DemoPatient[],
+): Promise<number[]> {
   const path = "simulation/drchrono/patients";
   await wipeCollection(db, path);
-  const r = rand(SEED);
   const batch = db.batch();
   const ids: number[] = [];
-  for (let i = 1; i <= RECORD_COUNT; i++) {
-    const first = FIRST_NAMES[Math.floor(r() * FIRST_NAMES.length)];
-    const last = LAST_NAMES[Math.floor(r() * LAST_NAMES.length)];
-    const id = 1000 + i;
+  demoPatients.forEach((p, i) => {
+    const id = 1001 + i;
     ids.push(id);
     batch.set(db.doc(`${path}/${id}`), {
       id,
-      first_name: first,
-      last_name: last,
-      email: `${first}.${last}${i}@example.com`.toLowerCase(),
-      cell_phone: `+1555${String(1000000 + i).padStart(7, "0")}`,
-      date_of_birth: `19${50 + Math.floor(r() * 50)}-${String(1 + Math.floor(r() * 12)).padStart(2, "0")}-${String(1 + Math.floor(r() * 28)).padStart(2, "0")}`,
-      gender: r() < 0.5 ? "female" : "male",
+      first_name: p.firstName,
+      last_name: p.lastName,
+      email: p.email,
+      cell_phone: p.phoneNumber,
+      date_of_birth: p.dob,
+      gender: i % 2 === 0 ? "female" : "male",
       is_active: true,
+      native_uid: p.uid,
     });
-  }
+    // Back-reference on the native user doc so integration pages can map
+    // native UID → drchrono id without a second lookup.
+    batch.update(db.doc(`simulation/native/users/${p.uid}`), {
+      drchronoId: id,
+    });
+  });
   await batch.commit();
   return ids;
 }
@@ -130,9 +140,6 @@ async function seedDrChronoRefills(
 export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
   assertSuperAdmin(req.auth);
   const db = admin.firestore();
-  const patientIds = await seedDrChronoPatients(db);
-  const appointments = await seedDrChronoAppointments(db, patientIds);
-  const refills = await seedDrChronoRefills(db, patientIds);
   // Each domain seed is isolated — one failing shouldn't block the others.
   const safeSeed = async <T extends object>(
     label: string,
@@ -147,6 +154,22 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
       return {...fallback, _safeSeedError: msg};
     }
   };
+  // Native runs first — DrChrono + every EHR sim reuses its patient pool so
+  // every integration view shows the same demo people as the admin list.
+  const native = await safeSeed("native", () => seedNative(db), {
+    users: 0, appointments: 0, refills: 0,
+    specialistRequests: 0, intakeForms: 0, priorAuths: 0,
+    patients: [] as DemoPatient[],
+  } as Awaited<ReturnType<typeof seedNative>>);
+  const patientIds = native.patients.length > 0
+    ? await seedDrChronoPatients(db, native.patients)
+    : [];
+  const appointments = patientIds.length > 0
+    ? await seedDrChronoAppointments(db, patientIds)
+    : 0;
+  const refills = patientIds.length > 0
+    ? await seedDrChronoRefills(db, patientIds)
+    : 0;
   const faxes = await safeSeed("faxes", () => seedFaxes(db), {
     inbound: 0,
     outbound: 0,
@@ -156,10 +179,6 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
   } as Awaited<ReturnType<typeof seedFaxes>>);
   const sms = await safeSeed("sms", () => seedSms(db), {outbound: 0, inbound: 0});
   const workspace = await safeSeed("workspace", () => seedWorkspace(db), {emails: 0, events: 0});
-  const native = await safeSeed("native", () => seedNative(db), {
-    users: 0, appointments: 0, refills: 0,
-    specialistRequests: 0, intakeForms: 0, priorAuths: 0,
-  } as Awaited<ReturnType<typeof seedNative>>);
   return {
     ok: true,
     seeded: {

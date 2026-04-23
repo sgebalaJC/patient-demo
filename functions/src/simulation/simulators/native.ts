@@ -373,18 +373,20 @@ async function seedPriorAuths(
   return PA_COUNT;
 }
 
-export interface NativeSeedCounts {
+export interface NativeSeedResult {
   users: number;
   appointments: number;
   refills: number;
   specialistRequests: number;
   intakeForms: number;
   priorAuths: number;
+  /** The seeded demo patients — shared with DrChrono/EHR sims for 1:1 alignment. */
+  patients: DemoPatient[];
 }
 
 export async function seedNative(
   db: admin.firestore.Firestore,
-): Promise<NativeSeedCounts> {
+): Promise<NativeSeedResult> {
   const patients = await seedUsers(db);
   const [appointments, refills, specialistRequests, intakeForms, priorAuths] = await Promise.all([
     seedAppointments(db, patients),
@@ -400,6 +402,7 @@ export async function seedNative(
     specialistRequests,
     intakeForms,
     priorAuths,
+    patients,
   };
 }
 

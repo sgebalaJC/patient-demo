@@ -186,6 +186,9 @@ export const UserManagementPage: React.FC = () => {
       sessionStorage.setItem('impersonation', JSON.stringify({
         realEmail: userProfile?.email,
         targetName: `${targetUser.firstName} ${targetUser.lastName}`,
+        // Flag sim-seeded targets so AuthContext loads their profile from
+        // simulation/native/users/<uid> — they don't exist in real users/.
+        simulated,
       }));
       try {
         await signInWithCustomToken(auth, res.data.token);

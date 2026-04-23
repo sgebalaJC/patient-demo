@@ -86,19 +86,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             return;
           }
 
-          // Normal user or impersonating: load from Firestore
+          // Normal user or impersonating: load from Firestore. When the
+          // impersonation record is flagged `simulated`, the target was a
+          // seeded demo user (only exists at simulation/native/users/<uid>),
+          // so read from the sim collection instead of the real one — the
+          // banner + the rest of the app depend on having a profile to show.
+          let simProfile = false;
+          try {
+            const raw = sessionStorage.getItem('impersonation');
+            if (raw) simProfile = !!JSON.parse(raw)?.simulated;
+          } catch { /* ignore malformed flag */ }
+
           await new Promise(resolve => setTimeout(resolve, 100));
 
-          const profileResponse = await userOperations.getUser(fbUser.uid);
+          const profileResponse = await userOperations.getUser(fbUser.uid, simProfile);
           if (profileResponse.success && profileResponse.data && !profileResponse.data.role) {
             logger.warn('User document missing role, retrying...');
             await new Promise(resolve => setTimeout(resolve, 200));
           }
 
-          unsubscribeProfile = userOperations.onUserChange(fbUser.uid, (profile) => {
-            setUserProfile(profile);
-            setLoading(false);
-          });
+          unsubscribeProfile = userOperations.onUserChange(
+            fbUser.uid,
+            (profile) => {
+              setUserProfile(profile);
+              setLoading(false);
+            },
+            simProfile,
+          );
         } else {
           setUser(null);
           setUserProfile(null);

@@ -90,10 +90,15 @@ export const userOperations = {
     }
   },
 
-  // Get user by ID
-  async getUser(uid: string): Promise<ApiResponse<User>> {
+  // Get user by ID. When `simulated` is true (e.g. when a super-admin
+  // impersonates a seeded demo user that only exists at
+  // simulation/native/users/<uid>), reads from the sim collection instead.
+  async getUser(uid: string, simulated = false): Promise<ApiResponse<User>> {
     try {
-      const userDoc = await getDoc(doc(collections.users, uid));
+      const ref = simulated
+        ? doc(collection(db, 'simulation/native/users') as CollectionReference, uid)
+        : doc(collections.users, uid);
+      const userDoc = await getDoc(ref);
       if (userDoc.exists()) {
         return { success: true, data: { id: uid, ...userDoc.data() } as User };
       }
@@ -123,11 +128,16 @@ export const userOperations = {
     }
   },
 
-  // Listen to user changes
-  onUserChange(uid: string, callback: (user: User | null) => void) {
-    return onSnapshot(doc(collections.users, uid), (doc) => {
-      if (doc.exists()) {
-        callback({ id: uid, ...doc.data() } as User);
+  // Listen to user changes. `simulated` mirrors `getUser` — read from
+  // simulation/native/users/<uid> when the active session is impersonating
+  // a seeded demo user.
+  onUserChange(uid: string, callback: (user: User | null) => void, simulated = false) {
+    const ref = simulated
+      ? doc(collection(db, 'simulation/native/users') as CollectionReference, uid)
+      : doc(collections.users, uid);
+    return onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        callback({ id: uid, ...snap.data() } as User);
       } else {
         callback(null);
       }

@@ -15,7 +15,7 @@ import {
     Trash2,
     Calendar
 } from 'lucide-react';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { SkeletonList } from '../components/ui/Skeleton';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { getUrgencyColor as getUrgencyColorHelper, getRefillStatusIcon, getRefillStatusColor } from '../lib/status-helpers';
@@ -175,7 +175,11 @@ export const RefillsPage: React.FC = () => {
     };
 
     if (loading) {
-        return <LoadingSpinner />;
+        return (
+            <div className="space-y-6">
+                <SkeletonList rows={4} leading="icon" />
+            </div>
+        );
     }
 
     return (

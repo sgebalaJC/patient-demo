@@ -314,7 +314,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Check your spam or junk folder — emails from noreply@example.com sometimes end up there.',
+            'Check your spam or junk folder — emails from ${branding.fromEmail} sometimes end up there.',
             style: TextStyle(fontSize: 12, color: Colors.amber.shade700),
           ),
         ],

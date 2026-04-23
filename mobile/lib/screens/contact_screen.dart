@@ -9,32 +9,26 @@ class ContactScreen extends StatelessWidget {
 
   const ContactScreen({super.key, this.onBack});
 
-  // Pulled from branding config — edit mobile/lib/config/branding.dart to rebrand.
-  static final String _businessName = branding.practiceName;
-  static const String _street = '123 Main St';
-  static const String _cityStateZip = 'Anytown, CA 90000';
-  static final String _email = branding.supportEmail;
-  static const String _fax = '';
-  static const String _mapsQuery = '123+Main+St+Anytown+CA';
-
-  static const _hours = [
-    ('Monday \u2013 Friday', '9:00 AM \u2013 5:00 PM'),
-    ('Saturday \u2013 Sunday', 'Closed'),
-  ];
-
   Future<void> _openMaps() async {
     final url = Uri.parse(
-        'https://www.google.com/maps/search/?api=1&query=$_mapsQuery');
+        'https://www.google.com/maps/search/?api=1&query=${branding.address.mapsQuery}');
     if (await canLaunchUrl(url)) await launchUrl(url);
   }
 
   Future<void> _sendEmail() async {
-    final url = Uri.parse('mailto:$_email');
+    final url = Uri.parse('mailto:${branding.supportEmail}');
+    if (await canLaunchUrl(url)) await launchUrl(url);
+  }
+
+  Future<void> _callPhone(String phone) async {
+    final url = Uri.parse('tel:$phone');
     if (await canLaunchUrl(url)) await launchUrl(url);
   }
 
   @override
   Widget build(BuildContext context) {
+    final phone = branding.supportPhone;
+    final fax = branding.fax;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -50,48 +44,55 @@ class ContactScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // Business name
                   _ContactCard(
                     icon: Icons.business,
-                    title: _businessName,
+                    title: branding.practiceName,
                     subtitle: 'Healthcare Services',
                   ),
 
                   const SizedBox(height: 12),
 
-                  // Address
                   _ContactCard(
                     icon: Icons.location_on,
                     title: 'Address',
-                    subtitle: '$_street\n$_cityStateZip',
+                    subtitle:
+                        '${branding.address.street}\n${branding.address.city}, ${branding.address.state} ${branding.address.zip}',
                     actionLabel: 'Get Directions',
                     onAction: _openMaps,
                   ),
 
                   const SizedBox(height: 12),
 
-                  // Email
                   _ContactCard(
                     icon: Icons.email,
                     title: 'Email',
-                    subtitle: _email,
+                    subtitle: branding.supportEmail,
                     actionLabel: 'Send Email',
                     onAction: _sendEmail,
                   ),
 
-                  const SizedBox(height: 12),
+                  if (phone != null) ...[
+                    const SizedBox(height: 12),
+                    _ContactCard(
+                      icon: Icons.phone,
+                      title: 'Phone',
+                      subtitle: phone,
+                      actionLabel: 'Call',
+                      onAction: () => _callPhone(phone),
+                    ),
+                  ],
 
-                  // Fax (only shown if configured)
-                  if (_fax.isNotEmpty) ...[
+                  if (fax != null && fax.isNotEmpty) ...[
+                    const SizedBox(height: 12),
                     _ContactCard(
                       icon: Icons.print,
                       title: 'Fax',
-                      subtitle: _fax,
+                      subtitle: fax,
                     ),
-                    const SizedBox(height: 12),
                   ],
 
-                  // Hours
+                  const SizedBox(height: 12),
+
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -122,17 +123,17 @@ class ContactScreen extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        ..._hours.map((h) => Padding(
+                        ...branding.hours.map((h) => Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(h.$1,
+                                  Text(h.day,
                                       style: TextStyle(
                                           color: AppColors.textSecondary,
                                           fontSize: 14)),
-                                  Text(h.$2,
+                                  Text(h.time,
                                       style: TextStyle(
                                           color: AppColors.textPrimary,
                                           fontWeight: FontWeight.w500,

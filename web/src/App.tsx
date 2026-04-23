@@ -13,6 +13,7 @@ import { isAdminRole } from './lib/roles';
 // Eager-loaded (needed immediately)
 const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));
 const LegalPage = lazy(() => import('./pages/LegalPage').then(m => ({ default: m.LegalPage })));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
 
 // Lazy-loaded pages (split into separate chunks)
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
@@ -149,7 +150,7 @@ function App() {
             <Route path="faxes" element={<AdminFaxesHubPage />} />
             <Route path="sms" element={<AdminSmsPage />} />
           </Route>
-          {/* Add more protected routes here */}
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
       </Suspense>

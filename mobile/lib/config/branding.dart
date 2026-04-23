@@ -51,6 +51,45 @@ class BrandingPlatformVendor {
   });
 }
 
+class BrandingAddress {
+  /// Street line, e.g. "500 Main Street"
+  final String street;
+
+  /// City, e.g. "Palo Alto"
+  final String city;
+
+  /// State two-letter code, e.g. "CA"
+  final String state;
+
+  /// ZIP code
+  final String zip;
+
+  /// Single-line form for display, e.g. "500 Main Street, Palo Alto, CA 94301"
+  final String full;
+
+  /// Google Maps query fragment, e.g. "500+Main+Street+Palo+Alto+CA+94301"
+  final String mapsQuery;
+
+  const BrandingAddress({
+    required this.street,
+    required this.city,
+    required this.state,
+    required this.zip,
+    required this.full,
+    required this.mapsQuery,
+  });
+}
+
+class BrandingHours {
+  /// Day or day range, e.g. "Monday – Friday"
+  final String day;
+
+  /// Time range, e.g. "9:00 AM – 5:00 PM" or "Closed"
+  final String time;
+
+  const BrandingHours({required this.day, required this.time});
+}
+
 class BrandingLogos {
   /// Full logo for light backgrounds (assets/branding/logo.png)
   final String full;
@@ -87,8 +126,21 @@ class Branding {
   /// Public support email
   final String supportEmail;
 
+  /// Email sender address for transactional emails (verification, invites).
+  /// Shown to patients in "check your spam folder" copy.
+  final String fromEmail;
+
   /// Optional public support phone
   final String? supportPhone;
+
+  /// Optional fax number
+  final String? fax;
+
+  /// Physical office address
+  final BrandingAddress address;
+
+  /// Office hours list for the Contact screen
+  final List<BrandingHours> hours;
 
   /// Default appointment duration in minutes
   final int defaultAppointmentDuration;
@@ -115,7 +167,11 @@ class Branding {
     required this.legalEntity,
     required this.domain,
     required this.supportEmail,
+    required this.fromEmail,
     this.supportPhone,
+    this.fax,
+    required this.address,
+    required this.hours,
     required this.defaultAppointmentDuration,
     required this.colors,
     required this.logos,
@@ -132,7 +188,21 @@ const branding = Branding(
   legalEntity: 'Aurelia Primary Care, LLC',
   domain: 'patient-demo-project.web.app',
   supportEmail: 'support@aureliamd.com',
+  fromEmail: 'noreply@aureliamd.com',
   supportPhone: null,
+  fax: null,
+  address: BrandingAddress(
+    street: '500 Main Street',
+    city: 'Palo Alto',
+    state: 'CA',
+    zip: '94301',
+    full: '500 Main Street, Palo Alto, CA 94301',
+    mapsQuery: '500+Main+Street+Palo+Alto+CA+94301',
+  ),
+  hours: [
+    BrandingHours(day: 'Monday – Friday', time: '9:00 AM – 5:00 PM'),
+    BrandingHours(day: 'Saturday – Sunday', time: 'Closed'),
+  ],
   defaultAppointmentDuration: 20,
   colors: BrandingColors(
     primary: '#0F766E',

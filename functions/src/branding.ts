@@ -24,6 +24,11 @@ export const FUNCTIONS_BRANDING = {
   /** Patient portal URL for email links */
   portalUrl: 'https://demo.aureliamd.com',
   /**
+   * Email sender address for transactional emails (verification, invites,
+   * notifications). Mirror of BRANDING.fromEmail on the web side.
+   */
+  fromEmail: 'noreply@aureliamd.com',
+  /**
    * Additional origins allowed by the CORS allow-list. Include the App
    * Hosting default URL so the portal still works when accessed directly,
    * plus any staging or preview URLs.

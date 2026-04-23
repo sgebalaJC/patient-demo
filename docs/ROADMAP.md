@@ -8,6 +8,8 @@ Phased plan for expanding the patient portal from its current feature set. Each 
 
 **Feature flags:** user management, appointments, messages, prescriptions, documents, patient intake, admin tools, admin todos.
 
+**Known mobile gaps are tracked separately in [`MOBILE_DEFERRED.md`](MOBILE_DEFERRED.md).**
+
 ---
 
 ## Phase 1 — Polish & Complete

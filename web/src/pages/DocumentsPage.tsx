@@ -5,7 +5,7 @@ import { DocumentUpload } from '../components/documents/DocumentUpload';
 import logger from '../lib/logger';
 import { useAuth } from '../hooks/useAuth';
 import { isAdminRole } from '../lib/roles';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { SkeletonList } from '../components/ui/Skeleton';
 import { PageHeader } from '../components/ui/PageHeader';
 import { documentOperations } from '../lib/firestore';
 import { PatientDocument, DocumentType } from '../types';
@@ -130,7 +130,11 @@ export const DocumentsPage: React.FC = () => {
   }, {} as Record<DocumentType, PatientDocument[]>);
 
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="space-y-6">
+        <SkeletonList rows={4} leading="icon" />
+      </div>
+    );
   }
 
   return (

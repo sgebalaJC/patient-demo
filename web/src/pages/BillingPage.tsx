@@ -3,7 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { SkeletonList } from '../components/ui/Skeleton';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { Modal } from '../components/ui/Modal';
@@ -100,7 +100,7 @@ export const BillingPage: React.FC = () => {
     }
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return <div className="space-y-6"><SkeletonList rows={3} leading="icon" /></div>;
   if (!userProfile) return null;
 
   const activeSub =

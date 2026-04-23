@@ -74,6 +74,12 @@ export interface Branding {
   domain: string;
   /** Public support email, e.g. "support@example.com" */
   supportEmail: string;
+  /**
+   * Email sender address used for transactional emails (Firebase Auth
+   * verification, invites, notifications). Shown to patients in
+   * "check your spam folder" copy so they know what to search for.
+   */
+  fromEmail: string;
   /** Public phone number, undefined if none */
   supportPhone?: string;
   /** Fax number, undefined if none */
@@ -105,6 +111,7 @@ export const BRANDING: Branding = {
   legalEntity: 'Aurelia Primary Care',
   domain: 'patient-demo-project.web.app',
   supportEmail: 'support@aureliamd.com',
+  fromEmail: 'noreply@aureliamd.com',
   supportPhone: undefined,
   fax: undefined,
   smsSenderName: 'Aurelia',

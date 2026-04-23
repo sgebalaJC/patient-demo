@@ -5,6 +5,7 @@ import { Button } from './ui/Button';
 import { ErrorAlert } from './ui/ErrorAlert';
 import { Mail, CheckCircle2, RefreshCw } from 'lucide-react';
 import logger from '../lib/logger';
+import { BRANDING } from '../config/branding';
 
 export const EmailVerificationBanner: React.FC = () => {
   const { user } = useAuth();
@@ -93,7 +94,7 @@ export const EmailVerificationBanner: React.FC = () => {
           </h3>
           <p className="mt-1 text-sm text-amber-700">
             Please verify your email address to access all features. Check your inbox for a verification link.
-            If you don't see it, <strong>check your spam or junk folder</strong> — emails from <strong>noreply@example.com</strong> sometimes end up there.
+            If you don't see it, <strong>check your spam or junk folder</strong> — emails from <strong>{BRANDING.fromEmail}</strong> sometimes end up there.
           </p>
 
           {message && (

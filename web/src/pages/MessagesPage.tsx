@@ -14,7 +14,7 @@ import {
     Plus,
     MessageSquare,
 } from 'lucide-react';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { SkeletonList } from '../components/ui/Skeleton';
 import { PageHeader } from '../components/ui/PageHeader';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { SearchInput } from '../components/ui/SearchInput';
@@ -129,7 +129,11 @@ export const MessagesPage: React.FC = () => {
     };
 
     if (loading && allThreads.length === 0) {
-        return <LoadingSpinner />;
+        return (
+            <div className="space-y-6">
+                <SkeletonList rows={5} leading="icon" />
+            </div>
+        );
     }
 
     return (

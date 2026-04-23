@@ -107,24 +107,23 @@ export const DashboardPage: React.FC = () => {
         <div className="space-y-6">
             <OnboardingTutorial />
             <EmailVerificationBanner />
+            <IntakeFormBanner />
 
-            {/* Phone verification prompt — non-blocking */}
+            {/* Phone verification prompt — non-blocking, informational (not a warning) */}
             {userProfile && !userProfile.phoneVerified && userProfile.phoneNumber && (
                 <Link
                     to="/profile"
-                    className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg"
+                    className="flex items-center justify-between p-4 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors"
                 >
                     <div className="flex items-center space-x-3">
-                        <Phone className="h-5 w-5 text-amber-600" />
-                        <p className="text-sm text-amber-800">
+                        <Phone className="h-5 w-5 text-primary-600" />
+                        <p className="text-sm text-primary-800">
                             <span className="font-medium">Verify your phone number</span> to receive appointment reminders via SMS
                         </p>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                    <ArrowRight className="h-4 w-4 text-primary-600 flex-shrink-0" />
                 </Link>
             )}
-
-            <IntakeFormBanner />
 
             <div className={`grid gap-6 ${features.appointments && features.messages ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
                 {/* Upcoming Appointments */}

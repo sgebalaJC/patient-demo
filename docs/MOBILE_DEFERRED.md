@@ -82,17 +82,32 @@ pattern once the shape is agreed.
 
 ---
 
-## 5. `noreply@example.com` literal in mobile banner (XS)
+## 5. ~~`noreply@example.com` literal in mobile banner (XS)~~ — DONE
 
-**What:** `mobile/lib/screens/dashboard_screen.dart` `_buildEmailVerificationBanner`
-renders the literal string `noreply@example.com` in copy. "This looks broken"
-moment on first app open.
+Shipped in the branding-config round. `BRANDING.fromEmail` is in
+`mobile/lib/config/branding.dart`; dashboard banner reads from it.
 
-**Fix sketch:** replace with `BRANDING.fromEmail` (add to
-`mobile/lib/config/branding.dart` if not already there; mirror the web
-value).
+---
 
-**Why deferred:** bundle with item 2 (both are branding/config hygiene).
+## 6. Release prep (S–M, per-fork)
+
+**What:** before any real customer launches the mobile app, we need:
+
+- Branded app icon (replace the Flutter default) — `mobile/android/app/src/main/res/mipmap-*/ic_launcher.png` and `mobile/ios/Runner/Assets.xcassets/AppIcon.appiconset/`
+- Branded splash screen — `mobile/android/app/src/main/res/drawable*/launch_background.xml` + iOS `LaunchScreen.storyboard`. Today both show the default Flutter splash.
+- Android release signing config (keystore, `key.properties`, `signingConfigs` in `build.gradle.kts`)
+- iOS bundle identifier + signing — `mobile/ios/Runner.xcodeproj` under the owner's Apple Developer account
+- APNs keys registered in Firebase console (iOS foreground/background pushes)
+- Play Store + App Store listing assets (feature graphic, screenshots, privacy policy URL)
+- `package name` / `bundle id` per fork (already documented in CLAUDE.md deployment notes)
+
+**Fix sketch:** `flutter_launcher_icons` + `flutter_native_splash` packages
+automate the image generation; signing is one-time per fork using the
+official Android/iOS docs.
+
+**Why deferred:** nothing to do until the first fork commits to shipping
+mobile. Demo runs in the Flutter development shell; real customers will
+prep their own signing keys as part of launch.
 
 ---
 

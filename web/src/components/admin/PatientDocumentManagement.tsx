@@ -42,6 +42,41 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
   const [imageRotation, setImageRotation] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const { enabled: simulated } = useSimulationMode();
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfBlobLoading, setPdfBlobLoading] = useState(false);
+  const [pdfBlobError, setPdfBlobError] = useState<string | null>(null);
+
+  // For PDF previews, fetch the file and re-host it as a same-origin blob:
+  // URL. Chrome refuses to render cross-origin PDFs inline in <iframe>
+  // (storage.googleapis.com signed URLs trigger the dark "Open" prompt
+  // instead). data: URLs are also blocked. blob: URLs inherit the app's
+  // origin so the built-in PDF viewer renders them in place.
+  useEffect(() => {
+    let cancelled = false;
+    let revoke: string | null = null;
+    setPdfBlobUrl(null);
+    setPdfBlobError(null);
+    if (!previewDocument || previewDocument.fileType !== 'application/pdf') return;
+    setPdfBlobLoading(true);
+    (async () => {
+      try {
+        const r = await fetch(previewDocument.fileUrl);
+        if (!r.ok) throw new Error(`Fetch ${r.status}`);
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        revoke = url;
+        if (!cancelled) setPdfBlobUrl(url);
+      } catch (err: any) {
+        if (!cancelled) setPdfBlobError(err?.message || 'Failed to load PDF');
+      } finally {
+        if (!cancelled) setPdfBlobLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (revoke) URL.revokeObjectURL(revoke);
+    };
+  }, [previewDocument]);
 
   useEffect(() => {
     if (isOpen && patient) {
@@ -411,11 +446,25 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
                 />
               </div>
             ) : previewDocument.fileType === 'application/pdf' ? (
-              <iframe
-                src={`${previewDocument.fileUrl}#toolbar=1&navpanes=0`}
-                className="w-full h-full bg-white rounded-lg"
-                title={previewDocument.fileName || 'PDF Preview'}
-              />
+              pdfBlobLoading ? (
+                <div className="flex items-center justify-center w-full h-full text-white text-sm">
+                  Loading PDF…
+                </div>
+              ) : pdfBlobError ? (
+                <div className="flex flex-col items-center justify-center w-full h-full text-rose-200 text-sm gap-3">
+                  {pdfBlobError}
+                  <Button variant="secondary" onClick={() => handleDownload(previewDocument)}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download instead
+                  </Button>
+                </div>
+              ) : pdfBlobUrl ? (
+                <iframe
+                  src={`${pdfBlobUrl}#toolbar=1&navpanes=0`}
+                  className="w-full h-full bg-white rounded-lg"
+                  title={previewDocument.fileName || 'PDF Preview'}
+                />
+              ) : null
             ) : (
               <div className="text-center text-white">
                 <File className="h-24 w-24 mx-auto mb-4 opacity-50" />

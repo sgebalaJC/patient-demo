@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { AgentChat } from '../components/agent/AgentChat';
 import { AgentSkills } from '../components/agent/AgentSkills';
-import { AgentChannels } from '../components/agent/AgentChannels';
 import { AgentBackups } from '../components/agent/AgentBackups';
 import { AgentHealth } from '../components/agent/AgentHealth';
 import { EhrSetup } from '../components/agent/EhrSetup';
+import { GoogleWorkspaceSetup } from '../components/agent/GoogleWorkspaceSetup';
+import { SlackSetup } from '../components/agent/SlackSetup';
 import { EHR_PROVIDERS } from '../lib/integrations/registry';
 import { sidecar } from '../lib/sidecar';
+import { readSlackStatus, type SlackChannelStatus } from '../lib/slack';
 import { useAuth } from '../hooks/useAuth';
 import { isSuperAdminEmail } from '../lib/roles';
 import {
@@ -17,40 +19,91 @@ import {
   Star,
   Archive,
   Activity,
-  Radio,
   Bot,
   Plug,
 } from 'lucide-react';
 
-type Tab = 'chat' | 'skills' | 'channels' | 'integrations' | 'backups' | 'health';
+type Tab = 'chat' | 'skills' | 'integrations' | 'backups' | 'health';
 
 const ALL_NAV_ITEMS: { key: Tab; label: string; icon: React.ElementType; superAdminOnly?: boolean }[] = [
   { key: 'chat', label: 'Chat', icon: MessageSquare },
   { key: 'skills', label: 'Skills', icon: Star, superAdminOnly: true },
-  { key: 'channels', label: 'Channels', icon: Radio },
   { key: 'integrations', label: 'Integrations', icon: Plug, superAdminOnly: true },
   { key: 'backups', label: 'Backups', icon: Archive, superAdminOnly: true },
   { key: 'health', label: 'Health', icon: Activity },
 ];
 
-const IntegrationsPanel: React.FC = () => (
-  <div className="flex-1 overflow-y-auto p-6">
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-secondary-900">EHR Integrations</h2>
-        <p className="text-sm text-secondary-500 mt-1">
-          Platform-level connections. Super-admin only — credentials are stored encrypted at rest and never
-          exposed to practice admins.
-        </p>
-      </div>
-      <div className="space-y-3">
-        {EHR_PROVIDERS.map((p) => (
-          <EhrSetup key={p.id} provider={p} />
-        ))}
+/**
+ * Two-group integrations panel:
+ *  - Common — project-wide services (Google Workspace, Slack, ...) used
+ *    across multiple features. Top of the list.
+ *  - EHR — practice-specific electronic health records. Bottom, under
+ *    their own header + separator.
+ *
+ * Slack used to live under a separate "Channels" tab. Merging it here
+ * keeps one inventory of everything that's installed.
+ */
+const IntegrationsPanel: React.FC = () => {
+  const [slack, setSlack] = useState<SlackChannelStatus>({ enabled: false });
+
+  const loadSlackStatus = useCallback(async () => {
+    try {
+      const config = await sidecar.getConfig();
+      setSlack(await readSlackStatus(config));
+    } catch {
+      // Sidecar might be down — keep whatever we last knew.
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSlackStatus();
+  }, [loadSlackStatus]);
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="space-y-8 max-w-3xl">
+        {/* Common integrations */}
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-secondary-900">Common Integrations</h2>
+            <p className="text-sm text-secondary-500 mt-1">
+              Project-wide services used across multiple features. Credentials are stored
+              encrypted at rest and never exposed to practice admins.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <GoogleWorkspaceSetup />
+            <SlackSetup
+              agentName="Aurelia"
+              initialConnected={slack.enabled}
+              initialWorkspaceName={slack.workspace?.name}
+              onStateChange={loadSlackStatus}
+            />
+          </div>
+        </section>
+
+        {/* Separator between the two groups. */}
+        <hr className="border-secondary-200" />
+
+        {/* EHR integrations */}
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold text-secondary-900">EHR Integrations</h2>
+            <p className="text-sm text-secondary-500 mt-1">
+              Per-practice electronic health record connections. Enable one per practice;
+              toggling on activates the matching agent skill.
+            </p>
+          </div>
+          <div className="space-y-3">
+            {EHR_PROVIDERS.map((p) => (
+              <EhrSetup key={p.id} provider={p} />
+            ))}
+          </div>
+        </section>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const AgentPage: React.FC = () => {
   const { user } = useAuth();
@@ -129,8 +182,6 @@ export const AgentPage: React.FC = () => {
         return <AgentChat />;
       case 'skills':
         return isSuperAdmin ? <AgentSkills /> : <AgentChat />;
-      case 'channels':
-        return <AgentChannels />;
       case 'integrations':
         return isSuperAdmin ? <IntegrationsPanel /> : <AgentChat />;
       case 'backups':

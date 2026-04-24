@@ -4,19 +4,21 @@
  * is true, otherwise POSTs to SignalWire's Twilio-compatible Messages.json
  * endpoint under the LaML namespace.
  *
- * Every function that sends SMS must include `SMS_SECRETS` in its
- * `secrets: [...]` option so Firebase binds the secret values at runtime.
+ * Credentials come from `integrations/signalwire` + Secret Manager (admin-
+ * managed); env-var `defineSecret()`s remain bound for backward compatibility
+ * so any still-connected fork that hasn't moved creds into the Integrations
+ * panel keeps working.
  */
 
 import {defineSecret} from "firebase-functions/params";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
 import {signalwireProjectId, signalwireAuthToken} from "./signalwire-helpers.js";
+import {loadSignalwireConfig} from "./signalwire-config.js";
 
 // Space URL (e.g. `example.signalwire.com`) and the outbound SMS sender
-// number are SMS-specific. The fax sender number already lives on
-// `integrations/signalwire.faxNumber`; SMS uses its own secret so the two
-// can be different DIDs.
+// number can still come from env/Secret Manager on un-migrated forks.
+// New forks configure both via the admin Integrations panel.
 export const SIGNALWIRE_SPACE_URL = defineSecret("SIGNALWIRE_SPACE_URL");
 export const SIGNALWIRE_SMS_FROM = defineSecret("SIGNALWIRE_SMS_FROM");
 
@@ -27,22 +29,6 @@ export const SMS_SECRETS = [
   SIGNALWIRE_SPACE_URL,
   SIGNALWIRE_SMS_FROM,
 ] as const;
-
-interface SmsEnv {
-  projectId: string;
-  authToken: string;
-  spaceUrl: string;
-  fromNumber: string;
-}
-
-function readEnv(): SmsEnv | null {
-  const projectId = process.env.SIGNALWIRE_PROJECT_ID || "";
-  const authToken = process.env.SIGNALWIRE_AUTH_TOKEN || "";
-  const spaceUrl = (process.env.SIGNALWIRE_SPACE_URL || "").replace(/\/+$/, "");
-  const fromNumber = process.env.SIGNALWIRE_SMS_FROM || "";
-  if (!projectId || !authToken || !spaceUrl || !fromNumber) return null;
-  return {projectId, authToken, spaceUrl, fromNumber};
-}
 
 async function isSimulationOn(): Promise<boolean> {
   const snap = await admin.firestore().doc("system/settings").get();
@@ -82,20 +68,20 @@ export async function sendSms(opts: SendSmsOptions): Promise<SendSmsResult> {
     return {sent: true, sim: true};
   }
 
-  const env = readEnv();
-  if (!env) {
+  const cfg = await loadSignalwireConfig();
+  if (!cfg || !cfg.smsFrom) {
     logger.warn(`[${opts.context}] SignalWire SMS not configured — SMS not sent`);
     return {sent: false, sim: false, reason: "signalwire-not-configured"};
   }
 
   const form = new URLSearchParams({
-    From: env.fromNumber,
+    From: cfg.smsFrom,
     To: opts.to,
     Body: opts.body,
   });
-  const basic = Buffer.from(`${env.projectId}:${env.authToken}`).toString("base64");
+  const basic = Buffer.from(`${cfg.projectId}:${cfg.authToken}`).toString("base64");
   const res = await fetch(
-    `https://${env.spaceUrl}/api/laml/2010-04-01/Accounts/${env.projectId}/Messages.json`,
+    `https://${cfg.spaceUrl}/api/laml/2010-04-01/Accounts/${cfg.projectId}/Messages.json`,
     {
       method: "POST",
       headers: {

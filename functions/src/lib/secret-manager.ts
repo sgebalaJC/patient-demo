@@ -155,3 +155,59 @@ export async function deleteGoogleServiceAccountKey(): Promise<void> {
   }
   cache.delete(GOOGLE_SA_KEY_NAME);
 }
+
+// ── SignalWire auth token ─────────────────────────────────────────────
+//
+// LaML API auth token. Long-lived (rotated manually in the SignalWire
+// dashboard), same Secret Manager rationale as the Google SA key.
+
+const SIGNALWIRE_AUTH_TOKEN_NAME = "signalwire_auth_token";
+
+export async function getSignalwireAuthToken(): Promise<string | undefined> {
+  const now = Date.now();
+  const cached = cache.get(SIGNALWIRE_AUTH_TOKEN_NAME);
+  if (cached && cached.expiresAt > now) return cached.value;
+  try {
+    const [ver] = await client.accessSecretVersion({
+      name: `projects/${projectId()}/secrets/${SIGNALWIRE_AUTH_TOKEN_NAME}/versions/latest`,
+    });
+    const value = ver.payload?.data?.toString("utf8") ?? "";
+    cache.set(SIGNALWIRE_AUTH_TOKEN_NAME, { value, expiresAt: now + CACHE_TTL_MS });
+    return value;
+  } catch (err: any) {
+    const code = (err && (err.code || err.status)) as number | string | undefined;
+    if (code === 5 || code === "NOT_FOUND") return undefined;
+    throw err;
+  }
+}
+
+export async function setSignalwireAuthToken(value: string): Promise<void> {
+  const parent = `projects/${projectId()}`;
+  try {
+    await client.createSecret({
+      parent,
+      secretId: SIGNALWIRE_AUTH_TOKEN_NAME,
+      secret: { replication: { automatic: {} } },
+    });
+  } catch (err: any) {
+    const code = (err && (err.code || err.status)) as number | string | undefined;
+    if (code !== 6 && code !== "ALREADY_EXISTS") throw err;
+  }
+  await client.addSecretVersion({
+    parent: `${parent}/secrets/${SIGNALWIRE_AUTH_TOKEN_NAME}`,
+    payload: { data: Buffer.from(value, "utf8") },
+  });
+  cache.delete(SIGNALWIRE_AUTH_TOKEN_NAME);
+}
+
+export async function deleteSignalwireAuthToken(): Promise<void> {
+  try {
+    await client.deleteSecret({
+      name: `projects/${projectId()}/secrets/${SIGNALWIRE_AUTH_TOKEN_NAME}`,
+    });
+  } catch (err: any) {
+    const code = (err && (err.code || err.status)) as number | string | undefined;
+    if (code !== 5 && code !== "NOT_FOUND") throw err;
+  }
+  cache.delete(SIGNALWIRE_AUTH_TOKEN_NAME);
+}

@@ -2300,7 +2300,10 @@ import {
 import {
   setGoogleServiceAccountKey,
   deleteGoogleServiceAccountKey,
+  setSignalwireAuthToken,
+  deleteSignalwireAuthToken,
 } from "./lib/secret-manager.js";
+import {invalidateSignalwireConfig} from "./lib/signalwire-config.js";
 import {
   listInboxMessages,
   getFullMessage,
@@ -2569,6 +2572,81 @@ export const disconnectGoogleWorkspace = onCall({}, async (request) => {
     await deleteGoogleServiceAccountKey();
   }
   await ref.delete();
+  return {success: true};
+});
+
+/**
+ * saveSignalwireCredentials — Admin-only callable.
+ *
+ * Writes non-secret routing fields to `integrations/signalwire` and the
+ * LaML auth token (if provided) to Secret Manager. Empty `authToken`
+ * means "keep existing" so admins can rotate other fields without
+ * re-pasting the token.
+ */
+export const saveSignalwireCredentials = onCall({}, async (request) => {
+  const authContext = await requireAdmin(request);
+
+  const projectId = ((request.data?.projectId as string) || '').trim();
+  const authToken = ((request.data?.authToken as string) || '').trim();
+  const spaceUrl = ((request.data?.spaceUrl as string) || '').trim().replace(/\/+$/, '');
+  const smsFrom = ((request.data?.smsFrom as string) || '').trim();
+  const faxNumber = ((request.data?.faxNumber as string) || '').trim();
+  const faxLabel = ((request.data?.faxLabel as string) || '').trim();
+  const faxFromEmail = ((request.data?.faxFromEmail as string) || '').trim();
+  const faxCcEmail = ((request.data?.faxCcEmail as string) || '').trim();
+
+  if (!projectId) throw new HttpsError('invalid-argument', 'Project ID is required');
+  if (!spaceUrl) throw new HttpsError('invalid-argument', 'Space URL is required');
+  if (!/^[a-z0-9.-]+\.signalwire\.com$/i.test(spaceUrl)) {
+    throw new HttpsError('invalid-argument', 'Space URL must look like <your-space>.signalwire.com');
+  }
+  if (faxFromEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(faxFromEmail)) {
+    throw new HttpsError('invalid-argument', 'Fax from-email is not a valid email address');
+  }
+  if (faxCcEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(faxCcEmail)) {
+    throw new HttpsError('invalid-argument', 'Fax CC email is not a valid email address');
+  }
+
+  if (authToken) {
+    await setSignalwireAuthToken(authToken);
+  }
+
+  const doc: Record<string, unknown> = {
+    provider: 'signalwire',
+    status: 'active',
+    projectId,
+    spaceUrl,
+    smsFrom: smsFrom || null,
+    faxNumber: faxNumber || null,
+    faxLabel: faxLabel || null,
+    faxFromEmail: faxFromEmail || null,
+    faxCcEmail: faxCcEmail || null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    connectedBy: authContext.uid,
+  };
+  const ref = db.collection('integrations').doc('signalwire');
+  const existing = await ref.get();
+  if (!existing.exists) {
+    doc.connectedAt = admin.firestore.FieldValue.serverTimestamp();
+  }
+  await ref.set(doc, {merge: true});
+  invalidateSignalwireConfig();
+
+  return {success: true};
+});
+
+/**
+ * disconnectSignalwire — Admin-only callable. Clears the integration doc
+ * and removes the auth token from Secret Manager so a reconnect starts
+ * clean. Fax number / SMS senders go with the doc.
+ */
+export const disconnectSignalwire = onCall({}, async (request) => {
+  await requireAdmin(request);
+
+  const ref = db.collection('integrations').doc('signalwire');
+  await deleteSignalwireAuthToken().catch(() => {});
+  await ref.delete().catch(() => {});
+  invalidateSignalwireConfig();
   return {success: true};
 });
 

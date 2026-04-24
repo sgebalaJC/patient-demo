@@ -9,14 +9,20 @@ import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
 import {google} from "googleapis";
 import {requireFaxAdmin} from "./lib/signalwire-helpers.js";
+import {loadSignalwireConfig} from "./lib/signalwire-config.js";
 
 const googleSaKey = defineSecret("GOOGLE_SA_KEY");
 
 // Outbound fax-forward email uses the practice's Google Workspace mailbox
-// via SA domain-wide delegation. Both env vars are set per fork (functions
-// config). If FAX_CC_EMAIL is unset, CC is skipped.
-const FAX_FROM_EMAIL = process.env.FAX_FROM_EMAIL || "";
-const FAX_CC_EMAIL = process.env.FAX_CC_EMAIL || "";
+// via SA domain-wide delegation. Resolved from the SignalWire integration
+// doc (admin-managed) with env-var fallback for backward compatibility.
+async function loadFaxEmails(): Promise<{from: string; cc: string}> {
+  const cfg = await loadSignalwireConfig();
+  return {
+    from: cfg?.faxFromEmail || "",
+    cc: cfg?.faxCcEmail || "",
+  };
+}
 
 let _db: admin.firestore.Firestore;
 function db() {
@@ -57,14 +63,15 @@ async function sendFaxForwardEmail(args: {
 }): Promise<string> {
   const saKeyJson = process.env.GOOGLE_SA_KEY;
   if (!saKeyJson) throw new Error("GOOGLE_SA_KEY not configured");
-  if (!FAX_FROM_EMAIL) throw new Error("FAX_FROM_EMAIL env var not set");
+  const {from: faxFromEmail} = await loadFaxEmails();
+  if (!faxFromEmail) throw new Error("Fax from-email not configured on integrations/signalwire");
   const key = JSON.parse(saKeyJson);
 
   const jwtClient = new google.auth.JWT({
     email: key.client_email,
     key: key.private_key,
     scopes: ["https://www.googleapis.com/auth/gmail.send"],
-    subject: FAX_FROM_EMAIL,
+    subject: faxFromEmail,
   });
   await jwtClient.authorize();
   const gmail = google.gmail({version: "v1", auth: jwtClient});
@@ -78,7 +85,7 @@ async function sendFaxForwardEmail(args: {
 
   if (!hasAttachments) {
     mime = [
-      `From: ${FAX_FROM_EMAIL}`,
+      `From: ${faxFromEmail}`,
       `To: ${safeTo}`,
       ccLine.trim(),
       `Subject: ${safeSubject}`,
@@ -91,7 +98,7 @@ async function sendFaxForwardEmail(args: {
     const boundary = `fax_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
     const parts: string[] = [];
     parts.push([
-      `From: ${FAX_FROM_EMAIL}`,
+      `From: ${faxFromEmail}`,
       `To: ${safeTo}`,
       ccLine.trim(),
       `Subject: ${safeSubject}`,
@@ -257,9 +264,10 @@ export const sendFaxEmail = onCall({
   }
 
   logger.info("[fax] Sending email", {faxSid, by: uid, attached: attachments.length});
+  const {cc: faxCcEmail} = await loadFaxEmails();
   const messageId = await sendFaxForwardEmail({
     to: draft.to,
-    cc: draft.cc?.length ? draft.cc : FAX_CC_EMAIL ? [FAX_CC_EMAIL] : [],
+    cc: draft.cc?.length ? draft.cc : faxCcEmail ? [faxCcEmail] : [],
     subject: draft.subject,
     body: draft.body,
     attachments,

@@ -7,6 +7,7 @@ import { AgentBackups } from '../components/agent/AgentBackups';
 import { AgentHealth } from '../components/agent/AgentHealth';
 import { EhrSetup } from '../components/agent/EhrSetup';
 import { GoogleWorkspaceSetup } from '../components/agent/GoogleWorkspaceSetup';
+import { SignalWireSetup } from '../components/agent/SignalWireSetup';
 import { SlackSetup } from '../components/agent/SlackSetup';
 import { EHR_PROVIDERS } from '../lib/integrations/registry';
 import { sidecar } from '../lib/sidecar';
@@ -73,6 +74,7 @@ const IntegrationsPanel: React.FC = () => {
           </div>
           <div className="space-y-3">
             <GoogleWorkspaceSetup />
+            <SignalWireSetup />
             <SlackSetup
               agentName="Aurelia"
               initialConnected={slack.enabled}

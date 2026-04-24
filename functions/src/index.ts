@@ -2328,6 +2328,8 @@ import {
   getFileContent,
   createFile,
 } from "./google-drive-workspace.js";
+import * as sheets from "./google-sheets-workspace.js";
+import * as docs from "./google-docs-workspace.js";
 
 /**
  * googleWorkspaceAuthorize — Admin-only callable.
@@ -2735,8 +2737,14 @@ export const googleWorkspaceProxy = onRequest({
     case 'drive':
       res.json(await handleDriveAction(accessToken, action, body));
       break;
+    case 'sheets':
+      res.json(await handleSheetsAction(accessToken, action, body));
+      break;
+    case 'docs':
+      res.json(await handleDocsAction(accessToken, action, body));
+      break;
     default:
-      res.status(400).json({error: 'Invalid service. Use: gmail, calendar, drive'});
+      res.status(400).json({error: 'Invalid service. Use: gmail, calendar, drive, sheets, docs'});
     }
   } catch (error: any) {
     logger.error('[gws-proxy] error:', error.message);
@@ -2856,6 +2864,116 @@ async function handleDriveAction(
   }
   default:
     throw new HttpsError('invalid-argument', 'Invalid Drive action. Use: list, get, read, create');
+  }
+}
+
+async function handleSheetsAction(
+  accessToken: string,
+  action: string,
+  body: Record<string, unknown>,
+) {
+  const spreadsheetId = body.spreadsheetId as string | undefined;
+  if (action !== 'metadata' && !spreadsheetId) {
+    if (!spreadsheetId) throw new HttpsError('invalid-argument', 'spreadsheetId required');
+  }
+  switch (action) {
+  case 'metadata': {
+    if (!spreadsheetId) throw new HttpsError('invalid-argument', 'spreadsheetId required');
+    return await sheets.getMetadata(accessToken, spreadsheetId);
+  }
+  case 'get': {
+    const range = body.range as string;
+    if (!range) throw new HttpsError('invalid-argument', 'range required');
+    return {values: await sheets.getValues(accessToken, spreadsheetId!, range)};
+  }
+  case 'setValues': {
+    const range = body.range as string;
+    const values = body.values as string[][] | undefined;
+    if (!range) throw new HttpsError('invalid-argument', 'range required');
+    if (!Array.isArray(values)) throw new HttpsError('invalid-argument', 'values (array of arrays) required');
+    return await sheets.setValues(accessToken, spreadsheetId!, range, values);
+  }
+  case 'append': {
+    const range = (body.range as string) || 'Sheet1!A1';
+    const values = body.values as string[][] | undefined;
+    if (!Array.isArray(values)) throw new HttpsError('invalid-argument', 'values (array of arrays) required');
+    return await sheets.appendValues(accessToken, spreadsheetId!, range, values);
+  }
+  case 'clear': {
+    const range = body.range as string;
+    if (!range) throw new HttpsError('invalid-argument', 'range required');
+    await sheets.clearValues(accessToken, spreadsheetId!, range);
+    return {cleared: true};
+  }
+  case 'replace': {
+    const values = body.values as string[][] | undefined;
+    const tab = (body.tabTitle as string) || 'Sheet1';
+    if (!Array.isArray(values)) throw new HttpsError('invalid-argument', 'values (array of arrays) required');
+    return await sheets.replaceSheet(accessToken, spreadsheetId!, tab, values);
+  }
+  case 'addSheet': {
+    const title = body.title as string;
+    if (!title) throw new HttpsError('invalid-argument', 'title required');
+    return {sheetId: await sheets.addSheet(accessToken, spreadsheetId!, title)};
+  }
+  case 'deleteSheet': {
+    const title = body.title as string;
+    if (!title) throw new HttpsError('invalid-argument', 'title required');
+    await sheets.deleteSheetByTitle(accessToken, spreadsheetId!, title);
+    return {deleted: true};
+  }
+  case 'renameSheet': {
+    const oldTitle = body.oldTitle as string;
+    const newTitle = body.newTitle as string;
+    if (!oldTitle || !newTitle) throw new HttpsError('invalid-argument', 'oldTitle and newTitle required');
+    await sheets.renameSheet(accessToken, spreadsheetId!, oldTitle, newTitle);
+    return {renamed: true};
+  }
+  case 'autoResize': {
+    const tab = (body.sheetTitle as string) || 'Sheet1';
+    const startIndex = (body.startIndex as number) ?? 0;
+    const endIndex = body.endIndex as number | undefined;
+    await sheets.autoResize(accessToken, spreadsheetId!, tab, startIndex, endIndex);
+    return {resized: true};
+  }
+  case 'batchUpdate': {
+    const requests = body.requests as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(requests)) throw new HttpsError('invalid-argument', 'requests (array) required');
+    return await sheets.batchUpdate(accessToken, spreadsheetId!, requests);
+  }
+  default:
+    throw new HttpsError(
+      'invalid-argument',
+      'Invalid Sheets action. Use: metadata, get, setValues, append, clear, replace, addSheet, deleteSheet, renameSheet, autoResize, batchUpdate',
+    );
+  }
+}
+
+async function handleDocsAction(
+  accessToken: string,
+  action: string,
+  body: Record<string, unknown>,
+) {
+  const documentId = body.documentId as string | undefined;
+  if (!documentId) throw new HttpsError('invalid-argument', 'documentId required');
+  switch (action) {
+  case 'read': {
+    return await docs.readDoc(accessToken, documentId);
+  }
+  case 'insertText': {
+    const text = body.text as string;
+    const index = (body.index as number) ?? 1;
+    if (typeof text !== 'string') throw new HttpsError('invalid-argument', 'text required');
+    await docs.insertText(accessToken, documentId, text, index);
+    return {inserted: true};
+  }
+  case 'batchUpdate': {
+    const requests = body.requests as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(requests)) throw new HttpsError('invalid-argument', 'requests (array) required');
+    return await docs.batchUpdate(accessToken, documentId, requests);
+  }
+  default:
+    throw new HttpsError('invalid-argument', 'Invalid Docs action. Use: read, insertText, batchUpdate');
   }
 }
 

@@ -1,6 +1,6 @@
 ---
 name: google-workspace
-description: Gmail, Calendar, and Drive access via the practice's connected Google Workspace account — read inbox, manage events, read/write Drive files
+description: Gmail, Calendar, Drive, Sheets, and Docs access via the practice's connected Google Workspace account
 user-invocable: true
 ---
 
@@ -20,7 +20,7 @@ All actions hit one endpoint with `{ service, action, ...args }`:
 curl -sf -X POST "{{GOOGLE_WORKSPACE_PROXY_URL}}" \
   -H "X-Api-Key: {{GOOGLE_WORKSPACE_API_KEY}}" \
   -H "Content-Type: application/json" \
-  -d '{ "service": "<gmail|calendar|drive>", "action": "<action>", ... }'
+  -d '{ "service": "<gmail|calendar|drive|sheets|docs>", "action": "<action>", ... }'
 ```
 
 Calendar actions default to the `calendarId` configured on the integration doc — pass an explicit `calendarId` only when you need to touch a different calendar that the connected account can access.
@@ -106,6 +106,140 @@ Extract file IDs from URLs: `https://docs.google.com/document/d/<fileId>/edit`, 
 ```
 
 For a Google Doc: `"mimeType": "application/vnd.google-apps.document"`. For a Sheet: `"application/vnd.google-apps.spreadsheet"`.
+
+## Google Sheets
+
+Extract the spreadsheet ID from the URL: `https://docs.google.com/spreadsheets/d/<spreadsheetId>/edit`.
+
+### Get sheet metadata
+
+Before any structural operation, get the sheet's metadata to understand tabs, row/column counts:
+
+```bash
+-d '{ "service": "sheets", "action": "metadata", "spreadsheetId": "<id>" }'
+```
+
+Returns sheet tab names, IDs, grid dimensions, and frozen rows/columns.
+
+### Read values
+
+```bash
+# Read a range
+-d '{ "service": "sheets", "action": "get", "spreadsheetId": "<id>", "range": "Sheet1!A1:D10" }'
+
+# Read entire sheet
+-d '{ "service": "sheets", "action": "get", "spreadsheetId": "<id>", "range": "Sheet1" }'
+```
+
+### Replace entire tab content
+
+Clears the tab first, then writes. Use when you need to rewrite the whole sheet.
+
+```bash
+-d '{ "service": "sheets", "action": "replace", "spreadsheetId": "<id>", "tabTitle": "Sheet1", "values": [["Goal","Priority","Owner"],["Launch","High","Stan"]] }'
+```
+
+### Write values to a specific range
+
+```bash
+-d '{ "service": "sheets", "action": "setValues", "spreadsheetId": "<id>", "range": "Sheet1!A1", "values": [["H1","H2"],["V1","V2"]] }'
+```
+
+### Append rows after existing data
+
+```bash
+-d '{ "service": "sheets", "action": "append", "spreadsheetId": "<id>", "range": "Sheet1!A1", "values": [["New row 1","data"],["New row 2","data"]] }'
+```
+
+`range` targets a specific tab — Google appends after the last row of the detected table. Defaults to `Sheet1!A1` when omitted; that 400s if the first tab is named differently.
+
+### Clear
+
+```bash
+-d '{ "service": "sheets", "action": "clear", "spreadsheetId": "<id>", "range": "Sheet1" }'
+```
+
+### Data format rule
+
+**Always use the `values` field (array of arrays).** This is explicit and unambiguous.
+
+```json
+"values": [
+  ["Header1", "Header2", "Header3"],
+  ["Row1Val1", "Row1Val2", "Row1Val3"]
+]
+```
+
+Rules:
+- Every row must have the same column count as the header row.
+- Use empty string `""` for blank cells, not `null` or missing values.
+- **Never pass a CSV / TSV string** — the Sheets endpoint only accepts `values`, and a string would misparse silently.
+
+### Choosing the right write action
+
+| Scenario | Action | Why |
+|---|---|---|
+| Populate a blank sheet | `sheets.replace` | Sets headers + data in one call |
+| Rewrite an existing sheet | `sheets.get` then `sheets.replace` | Read first to understand what you're replacing |
+| Add rows to the bottom | `sheets.append` | Appends after existing data |
+| Update specific cells | `sheets.setValues` with exact range | Targeted, doesn't touch other cells |
+| Update a single column | `sheets.get`, modify in memory, `sheets.setValues` | Read full data, change column, write back |
+
+### What NOT to do with Sheets
+
+- **Never use `drive.update` for spreadsheet edits** — use `sheets.*` actions so column structure stays explicit.
+- **Never `setValues` to "add a column"** — read the full sheet, add the column to your data, then `replace` the whole tab.
+- **Never use a live production spreadsheet as a write test.** Use a disposable sheet or a dedicated test tab.
+
+### Sheet tab management
+
+```bash
+-d '{ "service": "sheets", "action": "addSheet", "spreadsheetId": "<id>", "title": "Q2 Data" }'
+-d '{ "service": "sheets", "action": "deleteSheet", "spreadsheetId": "<id>", "title": "Old Tab" }'
+-d '{ "service": "sheets", "action": "renameSheet", "spreadsheetId": "<id>", "oldTitle": "Sheet1", "newTitle": "Summary" }'
+```
+
+### Auto-resize columns
+
+```bash
+-d '{ "service": "sheets", "action": "autoResize", "spreadsheetId": "<id>" }'
+```
+
+Optional: `sheetTitle` (default "Sheet1"), `startIndex`, `endIndex` (0-based column range).
+
+### Batch formatting (batchUpdate)
+
+For formatting, merges, conditional rules — pass Google Sheets API request objects directly:
+
+```bash
+-d '{ "service": "sheets", "action": "batchUpdate", "spreadsheetId": "<id>", "requests": [{ "repeatCell": { "range": { "sheetId": 0, "startRowIndex": 0, "endRowIndex": 1 }, "cell": { "userEnteredFormat": { "textFormat": { "bold": true } } }, "fields": "userEnteredFormat.textFormat.bold" } }] }'
+```
+
+## Google Docs
+
+Extract the document ID from the URL: `https://docs.google.com/document/d/<documentId>/edit`.
+
+### Read a document
+
+```bash
+-d '{ "service": "docs", "action": "read", "documentId": "<doc_id>" }'
+```
+
+Returns the structured document JSON (body, paragraphs, tables, …). For "just the text," prefer `drive.read` — it's cheaper and returns an exported text body.
+
+### Insert text
+
+```bash
+-d '{ "service": "docs", "action": "insertText", "documentId": "<doc_id>", "text": "Hello world\n", "index": 1 }'
+```
+
+`index` defaults to 1 (start of document). Use `drive.update` if you need to replace the entire body — `docs.insertText` is for targeted inserts.
+
+### Raw batchUpdate
+
+```bash
+-d '{ "service": "docs", "action": "batchUpdate", "documentId": "<doc_id>", "requests": [{ "deleteContentRange": { "range": { "startIndex": 1, "endIndex": 10 } } }] }'
+```
 
 ## Read-before-write rule
 

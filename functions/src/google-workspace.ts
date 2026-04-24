@@ -44,6 +44,12 @@ export const SERVICE_SCOPES: Record<string, string[]> = {
   drive: [
     "https://www.googleapis.com/auth/drive.readonly",
     "https://www.googleapis.com/auth/drive.file",
+    // Sheets + Docs share the Drive toggle in the admin UI — enabling
+    // Drive grants the native Sheets/Docs APIs too so the agent can do
+    // structured reads/writes (sheets.batchUpdate, docs.insertText, …)
+    // not just text export via drive.read.
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/documents",
   ],
 };
 

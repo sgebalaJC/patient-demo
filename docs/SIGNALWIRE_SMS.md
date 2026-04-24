@@ -2,6 +2,14 @@
 
 All outbound patient/admin SMS and inbound reply capture goes through SignalWire's LaML namespace (Twilio-API-compatible endpoints). The code paths are documented inline in CLAUDE.md; this file covers the **operational setup** that must be done on the SignalWire side before real SMS will flow.
 
+## Per-fork posture
+
+**Demo fork (this repo, `patient-demo-project`):** SignalWire for SMS **and** fax — one vendor, one bill, one set of credentials.
+
+**`patient-showmd` fork:** stays on **Twilio** for SMS; SignalWire only for fax. Intentional — Twilio is working fine there and switching would cost a number port, a fresh A2P 10DLC brand/campaign filing, and a code port, with no user-visible win. Do not cherry-pick the demo's `feat(sms): drop Twilio, route all SMS through SignalWire LaML` commit into showmd. Revisit only if Twilio behavior changes or the customer asks to consolidate.
+
+The rest of this doc applies to the **demo fork** unless otherwise noted.
+
 ## Wiring — what the code expects
 
 | Secret | Where | Example | Purpose |

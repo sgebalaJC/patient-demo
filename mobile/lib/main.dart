@@ -17,7 +17,9 @@ import 'screens/messages/messages_screen.dart';
 import 'screens/refills/refills_screen.dart';
 import 'screens/profile_screen.dart';
 import 'widgets/admin_blocked_modal.dart';
+import 'widgets/email_verification_banner.dart';
 import 'widgets/inactive_account_screen.dart';
+import 'widgets/intake_form_banner.dart';
 import 'widgets/biometric_lock_screen.dart';
 import 'widgets/simulation_mode_blocked_screen.dart';
 
@@ -152,16 +154,35 @@ class _MainShellState extends State<MainShell> {
     final themeId = themeProvider.currentId;
 
     return Scaffold(
-      body: IndexedStack(
-        // Force recreate children when theme changes
-        key: ValueKey(themeId),
-        index: _currentIndex,
+      body: Column(
         children: [
-          DashboardScreen(onNavigate: _navigateTo),
-          AppointmentsScreen(onBack: () => _navigateTo(0)),
-          MessagesScreen(onBack: () => _navigateTo(0)),
-          RefillsScreen(onBack: () => _navigateTo(0)),
-          ProfileScreen(onBack: () => _navigateTo(0)),
+          // Persistent banners — follow the patient across every tab.
+          // Mirror the web's `EmailVerificationBanner` + `IntakeFormBanner`,
+          // which sit above all patient routes in `App.tsx`.
+          SafeArea(
+            bottom: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                EmailVerificationBanner(),
+                IntakeFormBanner(),
+              ],
+            ),
+          ),
+          Expanded(
+            child: IndexedStack(
+              // Force recreate children when theme changes
+              key: ValueKey(themeId),
+              index: _currentIndex,
+              children: [
+                DashboardScreen(onNavigate: _navigateTo),
+                AppointmentsScreen(onBack: () => _navigateTo(0)),
+                MessagesScreen(onBack: () => _navigateTo(0)),
+                RefillsScreen(onBack: () => _navigateTo(0)),
+                ProfileScreen(onBack: () => _navigateTo(0)),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(

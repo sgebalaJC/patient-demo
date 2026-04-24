@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
@@ -13,6 +14,7 @@ import '../widgets/theme_selector.dart';
 import '../widgets/subscription_status_card.dart';
 import '../utils/phone.dart';
 import 'intake/intake_forms_screen.dart';
+import 'legal_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -393,6 +395,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
           ),
+          const SizedBox(height: 16),
+
+          // Legal
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceCard,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Icon(Icons.privacy_tip_outlined,
+                      color: Colors.grey.shade600),
+                  title: const Text('Privacy Policy'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const LegalScreen(document: LegalDocument.privacy),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Icon(Icons.description_outlined,
+                      color: Colors.grey.shade600),
+                  title: const Text('Terms of Service'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const LegalScreen(document: LegalDocument.terms),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Delete Account (destructive, below legal to keep it out of reach).
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceCard,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: ListTile(
+              leading: Icon(Icons.delete_forever_outlined,
+                  color: Colors.red.shade600),
+              title: Text(
+                'Delete Account',
+                style: TextStyle(
+                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Text(
+                'Permanently delete your account and data',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _DeleteAccountDialog.show(context),
+            ),
+          ),
           const SizedBox(height: 24),
 
           // Sign out
@@ -622,6 +689,137 @@ class _BiometricToggleState extends State<_BiometricToggle> {
         await _service.setEnabled(value);
         setState(() => _enabled = value);
       },
+    );
+  }
+}
+
+/// Destructive delete-account flow, mirroring the web `ProfilePage` modal.
+/// Calls the `deleteAccount` Cloud Function and signs the user out on success.
+/// Requires the literal "DELETE" string so a misclick can't trigger deletion.
+class _DeleteAccountDialog extends StatefulWidget {
+  static Future<void> show(BuildContext context) {
+    return showDialog(
+      context: context,
+      builder: (_) => const _DeleteAccountDialog(),
+    );
+  }
+
+  const _DeleteAccountDialog();
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _confirmController = TextEditingController();
+  bool _deleting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _delete() async {
+    if (_confirmController.text.trim() != 'DELETE') return;
+    setState(() {
+      _deleting = true;
+      _error = null;
+    });
+    try {
+      final fn = FirebaseFunctions.instance.httpsCallable('deleteAccount');
+      final result = await fn.call({});
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (data['success'] == true) {
+        // Clear state and route back to the auth gate — AuthProvider's
+        // profile listener will pick up the deletion.
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        await context.read<AuthProvider>().signOut();
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _error = (data['error'] as String?) ?? 'Failed to delete account';
+          _deleting = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Failed to delete account. Please try again later.';
+        _deleting = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Delete your account?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This will permanently delete your profile, messages, appointments, and documents. This action cannot be undone.',
+            style: TextStyle(color: Colors.grey.shade700, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Type DELETE to confirm.',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _confirmController,
+            autocorrect: false,
+            enableSuggestions: false,
+            textCapitalization: TextCapitalization.characters,
+            decoration: InputDecoration(
+              hintText: 'DELETE',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!,
+                style: TextStyle(color: Colors.red.shade700, fontSize: 13)),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed:
+              _deleting ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: (_confirmController.text.trim() == 'DELETE' && !_deleting)
+              ? _delete
+              : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red.shade600,
+            foregroundColor: Colors.white,
+          ),
+          child: _deleting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Delete Account'),
+        ),
+      ],
     );
   }
 }

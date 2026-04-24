@@ -15,7 +15,6 @@ import '../config/colors.dart';
 import '../config/branding.dart';
 import '../providers/theme_provider.dart';
 import '../utils/date_formatting.dart';
-import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
 import 'notifications/notifications_screen.dart';
 import 'support/support_chat_screen.dart';
 import '../widgets/onboarding_tutorial.dart';
@@ -198,10 +197,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // Email verification banner
-                  if (FirebaseAuth.instance.currentUser != null &&
-                      !FirebaseAuth.instance.currentUser!.emailVerified)
-                    _buildEmailVerificationBanner(),
+                  // Email verification banner is now mounted in MainShell so
+                  // it follows the patient across every tab — removed here
+                  // to avoid duplication.
 
                   // Phone verification banner (non-blocking)
                   if (user != null &&
@@ -288,59 +286,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: const Text('See All'),
           ),
       ],
-    );
-  }
-
-  Widget _buildEmailVerificationBanner() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.amber.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.mail_outlined, color: Colors.amber.shade700, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Please verify your email address.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.amber.shade800,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await FirebaseAuth.instance.currentUser?.sendEmailVerification();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Verification email sent! Check your inbox.')),
-                    );
-                  }
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.amber.shade800,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                ),
-                child: const Text('Resend', style: TextStyle(fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Check your spam or junk folder — emails from ${branding.fromEmail} sometimes end up there.',
-            style: TextStyle(fontSize: 12, color: Colors.amber.shade700),
-          ),
-        ],
-      ),
     );
   }
 

@@ -343,6 +343,7 @@ class PatientIntakeForm {
   final ConciergeAgreement? conciergeAgreement;
   final List<String> completedSections;
   final String currentSection;
+  final String? reviewNotes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? completedAt;
@@ -357,6 +358,7 @@ class PatientIntakeForm {
     this.conciergeAgreement,
     this.completedSections = const [],
     this.currentSection = 'patient-info',
+    this.reviewNotes,
     this.createdAt,
     this.updatedAt,
     this.completedAt,
@@ -383,6 +385,9 @@ class PatientIntakeForm {
       completedSections:
           (data['completedSections'] as List<dynamic>?)?.cast<String>() ?? [],
       currentSection: data['currentSection'] ?? 'patient-info',
+      reviewNotes: (data['reviewNotes'] as String?)?.trim().isNotEmpty == true
+          ? data['reviewNotes'] as String
+          : null,
       createdAt: _parseTimestamp(data['createdAt']),
       updatedAt: _parseTimestamp(data['updatedAt']),
       completedAt: _parseTimestamp(data['completedAt']),

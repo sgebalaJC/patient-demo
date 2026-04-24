@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../config/constants.dart';
 import '../../config/colors.dart';
 import '../../config/branding.dart';
+import '../legal_screen.dart';
 import 'email_link_login_screen.dart';
 import 'register_screen.dart';
 import 'phone_login_screen.dart';
@@ -377,6 +378,49 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           );
                         },
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Legal footer — same pattern as the web /auth page:
+                      // unauthenticated users can still read Privacy + Terms.
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LegalScreen(
+                                    document: LegalDocument.privacy),
+                              ),
+                            ),
+                            child: Text(
+                              'Privacy',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                          Text('·',
+                              style: TextStyle(color: Colors.grey.shade400)),
+                          TextButton(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LegalScreen(
+                                    document: LegalDocument.terms),
+                              ),
+                            ),
+                            child: Text(
+                              'Terms',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

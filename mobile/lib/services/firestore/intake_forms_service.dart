@@ -71,4 +71,14 @@ class IntakeFormsService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
+
+  /// Dismiss the intake-form nag banner. Matches web's banner skip —
+  /// writes `intakeFormSkipped: true` on the user doc so the prompt
+  /// doesn't reappear on next launch.
+  Future<void> markSkipped(String uid) async {
+    await _db.collection('users').doc(uid).update({
+      'intakeFormSkipped': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
 }

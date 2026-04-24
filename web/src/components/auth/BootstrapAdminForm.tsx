@@ -10,6 +10,7 @@ import { Input } from '../ui/Input';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { auth, db } from '../../lib/firebase';
 import { emailField, firstNameField, lastNameField, phoneField } from '../../lib/validation';
+import { normalizePhoneNumber, InvalidPhoneError } from '../../lib/phone';
 import { BRANDING } from '../../config/branding';
 import logger from '../../lib/logger';
 
@@ -102,6 +103,18 @@ export const BootstrapAdminForm: React.FC<BootstrapAdminFormProps> = ({ onSubmit
     const requestId = makeRequestId();
     const requestRef = doc(db, 'bootstrap-requests', requestId);
 
+    let normalizedPhone = '';
+    try {
+      normalizedPhone = normalizePhoneNumber(data.phoneNumber);
+    } catch (err) {
+      if (err instanceof InvalidPhoneError) {
+        setError('Please enter a valid 10-digit US phone number, or leave it blank.');
+        setLoading(false);
+        return;
+      }
+      throw err;
+    }
+
     try {
       // Step 1: write the request doc. Firestore rules reject this if
       // `system/settings.bootstrapped` is already true.
@@ -109,7 +122,7 @@ export const BootstrapAdminForm: React.FC<BootstrapAdminFormProps> = ({ onSubmit
         email: data.email,
         firstName: data.firstName,
         lastName: data.lastName,
-        phoneNumber: data.phoneNumber || '',
+        phoneNumber: normalizedPhone,
         status: 'pending',
         createdAt: serverTimestamp(),
       });

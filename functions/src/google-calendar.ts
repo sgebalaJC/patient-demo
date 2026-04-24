@@ -21,7 +21,39 @@ import {
 } from './google-workspace.js';
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
+const CALENDAR_TZ = 'America/Los_Angeles';
 const db = admin.firestore();
+
+/**
+ * Return the UTC ISO timestamps for the start and end of the given
+ * YYYY-MM-DD day in `CALENDAR_TZ`. Correct across DST transitions
+ * because we resolve the offset via `Intl.DateTimeFormat` for that
+ * specific date instead of hardcoding -08:00 / -07:00.
+ */
+function dayBoundsInCalendarTZ(date: string): { timeMin: string; timeMax: string } {
+  // Offset for the TZ at the target date. Two passes because the offset
+  // itself shifts at the DST boundary, but a second pass using the first
+  // pass's guess is always within the correct day.
+  const offsetAt = (instant: Date): number => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: CALENDAR_TZ,
+      timeZoneName: 'shortOffset',
+    }).formatToParts(instant);
+    const raw = parts.find((p) => p.type === 'timeZoneName')?.value || 'GMT-08:00';
+    const m = raw.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+    if (!m) return -8 * 60;
+    const sign = m[1] === '-' ? -1 : 1;
+    return sign * (Number(m[2]) * 60 + (m[3] ? Number(m[3]) : 0));
+  };
+
+  const baseUtcStart = new Date(`${date}T00:00:00Z`);
+  const offsetMin = offsetAt(baseUtcStart);
+  const timeMin = new Date(baseUtcStart.getTime() - offsetMin * 60 * 1000).toISOString();
+  const timeMax = new Date(
+    baseUtcStart.getTime() - offsetMin * 60 * 1000 + 24 * 60 * 60 * 1000 - 1000,
+  ).toISOString();
+  return { timeMin, timeMax };
+}
 
 // ── Shared integration resolver ────────────────────────────────────────
 
@@ -97,8 +129,8 @@ function buildEventBody(
     summary,
     description,
     ...(appointment.address ? { location: appointment.address } : {}),
-    start: { dateTime: startDate.toISOString(), timeZone: 'America/Los_Angeles' },
-    end: { dateTime: endDate.toISOString(), timeZone: 'America/Los_Angeles' },
+    start: { dateTime: startDate.toISOString(), timeZone: CALENDAR_TZ },
+    end: { dateTime: endDate.toISOString(), timeZone: CALENDAR_TZ },
     extendedProperties: {
       private: { firestoreId: appointment.id, source: 'patient-portal' },
     },
@@ -199,8 +231,7 @@ export async function getFreeBusySlots(date: string): Promise<{ start: Date; end
   const b = await bind();
   if (!b) return [];
   try {
-    const dayStart = new Date(`${date}T00:00:00-08:00`);
-    const dayEnd = new Date(`${date}T23:59:59-07:00`);
+    const { timeMin, timeMax } = dayBoundsInCalendarTZ(date);
     const res = await fetch(`${CALENDAR_API}/freeBusy`, {
       method: 'POST',
       headers: {
@@ -208,9 +239,9 @@ export async function getFreeBusySlots(date: string): Promise<{ start: Date; end
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        timeMin: dayStart.toISOString(),
-        timeMax: dayEnd.toISOString(),
-        timeZone: 'America/Los_Angeles',
+        timeMin,
+        timeMax,
+        timeZone: CALENDAR_TZ,
         items: [{ id: b.calendarId }],
       }),
     });

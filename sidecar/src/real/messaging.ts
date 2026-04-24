@@ -13,7 +13,7 @@
 import { getDb } from "../lib/firebase.js";
 import { toE164Lenient } from "../lib/phone.js";
 import { FieldValue } from "firebase-admin/firestore";
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 // Cached once on first call — env doesn't change under us, so we don't
 // need to re-read process.env per-request. Stays lazy so a sim-only
@@ -106,7 +106,11 @@ function verifyTwilioSignature(
   let data = url;
   for (const k of sortedKeys) data += k + params[k];
   const expected = createHmac("sha1", authToken).update(data).digest("base64");
-  return expected === signature;
+  // Constant-time compare to prevent timing attacks on webhook forgery.
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signature);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 export async function inboundSmsWebhook(request: Request): Promise<Response> {

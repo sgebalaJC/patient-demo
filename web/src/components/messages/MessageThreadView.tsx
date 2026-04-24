@@ -21,6 +21,7 @@ import { getThreadStatusColor } from '../../lib/status-helpers';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import logger from "../../lib/logger";
+import { formatDisplayName } from '../../lib/user-helpers';
 
 interface MessageThreadViewProps {
     thread: MessageThread;
@@ -126,7 +127,7 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
             const messageData = {
                 threadId: thread.id,
                 senderId: user.uid,
-                senderName: userProfile ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || user.email || 'Unknown' : user.email || 'Unknown',
+                senderName: formatDisplayName(userProfile ?? { email: user.email }, 'Unknown'),
                 senderRole: userProfile.role,
                 content: newMessage.trim() || (uploadedAttachments.length > 0 ? '[Attachment]' : ''),
                 attachments: uploadedAttachments,
@@ -141,7 +142,7 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
                 // onSnapshot listener will pick up the new message automatically
 
                 // Send notification to the other party
-                const senderName = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 'Someone';
+                const senderName = formatDisplayName(userProfile, 'Someone');
                 const preview = (newMessage.trim() || '[Attachment]').slice(0, 80);
                 if (isAdminRole(userProfile.role)) {
                     // Admin replied → notify the patient

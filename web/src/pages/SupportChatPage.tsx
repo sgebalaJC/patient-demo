@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { ChatThread } from '../components/chat/ChatThread';
 import { useChatThread } from '../hooks/useChatThread';
 import { supportChatRepo } from '../lib/firestore/chat-repo';
+import { formatDisplayName } from '../lib/user-helpers';
 
 /**
  * Patient support chat page — uses the shared ChatThread + useChatThread.
@@ -41,9 +42,7 @@ export const SupportChatPage: React.FC = () => {
     };
   }, []);
 
-  const senderName = userProfile
-    ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 'Patient'
-    : 'Patient';
+  const senderName = formatDisplayName(userProfile, 'Patient');
 
   // Hooks must be called unconditionally — pass a dummy repo when patient is
   // unknown so the hook stays mounted; the empty-state below covers loading.

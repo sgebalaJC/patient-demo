@@ -13,9 +13,7 @@ import * as admin from "firebase-admin";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {logger} from "firebase-functions";
 import {FUNCTIONS_BRANDING} from "./branding.js";
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const twilio = require("twilio");
+import {sendSms, TWILIO_SECRETS} from "./lib/twilio-helpers.js";
 
 function db() {
   return admin.firestore();
@@ -71,30 +69,12 @@ async function getReminderCalendarClient() {
   return google.calendar({version: "v3", auth: authClient as any});
 }
 
-async function isSimulationOn(): Promise<boolean> {
-  try {
-    const snap = await db().doc("system/settings").get();
-    return snap.exists && snap.data()?.simulationMode === true;
-  } catch {
-    return false;
-  }
-}
-
 async function sendReminderSMS(phoneNumber: string, body: string): Promise<void> {
-  if (await isSimulationOn()) {
-    const {recordSimSms} = await import("./simulation/simulators/messaging.js");
-    await recordSimSms({to: phoneNumber, body, kind: "reminder"});
-    return;
-  }
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-  if (!accountSid || !authToken || !fromNumber) return;
-
   try {
-    const client = twilio(accountSid, authToken);
-    await client.messages.create({body, from: fromNumber, to: phoneNumber});
-    logger.info("Reminder SMS sent", {phoneSuffix: phoneNumber.slice(-4)});
+    const result = await sendSms({to: phoneNumber, body, kind: "reminder", context: "appointment-reminder"});
+    if (result.sent) {
+      logger.info(`Reminder SMS ${result.sim ? "recorded (sim)" : "sent"}`, {phoneSuffix: phoneNumber.slice(-4)});
+    }
   } catch (error: any) {
     logger.error("Error sending reminder SMS", {phoneSuffix: phoneNumber.slice(-4), message: error.message});
   }
@@ -128,6 +108,7 @@ function applyTemplate(template: string, content: string, time: string): string 
 export const calendarReminderScheduler = onSchedule({
   schedule: "*/5 * * * *",
   timeZone: "America/Los_Angeles",
+  secrets: [...TWILIO_SECRETS],
 }, async () => {
   const calendarId = process.env.GOOGLE_CALENDAR_ID;
   if (!calendarId) {
@@ -196,6 +177,7 @@ export const calendarReminderScheduler = onSchedule({
 export const morningReminderScheduler = onSchedule({
   schedule: "0 8 * * *",
   timeZone: "America/Los_Angeles",
+  secrets: [...TWILIO_SECRETS],
 }, async () => {
   try {
     const pstDate = new Intl.DateTimeFormat("en-CA", {

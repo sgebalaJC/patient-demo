@@ -127,8 +127,15 @@ export function makeEhrProvider<C extends BaseEhrConfig>(spec: EhrProviderSpec<C
       }),
     });
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`${spec.providerName} token refresh failed: ${res.status} ${text.slice(0, 200)}`);
+      // Log upstream details server-side for debugging, but NEVER surface
+      // them to the caller — the response body can include token-endpoint
+      // hints or partial credentials from some providers.
+      const text = await res.text().catch(() => "");
+      console.error(
+        `[${spec.providerName}] token refresh failed: ${res.status}`,
+        text.slice(0, 200),
+      );
+      throw new Error(`${spec.providerName} authorization failed`);
     }
     const data = await res.json() as {
       access_token: string;
@@ -224,4 +231,50 @@ export function makeEhrProvider<C extends BaseEhrConfig>(spec: EhrProviderSpec<C
   }
 
   return { loadConfig, assertReady, getAccessToken, proxy };
+}
+
+/**
+ * Pre-built `tokenRefreshAuth` for providers that authenticate the refresh
+ * call via HTTP Basic (clientId:clientSecret). DrChrono, Athena, Elation,
+ * NextGen, Tebra, Greenway, and Practice Fusion all use this — inline
+ * spellings drifted over time, so consolidate here.
+ */
+export function basicAuthTokenRefresh<C extends BaseEhrConfig>(): (cfg: C) => TokenRefreshAuth {
+  return (cfg: C) => {
+    const clientId = cfg.clientId || "";
+    const clientSecret = cfg.clientSecret || "";
+    return {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      },
+      bodyExtras: {},
+    };
+  };
+}
+
+/**
+ * SMART-on-FHIR dual-mode refresh auth: Basic if the client is confidential
+ * (has a secret), otherwise the public-client `client_id` in the body. Used
+ * by Epic, Cerner, and eCW — same branch logic copy-pasted three times.
+ */
+export function smartDualModeTokenRefresh<C extends BaseEhrConfig>(): (cfg: C) => TokenRefreshAuth {
+  const basic = basicAuthTokenRefresh<C>();
+  return (cfg: C) => {
+    if (cfg.clientSecret) return basic(cfg);
+    return { headers: {}, bodyExtras: { client_id: cfg.clientId || "" } };
+  };
+}
+
+/**
+ * Refresh auth that puts `client_id` + `client_secret` in the form body
+ * (no Basic header). Used by Elation, Greenway, and NextGen.
+ */
+export function bodyCredsTokenRefresh<C extends BaseEhrConfig>(): (cfg: C) => TokenRefreshAuth {
+  return (cfg: C) => ({
+    headers: {},
+    bodyExtras: {
+      client_id: cfg.clientId || "",
+      client_secret: cfg.clientSecret || "",
+    },
+  });
 }

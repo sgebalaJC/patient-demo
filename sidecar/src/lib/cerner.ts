@@ -5,7 +5,7 @@
  * confidential or public SMART auth, FHIR content types.
  */
 
-import { makeEhrProvider, type BaseEhrConfig, type TokenRefreshAuth } from "./ehr-provider.js";
+import { makeEhrProvider, smartDualModeTokenRefresh, type BaseEhrConfig } from "./ehr-provider.js";
 
 interface CernerConfig extends BaseEhrConfig {
   fhirBase?: string;
@@ -19,17 +19,7 @@ const provider = makeEhrProvider<CernerConfig>({
   configDoc: "integrations/cerner",
   resolveApiBase: (cfg) => (cfg.fhirBase || "").replace(/\/+$/, ""),
   resolveTokenUrl: (cfg) => cfg.tokenUrl || "",
-  tokenRefreshAuth: (cfg): TokenRefreshAuth => {
-    if (cfg.clientSecret) {
-      return {
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString("base64")}`,
-        },
-        bodyExtras: {},
-      };
-    }
-    return { headers: {}, bodyExtras: { client_id: cfg.clientId || "" } };
-  },
+  tokenRefreshAuth: smartDualModeTokenRefresh<CernerConfig>(),
   extraReadyChecks: (cfg) => {
     if (!cfg.fhirBase) throw new Error("Cerner fhirBase missing — re-save credentials in the admin UI");
     if (!cfg.tokenUrl) throw new Error("Cerner tokenUrl missing — re-save credentials in the admin UI");

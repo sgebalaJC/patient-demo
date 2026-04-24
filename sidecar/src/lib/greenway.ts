@@ -2,7 +2,7 @@
  * Greenway Health sidecar client — thin spec over `makeEhrProvider`.
  */
 
-import { makeEhrProvider, type BaseEhrConfig } from "./ehr-provider.js";
+import { bodyCredsTokenRefresh, makeEhrProvider, type BaseEhrConfig } from "./ehr-provider.js";
 
 const GREENWAY_API_PROD = "https://apis.greenwayhealth.com/v1";
 const GREENWAY_API_SANDBOX = "https://apis-sandbox.greenwayhealth.com/v1";
@@ -18,13 +18,7 @@ const provider = makeEhrProvider<GreenwayConfig>({
   configDoc: "integrations/greenway",
   resolveApiBase: (cfg) => (cfg.sandbox ? GREENWAY_API_SANDBOX : GREENWAY_API_PROD),
   resolveTokenUrl: (cfg) => (cfg.sandbox ? GREENWAY_TOKEN_URL_SANDBOX : GREENWAY_TOKEN_URL_PROD),
-  tokenRefreshAuth: (cfg) => ({
-    headers: {},
-    bodyExtras: {
-      client_id: cfg.clientId || "",
-      client_secret: cfg.clientSecret || "",
-    },
-  }),
+  tokenRefreshAuth: bodyCredsTokenRefresh<GreenwayConfig>(),
 });
 
 export const proxyGreenway = provider.proxy;

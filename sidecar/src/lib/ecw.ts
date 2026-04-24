@@ -5,7 +5,7 @@
  * confidential-or-public token auth.
  */
 
-import { makeEhrProvider, type BaseEhrConfig, type TokenRefreshAuth } from "./ehr-provider.js";
+import { makeEhrProvider, smartDualModeTokenRefresh, type BaseEhrConfig } from "./ehr-provider.js";
 
 interface EcwConfig extends BaseEhrConfig {
   fhirBase?: string;
@@ -19,20 +19,7 @@ const provider = makeEhrProvider<EcwConfig>({
   configDoc: "integrations/ecw",
   resolveApiBase: (cfg) => (cfg.fhirBase || "").replace(/\/+$/, ""),
   resolveTokenUrl: (cfg) => cfg.tokenUrl || "",
-  tokenRefreshAuth: (cfg): TokenRefreshAuth => {
-    if (cfg.clientSecret) {
-      return {
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString("base64")}`,
-        },
-        bodyExtras: {},
-      };
-    }
-    return {
-      headers: {},
-      bodyExtras: { client_id: cfg.clientId || "" },
-    };
-  },
+  tokenRefreshAuth: smartDualModeTokenRefresh<EcwConfig>(),
   extraReadyChecks: (cfg) => {
     if (!cfg.fhirBase) {
       throw new Error("eCW fhirBase missing — re-save credentials in the admin UI");

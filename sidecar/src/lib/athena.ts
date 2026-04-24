@@ -6,7 +6,7 @@
  * injects it so callers don't need to supply it.
  */
 
-import { makeEhrProvider, type BaseEhrConfig } from "./ehr-provider.js";
+import { basicAuthTokenRefresh, makeEhrProvider, type BaseEhrConfig } from "./ehr-provider.js";
 
 const ATHENA_API_PROD = "https://api.athenahealth.com/v1";
 const ATHENA_API_PREVIEW = "https://api.preview.platform.athenahealth.com/v1";
@@ -23,12 +23,7 @@ const provider = makeEhrProvider<AthenaConfig>({
   configDoc: "integrations/athena",
   resolveApiBase: (cfg) => (cfg.preview ? ATHENA_API_PREVIEW : ATHENA_API_PROD),
   resolveTokenUrl: (cfg) => (cfg.preview ? ATHENA_TOKEN_URL_PREVIEW : ATHENA_TOKEN_URL_PROD),
-  tokenRefreshAuth: (cfg) => ({
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString("base64")}`,
-    },
-    bodyExtras: {},
-  }),
+  tokenRefreshAuth: basicAuthTokenRefresh<AthenaConfig>(),
   extraReadyChecks: (cfg) => {
     if (!cfg.practiceId) {
       throw new Error("Athena practiceId missing — re-save credentials in the admin UI");

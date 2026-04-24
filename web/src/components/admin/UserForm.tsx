@@ -119,8 +119,9 @@ export const UserForm: React.FC<UserFormProps> = ({
         setLoading(true);
         setError('');
 
-        // Normalize phone to +1XXXXXXXXXX before any write path so server-side
-        // queries (phone OTP login, etc.) can match on exact string equality.
+        // Normalize phone to canonical 10-digit form before any write path
+        // so server-side queries (phone OTP login, etc.) match on exact
+        // string equality across web, mobile, and functions.
         const normalizedPhone = normalizePhoneNumber(data.phoneNumber);
 
         try {

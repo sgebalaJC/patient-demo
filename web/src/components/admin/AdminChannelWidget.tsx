@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useFirestoreListener } from '../../hooks/useFirestoreListener';
 import { isAdminRole } from '../../lib/roles';
 import { formatDateTime } from '../../lib/date-helpers';
+import { formatDisplayName } from '../../lib/user-helpers';
 import { BRANDING } from '../../config/branding';
 import {
   subscribeAdminChannel,
@@ -178,10 +179,7 @@ export const AdminChannelWidget: React.FC = () => {
     if (!text || !user || !userProfile || sending) return;
     if (text.length > 2000) return;
     setSending(true);
-    const senderName =
-      [userProfile.firstName, userProfile.lastName].filter(Boolean).join(' ').trim() ||
-      userProfile.email ||
-      'Admin';
+    const senderName = formatDisplayName(userProfile, 'Admin');
     try {
       await sendAdminChannelMessage(user.uid, senderName, text);
       setDraft('');

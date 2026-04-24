@@ -96,9 +96,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       // Only include phone if NOT being updated via verification
       // (verification Cloud Function handles the phone update + calendar sync).
-      // Normalize to canonical +1XXXXXXXXXX so phone-OTP lookups can match.
+      // Normalize to canonical 10-digit form so phone-OTP lookups can match.
       if (!phoneVerifiedByCloudFunction) {
-        updates['phoneNumber'] = normalizePhoneNumber(_phoneController.text);
+        try {
+          updates['phoneNumber'] = normalizePhoneNumber(_phoneController.text);
+        } on InvalidPhoneException {
+          if (mounted) {
+            setState(() {
+              _error = 'Please enter a valid 10-digit US phone number.';
+              _saving = false;
+            });
+          }
+          return;
+        }
       }
 
       await FirebaseFirestore.instance

@@ -5,7 +5,7 @@
  * or public (sandbox) SMART clients.
  */
 
-import { makeEhrProvider, type BaseEhrConfig, type TokenRefreshAuth } from "./ehr-provider.js";
+import { makeEhrProvider, smartDualModeTokenRefresh, type BaseEhrConfig } from "./ehr-provider.js";
 
 interface EpicConfig extends BaseEhrConfig {
   fhirBase?: string;
@@ -19,17 +19,7 @@ const provider = makeEhrProvider<EpicConfig>({
   configDoc: "integrations/epic",
   resolveApiBase: (cfg) => (cfg.fhirBase || "").replace(/\/+$/, ""),
   resolveTokenUrl: (cfg) => cfg.tokenUrl || "",
-  tokenRefreshAuth: (cfg): TokenRefreshAuth => {
-    if (cfg.clientSecret) {
-      return {
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString("base64")}`,
-        },
-        bodyExtras: {},
-      };
-    }
-    return { headers: {}, bodyExtras: { client_id: cfg.clientId || "" } };
-  },
+  tokenRefreshAuth: smartDualModeTokenRefresh<EpicConfig>(),
   extraReadyChecks: (cfg) => {
     if (!cfg.fhirBase) throw new Error("Epic fhirBase missing — re-save credentials in the admin UI");
     if (!cfg.tokenUrl) throw new Error("Epic tokenUrl missing — re-save credentials in the admin UI");

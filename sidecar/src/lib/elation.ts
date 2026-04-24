@@ -2,7 +2,7 @@
  * Elation sidecar client — thin spec over `makeEhrProvider`.
  */
 
-import { makeEhrProvider, type BaseEhrConfig } from "./ehr-provider.js";
+import { bodyCredsTokenRefresh, makeEhrProvider, type BaseEhrConfig } from "./ehr-provider.js";
 
 const ELATION_API_PROD = "https://app.elationemr.com/api/2.0";
 const ELATION_API_SANDBOX = "https://sandbox.elationemr.com/api/2.0";
@@ -18,13 +18,7 @@ const provider = makeEhrProvider<ElationConfig>({
   configDoc: "integrations/elation",
   resolveApiBase: (cfg) => (cfg.sandbox ? ELATION_API_SANDBOX : ELATION_API_PROD),
   resolveTokenUrl: (cfg) => (cfg.sandbox ? ELATION_TOKEN_URL_SANDBOX : ELATION_TOKEN_URL_PROD),
-  tokenRefreshAuth: (cfg) => ({
-    headers: {},
-    bodyExtras: {
-      client_id: cfg.clientId || "",
-      client_secret: cfg.clientSecret || "",
-    },
-  }),
+  tokenRefreshAuth: bodyCredsTokenRefresh<ElationConfig>(),
 });
 
 export const proxyElation = provider.proxy;

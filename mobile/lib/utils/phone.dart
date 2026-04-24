@@ -1,65 +1,73 @@
-/// Phone number normalization — single source of truth for the mobile client.
+/// Phone normalization — US-only. Canonical stored format is 10 digits
+/// (no `+1`, no punctuation): `"4425004657"`. Mirrors
+/// `web/src/lib/phone.ts` and `functions/src/lib/phone.ts` — all three
+/// implementations MUST produce identical output for identical input.
 ///
-/// Must match the web `normalizePhoneNumber` in web/src/lib/phone.ts and the
-/// server-side `formatPhoneNumber` in functions/src/index.ts exactly so that
-/// the same input produces the same stored value regardless of which client
-/// writes it.
-///
-/// Used by every mobile path that writes `phoneNumber` to Firestore:
-///  - Profile screen (direct Firestore write on save)
-///  - Any future form that captures a phone number
+/// External APIs that require E.164 (Twilio, Firebase Auth) wrap with
+/// `toE164(...)` at the boundary.
 ///
 /// Input examples and their outputs:
-///   "14425004657"       → "+14425004657"
-///   "4425004657"        → "+14425004657"
-///   "(442) 500-4657"    → "+14425004657"
-///   "+1 (442) 500-4657" → "+14425004657"
-///   "+14425004657"      → "+14425004657"
-///   ""                  → ""
+///   "4425004657"        → "4425004657"
+///   "(442) 500-4657"    → "4425004657"
+///   "+1 (442) 500-4657" → "4425004657"
+///   "14425004657"       → "4425004657"
+///   ""                  → ""  (empty stays empty)
+///   "+33123456789"      → throws InvalidPhoneException (non-US)
+library;
+
+class InvalidPhoneException implements Exception {
+  final String input;
+  InvalidPhoneException(this.input);
+  @override
+  String toString() =>
+      'InvalidPhoneException: Invalid US phone number: "$input". Expected 10 digits.';
+}
+
+/// Strip to digits and validate as a US 10-digit number. Empty input
+/// returns empty string. Anything that doesn't reduce to exactly 10 digits
+/// (or 11 starting with 1) throws `InvalidPhoneException` — callers must
+/// catch and surface a field error to the user.
 String normalizePhoneNumber(String? phoneNumber) {
   if (phoneNumber == null) return '';
   final trimmed = phoneNumber.trim();
   if (trimmed.isEmpty) return '';
 
-  // Remove all non-digit characters
   final digits = trimmed.replaceAll(RegExp(r'[^\d]'), '');
-
-  // 10 digits → assume US, add +1
-  if (digits.length == 10) {
-    return '+1$digits';
-  }
-
-  // 11 digits starting with 1 → already US with country code, just add +
+  if (digits.length == 10) return digits;
   if (digits.length == 11 && digits.startsWith('1')) {
-    return '+$digits';
+    return digits.substring(1);
   }
-
-  // Fallback: prepend +
-  return '+$digits';
+  throw InvalidPhoneException(trimmed);
 }
 
-/// Format a stored phone number for display.
+/// Format a canonical 10-digit phone for display.
 ///
-/// Input (canonical):  "+14425004657"
-/// Output:             "(442) 500-4657"
+/// Input:  "4425004657"
+/// Output: "(442) 500-4657"
 ///
-/// Non-US numbers are returned as-is. Empty/null returns empty string.
+/// Also accepts `+1XXXXXXXXXX` / `1XXXXXXXXXX` so values read straight from
+/// Twilio webhook payloads render without a second normalize step.
+/// Unrecognized shapes return as-is.
 String formatPhoneDisplay(String? phoneNumber) {
   if (phoneNumber == null || phoneNumber.isEmpty) return '';
 
   final digits = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
 
-  // US number with country code: 1 + 10 digits
+  if (digits.length == 10) {
+    return '(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}';
+  }
   if (digits.length == 11 && digits.startsWith('1')) {
     final local = digits.substring(1);
     return '(${local.substring(0, 3)}) ${local.substring(3, 6)}-${local.substring(6)}';
   }
-
-  // 10-digit US number without country code
-  if (digits.length == 10) {
-    return '(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}';
-  }
-
-  // Non-US or unknown format: return as-is
   return phoneNumber;
+}
+
+/// Convert a canonical 10-digit phone to E.164 (`+1XXXXXXXXXX`) for
+/// external APIs (Twilio, Firebase Auth). Throws on invalid input.
+String toE164(String phone10) {
+  final digits = phone10.replaceAll(RegExp(r'[^\d]'), '');
+  if (digits.length == 10) return '+1$digits';
+  if (digits.length == 11 && digits.startsWith('1')) return '+$digits';
+  throw InvalidPhoneException(phone10);
 }

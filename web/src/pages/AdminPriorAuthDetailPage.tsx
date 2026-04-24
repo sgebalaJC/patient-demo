@@ -13,6 +13,7 @@ import { Input } from '../components/ui/Input';
 import { useAuth } from '../hooks/useAuth';
 import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
+import { formatDisplayName } from '../lib/user-helpers';
 import { subscribeToPriorAuth, appendNote, updateChecklist } from '../lib/firestore/prior-auths';
 import { PaStatusBadge } from '../components/prior-auth/StatusBadge';
 import { FreshnessBadge } from '../components/prior-auth/FreshnessBadge';
@@ -50,7 +51,7 @@ export const AdminPriorAuthDetailPage: React.FC = () => {
 
   async function addNote(): Promise<void> {
     if (!paId || !user || !userProfile || !noteText.trim()) return;
-    const name = [userProfile.firstName, userProfile.lastName].filter(Boolean).join(' ').trim() || userProfile.email || 'Admin';
+    const name = formatDisplayName(userProfile, 'Admin');
     await appendNote(paId, user.uid, name, noteText.trim(), simulated);
     setNoteText('');
   }

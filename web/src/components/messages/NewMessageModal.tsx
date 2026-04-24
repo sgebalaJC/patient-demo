@@ -11,6 +11,7 @@ import { newMessageBaseSchema } from '../../lib/validation';
 import logger from "../../lib/logger";
 import { Modal } from '../ui/Modal';
 import { useAuth } from '../../hooks/useAuth';
+import { formatDisplayName } from '../../lib/user-helpers';
 
 const newMessageSchema = z.object(newMessageBaseSchema);
 
@@ -77,7 +78,7 @@ export const NewMessageModal: React.FC<NewMessageModalProps> = ({
             const messageData = {
                 threadId,
                 senderId: patientId,
-                senderName: userProfile ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || user.email || 'Unknown' : user.email || 'Unknown',
+                senderName: formatDisplayName(userProfile ?? { email: user.email }, 'Unknown'),
                 senderRole: userProfile.role,
                 content: data.message,
                 attachments: [],

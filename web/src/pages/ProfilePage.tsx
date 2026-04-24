@@ -12,7 +12,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { PhoneVerificationModal } from '../components/ui/PhoneVerificationModal';
 import { signOut } from '../lib/firebase';
-import { formatPhoneDisplay } from '../lib/phone';
+import { formatPhoneDisplay, normalizePhoneNumber, InvalidPhoneError } from '../lib/phone';
 import logger from '../lib/logger';
 
 export const ProfilePage: React.FC = () => {
@@ -80,7 +80,16 @@ export const ProfilePage: React.FC = () => {
       // Only include phone if not being updated via verification
       // (verification Cloud Function handles the phone update + calendar sync)
       if (!verifiedPhone) {
-        updateData.phoneNumber = formData.phoneNumber;
+        try {
+          updateData.phoneNumber = normalizePhoneNumber(formData.phoneNumber);
+        } catch (err) {
+          if (err instanceof InvalidPhoneError) {
+            setError('Please enter a valid 10-digit US phone number.');
+            setLoading(false);
+            return;
+          }
+          throw err;
+        }
       }
 
       const response = await userOperations.updateUser(user.uid, updateData);

@@ -13,6 +13,7 @@ import { newMessageBaseSchema } from '../../lib/validation';
 import logger from '../../lib/logger';
 import { Modal } from '../ui/Modal';
 import { formatPhoneDisplay } from '../../lib/phone';
+import { formatDisplayName } from '../../lib/user-helpers';
 
 const adminNewMessageSchema = z.object({
     ...newMessageBaseSchema,
@@ -119,7 +120,7 @@ export const AdminNewMessageModal: React.FC<AdminNewMessageModalProps> = ({
             const threadId = threadResponse.data.id;
 
             // Send initial message from admin
-            const senderName = `${userProfile.firstName} ${userProfile.lastName}`.trim() || 'Admin';
+            const senderName = formatDisplayName(userProfile, 'Admin');
             const messageData = {
                 threadId,
                 senderId: user.uid,

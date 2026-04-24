@@ -77,8 +77,7 @@ admin.initializeApp();
 // Initialize Firestore
 const db = admin.firestore();
 
-// Twilio client
-const twilio = require("twilio");
+import {sendSms, TWILIO_SECRETS} from "./lib/twilio-helpers.js";
 
 // CORS, validation, phone normalization, rate limiting, and client-IP
 // helpers are all imported from ./lib/*.
@@ -286,7 +285,8 @@ export const logAuditEvent = onCall({
 });
 
 export const createUserWithAuth = onCall({
-  cors: corsOptions
+  cors: corsOptions,
+  secrets: [...TWILIO_SECRETS],
 }, async (request) => {
   try {
     logger.info('createUserWithAuth called');
@@ -443,26 +443,8 @@ export const createUserWithAuth = onCall({
       try {
         const formattedTo = toE164(phoneNumber);
         const body = `Welcome to ${FUNCTIONS_BRANDING.shortName}, ${firstName}! Check your email for a sign-in link to access your account.`;
-
-        const settingsSnap = await admin.firestore().doc('system/settings').get();
-        const simOn = settingsSnap.exists && settingsSnap.data()?.simulationMode === true;
-
-        if (simOn) {
-          const {recordSimSms} = await import('./simulation/simulators/messaging.js');
-          await recordSimSms({to: formattedTo, body, kind: 'welcome'});
-          smsSent = true;
-        } else {
-          const accountSid = process.env.TWILIO_ACCOUNT_SID;
-          const authToken = process.env.TWILIO_AUTH_TOKEN;
-          const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-          if (accountSid && authToken && fromNumber) {
-            const client = twilio(accountSid, authToken);
-            await client.messages.create({body, from: fromNumber, to: formattedTo});
-            smsSent = true;
-          } else {
-            logger.warn('Welcome SMS requested but Twilio not configured');
-          }
-        }
+        const result = await sendSms({to: formattedTo, body, kind: 'welcome', context: 'welcome-sms'});
+        smsSent = result.sent;
       } catch (smsError: any) {
         logger.error('Welcome SMS failed (non-fatal):', { message: smsError.message });
       }
@@ -1123,6 +1105,7 @@ import {
  */
 export const onAppointmentWrite = onDocumentWritten({
   document: 'appointments/{appointmentId}',
+  secrets: [...TWILIO_SECRETS],
 }, async (event) => {
     const appointmentId = event.params.appointmentId;
     const before = event.data?.before?.data();
@@ -1555,6 +1538,7 @@ export const validateAppointmentSlot = onCall({
  */
 export const sendPhoneVerificationCode = onCall({
   cors: corsOptions,
+  secrets: [...TWILIO_SECRETS],
 }, async (request) => {
   try {
     const context = request.auth;
@@ -1592,33 +1576,11 @@ export const sendPhoneVerificationCode = onCall({
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Sim short-circuit: record to simulation/sms/outbound instead of
-    // calling Twilio. The verification code still validates against
-    // the Firestore `phone-verifications` doc, so sim users can grab
-    // the code from the admin SMS panel.
-    const settingsSnap = await admin.firestore().doc('system/settings').get();
-    const simOn = settingsSnap.exists && settingsSnap.data()?.simulationMode === true;
     const body = `Your ${FUNCTIONS_BRANDING.shortName} verification code is: ${code}`;
-    if (simOn) {
-      const {recordSimSms} = await import('./simulation/simulators/messaging.js');
-      await recordSimSms({to: wireTo, body, kind: 'verification'});
-      logger.info('Verification code recorded (sim)', { uid: context.uid });
-      return { success: true, message: 'Verification code sent' };
-    }
+    const result = await sendSms({to: wireTo, body, kind: 'verification', context: 'phone-verify-otp'});
+    if (!result.sent) throw new Error('SMS service not configured');
 
-    // Send SMS via Twilio
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-
-    if (!accountSid || !authToken || !fromNumber) {
-      throw new Error('SMS service not configured');
-    }
-
-    const client = twilio(accountSid, authToken);
-    await client.messages.create({body, from: fromNumber, to: wireTo});
-
-    logger.info('Verification code sent', { uid: context.uid });
+    logger.info(`Verification code ${result.sim ? 'recorded (sim)' : 'sent'}`, { uid: context.uid });
     return { success: true, message: 'Verification code sent' };
   } catch (error: any) {
     logger.error('Error sending verification code:', { message: error.message });
@@ -1721,6 +1683,7 @@ export const verifyPhoneCode = onCall({
  */
 export const sendPhoneLoginCode = onCall({
   cors: corsOptions,
+  secrets: [...TWILIO_SECRETS],
 }, async (request) => {
   try {
     const { phoneNumber } = request.data;
@@ -1754,30 +1717,11 @@ export const sendPhoneLoginCode = onCall({
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Sim short-circuit: record to sandbox instead of hitting Twilio.
-    const settingsSnap = await admin.firestore().doc('system/settings').get();
-    const simOn = settingsSnap.exists && settingsSnap.data()?.simulationMode === true;
     const body = `Your ${FUNCTIONS_BRANDING.shortName} login code is: ${code}`;
-    if (simOn) {
-      const {recordSimSms} = await import('./simulation/simulators/messaging.js');
-      await recordSimSms({to: wireTo, body, kind: 'verification'});
-      logger.info('Phone login code recorded (sim)', { phone: normalized.slice(-4) });
-      return { success: true, message: 'Verification code sent' };
-    }
+    const result = await sendSms({to: wireTo, body, kind: 'verification', context: 'phone-login-otp'});
+    if (!result.sent) throw new Error('SMS service not configured');
 
-    // Send SMS via Twilio
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-
-    if (!accountSid || !authToken || !fromNumber) {
-      throw new Error('SMS service not configured');
-    }
-
-    const client = twilio(accountSid, authToken);
-    await client.messages.create({body, from: fromNumber, to: wireTo});
-
-    logger.info('Phone login code sent', { phone: normalized.slice(-4) });
+    logger.info(`Phone login code ${result.sim ? 'recorded (sim)' : 'sent'}`, { phone: normalized.slice(-4) });
     return { success: true, message: 'Verification code sent' };
   } catch (error: any) {
     logger.error('Error sending phone login code:', { message: error.message });
@@ -2060,12 +2004,6 @@ async function sendAppointmentStatusSMS(
   reason?: string
 ): Promise<void> {
   try {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
-
-    if (!accountSid || !authToken || !fromNumber) return;
-
     // Get patient phone number
     const patientDoc = await db.collection('users').doc(patientId).get();
     const patientData = patientDoc.data();
@@ -2095,22 +2033,10 @@ async function sendAppointmentStatusSMS(
       message += ' Please contact us to reschedule.';
     }
 
-    // Sim short-circuit: route to sandbox instead of Twilio.
-    const settingsSnap = await admin.firestore().doc('system/settings').get();
-    const simOn = settingsSnap.exists && settingsSnap.data()?.simulationMode === true;
-    if (simOn) {
-      const {recordSimSms} = await import('./simulation/simulators/messaging.js');
-      await recordSimSms({to: wireTo, body: message, kind: 'admin'});
-    } else {
-      const client = twilio(accountSid, authToken);
-      await client.messages.create({
-        body: message,
-        from: fromNumber,
-        to: wireTo,
-      });
+    const result = await sendSms({to: wireTo, body: message, kind: 'admin', context: `appointment-${status}-sms`});
+    if (result.sent) {
+      logger.info(`Appointment ${status} SMS ${result.sim ? 'recorded (sim)' : 'sent'} to patient ${patientId}`);
     }
-
-    logger.info(`Appointment ${status} SMS ${simOn ? 'recorded (sim)' : 'sent'} to patient ${patientId}`);
 
     // Also send email notification
     const email = patientData?.email;

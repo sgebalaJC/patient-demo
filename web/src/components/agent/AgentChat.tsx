@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { ChatThread } from '../chat/ChatThread';
 import { useChatThread } from '../../hooks/useChatThread';
 import { agentChatRepo } from '../../lib/firestore/chat-repo';
+import { formatDisplayName } from '../../lib/user-helpers';
 
 /**
  * Admin agent chat — thin wrapper around the shared ChatThread. All heavy
@@ -12,9 +13,7 @@ export const AgentChat: React.FC = () => {
   const { user, userProfile } = useAuth();
   const repo = useMemo(() => agentChatRepo(), []);
 
-  const senderName = userProfile
-    ? `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 'Admin'
-    : 'Admin';
+  const senderName = formatDisplayName(userProfile, 'Admin');
 
   const controller = useChatThread({
     repo,

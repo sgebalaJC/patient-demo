@@ -67,8 +67,13 @@ const TUTORIAL_STEPS = [
   },
 ];
 
+// Impersonation must not mutate the impersonated patient's tutorial state —
+// an admin clicking "Skip" shouldn't dismiss the tutorial for the real user.
+// Keep the dismissal tab-local in that case.
+const SESSION_DISMISS_KEY = 'tutorial-dismissed-in-session';
+
 export const OnboardingTutorial: React.FC = () => {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, impersonating } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [visible, setVisible] = useState(false);
@@ -78,6 +83,7 @@ export const OnboardingTutorial: React.FC = () => {
   useEffect(() => {
     if (!userProfile || userProfile.role !== 'patient') return;
     if (userProfile.tutorialDismissedAt) return;
+    if (sessionStorage.getItem(SESSION_DISMISS_KEY)) return;
 
     const done = userProfile.tutorialCompletedSections || [];
     const skip = userProfile.tutorialSkippedSections || [];
@@ -109,6 +115,10 @@ export const OnboardingTutorial: React.FC = () => {
 
   const persist = (updates: Record<string, unknown>) => {
     if (!user) return;
+    // Skip the Firestore write while impersonating — writing to the real
+    // patient's doc would pollute their tutorial state and the rules may
+    // deny it outright, leaving the popup to reappear on every navigation.
+    if (impersonating) return;
     userOperations.updateUser(user.uid, updates as any).catch(() => {});
   };
 
@@ -138,6 +148,7 @@ export const OnboardingTutorial: React.FC = () => {
 
   const dismiss = () => {
     setVisible(false);
+    sessionStorage.setItem(SESSION_DISMISS_KEY, '1');
     persist({ tutorialDismissedAt: new Date() });
   };
 

@@ -280,7 +280,22 @@ async function lookupOne(
 ) {
   if (q.drchronoId) {
     const snap = await db.doc(`${PATIENTS}/${q.drchronoId}`).get();
-    if (!snap.exists) {
+    if (snap.exists) {
+      const p = toUnified(snap.data());
+      return {
+        status: "matched",
+        matched: true,
+        candidatesCount: 1,
+        exactMatchesCount: 1,
+        patient: p,
+        candidates: [p],
+        errorMessage: null,
+      };
+    }
+    // ID miss — if no other signals, bail. Otherwise fall through to name/
+    // email/phone search (stored drchronoId may be stale).
+    const hasOther = q.firstName || q.lastName || q.email || q.phone;
+    if (!hasOther) {
       return {
         status: "no-match",
         matched: false,
@@ -291,16 +306,6 @@ async function lookupOne(
         errorMessage: null,
       };
     }
-    const p = toUnified(snap.data());
-    return {
-      status: "matched",
-      matched: true,
-      candidatesCount: 1,
-      exactMatchesCount: 1,
-      patient: p,
-      candidates: [p],
-      errorMessage: null,
-    };
   }
 
   const snap = await db.collection(PATIENTS).limit(500).get();

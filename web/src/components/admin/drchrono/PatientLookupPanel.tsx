@@ -12,23 +12,27 @@ import logger from '../../../lib/logger';
 /**
  * Parse a free-text search input into a DrChronoLookupQuery.
  * Detection rules:
- *   - contains '@'           → email
- *   - all digits, len ≥ 10   → phone (last 10 digits)
- *   - all digits, len < 10   → drchronoId
- *   - comma-separated name   → "Last, First"
- *   - whitespace-separated   → "First Last"
+ *   - '#' prefix + digits                  → drchronoId (explicit)
+ *   - contains '@'                         → email
+ *   - digits (with or without format chars) → phone
+ *   - comma-separated name                 → "Last, First"
+ *   - whitespace-separated                 → "First Last"
+ *
+ * `#` is the unambiguous ID marker — bare digits go to phone search so
+ * an unformatted phone still works. The UI populates `#<id>` for you
+ * when you click the DrChrono button on a patient card.
  */
 export function parseSearchInput(raw: string): DrChronoLookupQuery | null {
   const v = raw.trim();
   if (!v) return null;
 
+  if (/^#\d+$/.test(v)) return { drchronoId: v.slice(1) };
+
   if (v.includes('@')) return { email: v };
 
   const digits = v.replace(/\D/g, '');
-  if (/^\d+$/.test(v) || (digits.length > 0 && digits === v.replace(/[\s\-()]/g, ''))) {
-    if (digits.length >= 10) return { phone: digits };
-    return { drchronoId: digits };
-  }
+  const isPhoneLike = digits.length >= 7 && /^[\d\s\-()+]+$/.test(v);
+  if (isPhoneLike) return { phone: digits };
 
   if (v.includes(',')) {
     const [last, first] = v.split(',').map(s => s.trim());
@@ -81,7 +85,7 @@ export const PatientLookupPanel: React.FC = () => {
     if (firstName) q.firstName = firstName;
     if (lastName) q.lastName = lastName;
 
-    setInput(drchronoId || `${firstName} ${lastName}`.trim());
+    setInput(drchronoId ? `#${drchronoId}` : `${firstName} ${lastName}`.trim());
     void runLookup(q);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
@@ -139,7 +143,8 @@ export const PatientLookupPanel: React.FC = () => {
             </Button>
           </div>
           <p className="text-xs text-secondary-500">
-            Examples: <span className="font-mono">1001</span> (DrChrono ID),{' '}
+            Examples: <span className="font-mono">#1001</span> (DrChrono ID — prefix with{' '}
+            <span className="font-mono">#</span>),{' '}
             <span className="font-mono">grace.chen1@example.com</span>,{' '}
             <span className="font-mono">+15551000005</span>,{' '}
             <span className="font-mono">Patel, Hiro</span>. A single token is

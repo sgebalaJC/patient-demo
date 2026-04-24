@@ -21,15 +21,15 @@ interface ConfirmModalProps {
 const variantStyles = {
   danger: {
     icon: 'bg-red-100 text-red-600',
-    button: 'bg-red-600 hover:bg-red-700 text-white',
+    button: 'bg-surface-card border border-red-600 text-red-600 hover:bg-red-50',
   },
   warning: {
     icon: 'bg-yellow-100 text-yellow-600',
-    button: 'bg-yellow-600 hover:bg-yellow-700 text-white',
+    button: 'bg-surface-card border border-yellow-600 text-yellow-700 hover:bg-yellow-50',
   },
   info: {
     icon: 'bg-primary-100 text-primary-600',
-    button: 'bg-primary-600 hover:bg-primary-700 text-white',
+    button: 'bg-surface-card border border-primary-600 text-primary-600 hover:bg-primary-50',
   },
 };
 
@@ -93,13 +93,14 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           <Button variant="secondary" onClick={handleClose}>
             {cancelLabel}
           </Button>
-          <button
+          <Button
+            variant="secondary"
             onClick={handleConfirm}
             disabled={inputRequired && !inputValue.trim()}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${styles.button}`}
+            className={styles.button}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </ModalOverlay>

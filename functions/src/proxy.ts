@@ -53,7 +53,20 @@ export const sidecarProxy = onRequest({
       userRole = "admin";
       userData = {role: "admin", firstName: "Super", lastName: "Admin", email: decodedToken.email};
     } else {
-      const userDoc = await db.collection("users").doc(decodedToken.uid).get();
+      let userDoc = await db.collection("users").doc(decodedToken.uid).get();
+      // Sim-mode fallback: when an operator impersonates a seeded demo
+      // patient, their UID only exists at `simulation/native/users/<uid>`.
+      // AuthContext already mirrors this fallback on the web side so the
+      // banner + dashboard render; without the same fallback here, the
+      // proxy rejects every sidecar call (including support chat) with
+      // 403 "User not found".
+      if (!userDoc.exists) {
+        const settings = await db.doc("system/settings").get();
+        const simMode = settings.exists && settings.data()?.simulationMode === true;
+        if (simMode) {
+          userDoc = await db.doc(`simulation/native/users/${decodedToken.uid}`).get();
+        }
+      }
       if (!userDoc.exists) {
         res.status(403).json({error: "User not found"});
         return;

@@ -7,7 +7,6 @@ import { AuthProvider } from './contexts/AuthContext';
 import { GlobalModals } from './components/ui/GlobalModals';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { PendingApproval } from './components/ui/PendingApproval';
-import { ImpersonationBanner } from './components/layout/ImpersonationBanner';
 import { isAdminRole } from './lib/roles';
 
 // Eager-loaded (needed immediately)
@@ -71,12 +70,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <PendingApproval />;
   }
 
-  return (
-    <>
-      <ImpersonationBanner />
-      {children}
-    </>
-  );
+  return <>{children}</>;
 };
 
 // Role-based redirect component

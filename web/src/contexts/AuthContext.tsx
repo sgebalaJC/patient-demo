@@ -72,7 +72,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         if (fbUser) {
           setUser(fbUser);
-          const isImpersonating = !!sessionStorage.getItem('impersonation');
+          // Drop a stale impersonation flag when the signed-in identity can't
+          // plausibly be the impersonation target: super admins are never
+          // targets, and returning to the operator's own email means they
+          // signed back in without using the Exit button. Without this, a
+          // leftover flag blocks the super-admin bypass below and leaves the
+          // operator stuck loading a non-existent Firestore profile.
+          let impersonationRaw = sessionStorage.getItem('impersonation');
+          if (impersonationRaw) {
+            try {
+              const rec = JSON.parse(impersonationRaw);
+              const realEmail = rec?.realEmail as string | undefined;
+              if (
+                isSuperAdminEmail(fbUser.email) ||
+                (realEmail && fbUser.email && realEmail.toLowerCase() === fbUser.email.toLowerCase())
+              ) {
+                sessionStorage.removeItem('impersonation');
+                impersonationRaw = null;
+              }
+            } catch {
+              sessionStorage.removeItem('impersonation');
+              impersonationRaw = null;
+            }
+          }
+          const isImpersonating = !!impersonationRaw;
           setImpersonating(isImpersonating);
 
           // Super admin (not impersonating): synthesize profile, skip Firestore

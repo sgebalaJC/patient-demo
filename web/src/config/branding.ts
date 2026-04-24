@@ -11,6 +11,7 @@ import { FORK_CONFIG } from '../../../fork.config';
 export interface BrandingAgent {
   name: string;
   tagline: string;
+  pronouns: string;
 }
 
 export interface BrandingPlatformVendor {

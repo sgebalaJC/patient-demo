@@ -82,8 +82,8 @@ export interface ForkConfig {
 
   /** AI agent identities hosted via sidecar + OpenClaw. */
   readonly agents: {
-    readonly admin: { readonly name: string; readonly tagline: string };
-    readonly patient: { readonly name: string; readonly tagline: string };
+    readonly admin: { readonly name: string; readonly tagline: string; readonly pronouns: string };
+    readonly patient: { readonly name: string; readonly tagline: string; readonly pronouns: string };
   };
 
   /** Platform vendor — the entity the practice pays to run the system. */
@@ -169,10 +169,12 @@ export const FORK_CONFIG: ForkConfig = {
     admin: {
       name: 'Aurelia',
       tagline: 'Your practice management assistant',
+      pronouns: 'she/her',
     },
     patient: {
       name: 'Sunny',
       tagline: 'Here to help with your questions',
+      pronouns: 'he/him',
     },
   },
   platformVendor: {

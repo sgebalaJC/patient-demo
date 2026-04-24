@@ -29,8 +29,6 @@ export interface ForkConfig {
     readonly legalEntity: string;
     /** Sender prefix for outbound SMS. */
     readonly smsSenderName: string;
-    /** Signature on admin system-generated messages. */
-    readonly adminSignatureName: string;
   };
 
   /** Contact — public phone, fax, email addresses. */
@@ -129,7 +127,6 @@ export const FORK_CONFIG: ForkConfig = {
     shortName: 'Aurelia MD',
     legalEntity: 'Aurelia Primary Care',
     smsSenderName: 'Aurelia',
-    adminSignatureName: 'Aurelia Admin System',
   },
   contact: {
     supportEmail: 'support@aureliamd.com',

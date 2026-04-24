@@ -13,7 +13,6 @@ export const FUNCTIONS_BRANDING = {
   shortName: FORK_CONFIG.identity.shortName,
   practiceName: FORK_CONFIG.identity.practiceName,
   legalEntity: FORK_CONFIG.identity.legalEntity,
-  adminSignatureName: FORK_CONFIG.identity.adminSignatureName,
   portalUrl: FORK_CONFIG.urls.portalUrl,
   fromEmail: FORK_CONFIG.contact.fromEmail,
   additionalOrigins: [...FORK_CONFIG.urls.additionalOrigins] as string[],

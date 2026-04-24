@@ -15,9 +15,10 @@ Generic HIPAA-posture patient engagement platform. Fork per customer, one dedica
 ## Project Structure
 
 ```
+fork.config.ts # ★ PER-CUSTOMER: single source of truth for web + functions branding
 web/           # React SPA (Vite)
   src/config/
-    branding.ts      # ★ PER-CUSTOMER: name, logo, colors, agent identities
+    branding.ts      # adapter over /fork.config.ts — do not edit
     features.ts      # feature flags
   src/pages/         # Route-level pages
   src/components/    # Feature-organized; ui/ primitives; chat/ shared admin+patient
@@ -27,12 +28,12 @@ web/           # React SPA (Vite)
   src/types/         # TypeScript types
 mobile/        # Flutter patient app
   lib/config/
-    branding.dart    # ★ PER-CUSTOMER: mirror of web/src/config/branding.ts
+    branding.dart    # ★ PER-CUSTOMER: mirror of /fork.config.ts (Flutter can't import TS)
     constants.dart, colors.dart, firebase_config.dart
   lib/services/firestore/   # Per-collection service classes incl. subscriptions_service.dart
   lib/widgets/              # Shared widgets (SubscriptionStatusCard, etc.)
 functions/     # Cloud Functions (Node 20)
-  src/branding.ts    # ★ PER-CUSTOMER: short name for SMS/email/admin signatures
+  src/branding.ts    # adapter over _fork.config.ts (auto-copied by prebuild)
   src/index.ts       # Shared entry (SMS reminders, user management, calendar sync)
   src/stripe.ts      # Stripe Checkout, cancel, webhook → Firestore mirror
 sidecar/       # Bun sidecar API deployed to customer host
@@ -62,7 +63,7 @@ Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000
 
 ## Key Patterns
 
-- **Branding:** Single source of truth is `web/src/config/branding.ts` (web), `mobile/lib/config/branding.dart` (mobile), `functions/src/branding.ts` (functions). These three must stay in sync — Functions cannot import from the web workspace. Never hardcode the practice name in new code; import `BRANDING` and template it.
+- **Branding:** Single source of truth is `/fork.config.ts` at the repo root. `web/src/config/branding.ts` imports it directly; `functions/src/branding.ts` reads `functions/src/_fork.config.ts`, a copy made by the functions `prebuild` hook. Edit `/fork.config.ts` — never the adapter files. Mobile still mirrors manually at `mobile/lib/config/branding.dart`. Never hardcode the practice name in new code; import `BRANDING` (web) or `FUNCTIONS_BRANDING` (functions) and template it.
 - **Auth:** Firebase Auth (email/password, Google OAuth, email link, phone OTP). Roles: `patient`, `admin`, `super_admin`, plus `assistant` (used only by the sidecar auth layer — agents calling back in; never granted admin scope by Firestore rules). **Passwordless by default** — admin-created users sign in via email link, Google OAuth, or phone OTP.
 - **App Settings:** Global knobs in `system/settings` Firestore doc (`registrationEnabled`, `paginationSize`, `bootstrapped`). Publicly readable, admin-only write. `AppSettingsProvider` + `useAppSettings()` hook. `registrationEnabled: false` by default — self-signup blocked at every chokepoint when off.
 - **Bootstrap first admin:** WordPress-style. `AuthPage` renders `BootstrapAdminForm` when `system/settings.bootstrapped === false`. Client writes `bootstrap-requests/{uuid}`, `onBootstrapRequestCreated` Firestore trigger processes it and writes a custom token back, client signs in via `signInWithCustomToken`. **Firestore trigger, not `onCall`** — GCP orgs with `iam.allowedPolicyMemberDomains` (HIPAA-hardened) block public Cloud Run invocation. Trigger auto-heals by flipping `bootstrapped: true` if any user exists.
@@ -113,7 +114,7 @@ Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000
 
 Before first deploy to a new customer project:
 
-1. **Branding** — edit `web/src/config/branding.ts`, `mobile/lib/config/branding.dart`, `functions/src/branding.ts`
+1. **Branding** — edit `/fork.config.ts` (covers web + functions), then mirror into `mobile/lib/config/branding.dart` for Flutter
 2. **Firebase project** — update `.firebaserc` and `web/apphosting.yaml` (with new project's Firebase config values). With `rootDir: "web"` in `firebase.json`, App Hosting reads only `web/apphosting.yaml` — there is no root-level `apphosting.yaml`.
 3. **Firebase Web API key in Secret Manager** — NEVER put it in `web/apphosting.yaml` with `value:`; GitHub's scanner flags it, and `secret:` is cleaner for rotation:
    ```bash

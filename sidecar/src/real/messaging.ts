@@ -11,17 +11,9 @@
  */
 
 import { getDb } from "../lib/firebase.js";
+import { toE164Lenient } from "../lib/phone.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { createHmac } from "node:crypto";
-
-function normalizePhone(raw: string): string {
-  if (!raw) return "";
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  if (raw.startsWith("+") && digits.length >= 10) return `+${digits}`;
-  return "";
-}
 
 // Cached once on first call — env doesn't change under us, so we don't
 // need to re-read process.env per-request. Stays lazy so a sim-only
@@ -51,7 +43,7 @@ export async function realSmsSend(request: Request): Promise<Response> {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const toNormalized = normalizePhone(body.to || "");
+  const toNormalized = toE164Lenient(body.to || "");
   if (!toNormalized) return Response.json({ error: "Valid recipient phone required" }, { status: 400 });
   const text = typeof body.body === "string" ? body.body.trim() : "";
   if (!text) return Response.json({ error: "Message body required" }, { status: 400 });

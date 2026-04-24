@@ -28,7 +28,8 @@ import {
   RotateCw,
   ExternalLink
 } from 'lucide-react';
-import { formatFileSize, getFileIcon } from '../lib/storage';
+import { formatFileSize, getFileIcon, downloadFile } from '../lib/storage';
+import { usePdfPreview } from '../hooks/usePdfPreview';
 
 const documentTypes: { type: DocumentType; label: string; icon: React.ElementType; description: string }[] = [
   { type: 'drivers_license', label: "Driver's License", icon: UserIcon, description: 'Government issued ID' },
@@ -51,6 +52,13 @@ export const DocumentsPage: React.FC = () => {
   const [previewDocument, setPreviewDocument] = useState<PatientDocument | null>(null);
   const [imageZoom, setImageZoom] = useState(100);
   const [imageRotation, setImageRotation] = useState(0);
+  const { url: pdfBlobUrl, loading: pdfBlobLoading, error: pdfBlobError } = usePdfPreview(
+    async () => {
+      if (!previewDocument || previewDocument.fileType !== 'application/pdf') return null;
+      return previewDocument.fileUrl;
+    },
+    [previewDocument?.id, previewDocument?.fileUrl, previewDocument?.fileType],
+  );
 
   useEffect(() => {
     if (user && userProfile) {
@@ -87,8 +95,24 @@ export const DocumentsPage: React.FC = () => {
     setDeleteConfirmId(null);
   };
 
-  const openDocument = (url: string) => {
-    window.open(url, '_blank');
+  const handleDownload = async (doc: PatientDocument) => {
+    try {
+      await downloadFile(doc.fileUrl, doc.originalFileName || doc.fileName || 'document');
+    } catch (error) {
+      logger.error('Error downloading document:', error);
+    }
+  };
+
+  const openInNewTab = async (doc: PatientDocument) => {
+    try {
+      const r = await fetch(doc.fileUrl);
+      const blob = await r.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (error) {
+      logger.error('Error opening document:', error);
+    }
   };
 
   // Check if document can be previewed
@@ -216,7 +240,7 @@ export const DocumentsPage: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => openDocument(document.fileUrl)}
+                          onClick={() => handleDownload(document)}
                           title="Download"
                         >
                           <Download className="h-4 w-4" />
@@ -318,7 +342,7 @@ export const DocumentsPage: React.FC = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => window.open(previewDocument.fileUrl, '_blank')}
+                onClick={() => openInNewTab(previewDocument)}
                 className="text-white hover:bg-white/20"
                 title="Open in New Tab"
               >
@@ -327,7 +351,7 @@ export const DocumentsPage: React.FC = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => openDocument(previewDocument.fileUrl)}
+                onClick={() => handleDownload(previewDocument)}
                 className="text-white hover:bg-white/20"
                 title="Download"
               >
@@ -361,11 +385,25 @@ export const DocumentsPage: React.FC = () => {
                 />
               </div>
             ) : previewDocument.fileType === 'application/pdf' ? (
-              <iframe
-                src={`${previewDocument.fileUrl}#toolbar=1&navpanes=0`}
-                className="w-full h-full bg-white rounded-lg"
-                title={previewDocument.originalFileName || 'PDF Preview'}
-              />
+              pdfBlobLoading ? (
+                <div className="flex items-center justify-center w-full h-full text-white text-sm">
+                  Loading PDF…
+                </div>
+              ) : pdfBlobError ? (
+                <div className="flex flex-col items-center justify-center w-full h-full text-rose-200 text-sm gap-3">
+                  {pdfBlobError}
+                  <Button variant="secondary" onClick={() => handleDownload(previewDocument)}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download instead
+                  </Button>
+                </div>
+              ) : pdfBlobUrl ? (
+                <iframe
+                  src={`${pdfBlobUrl}#toolbar=1&navpanes=0`}
+                  className="w-full h-full bg-white rounded-lg"
+                  title={previewDocument.originalFileName || 'PDF Preview'}
+                />
+              ) : null
             ) : (
               <div className="text-center text-white">
                 <File className="h-24 w-24 mx-auto mb-4 opacity-50" />
@@ -373,7 +411,7 @@ export const DocumentsPage: React.FC = () => {
                 <Button
                   variant="secondary"
                   className="mt-4"
-                  onClick={() => openDocument(previewDocument.fileUrl)}
+                  onClick={() => handleDownload(previewDocument)}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Download to View

@@ -22,6 +22,7 @@ import { Modal } from '../ui/Modal';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { useSimulationMode } from '../../hooks/useSimulationMode';
 import { usePdfPreview } from '../../hooks/usePdfPreview';
+import { downloadFile } from '../../lib/storage';
 
 interface PatientDocumentManagementProps {
   isOpen: boolean;
@@ -96,20 +97,24 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
   const handleDownload = async (doc: PatientDocument) => {
     try {
       logger.log('📥 [PatientDocumentManagement] Downloading document:', doc.id);
-      
-      // Create a temporary link to download the file
-      const link = document.createElement('a');
-      link.href = doc.fileUrl;
-      link.download = doc.fileName || doc.originalFileName || 'document';
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
+      await downloadFile(doc.fileUrl, doc.fileName || doc.originalFileName || 'document');
       logger.log('✅ [PatientDocumentManagement] Download initiated');
     } catch (error) {
       logger.error('❌ [PatientDocumentManagement] Error downloading document:', error);
       setActionError('Failed to download document. Please try again.');
+    }
+  };
+
+  const handleOpenInNewTab = async (doc: PatientDocument) => {
+    try {
+      const r = await fetch(doc.fileUrl);
+      const blob = await r.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (error) {
+      logger.error('❌ [PatientDocumentManagement] Error opening document:', error);
+      setActionError('Failed to open document. Please try again.');
     }
   };
 
@@ -376,7 +381,7 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => window.open(previewDocument.fileUrl, '_blank')}
+                onClick={() => handleOpenInNewTab(previewDocument)}
                 className="text-white hover:bg-white/20"
                 title="Open in New Tab"
               >

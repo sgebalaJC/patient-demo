@@ -282,6 +282,28 @@ export const getFileIcon = (fileType: string): string => {
   return '📎';
 };
 
+// Trigger a browser download for any URL — http(s), blob:, or data: — by
+// fetching the bytes and clicking a same-origin blob-URL anchor. Chrome blocks
+// top-level navigation to `data:` URLs and long `<a href=data:... download>`
+// links fail in some browsers, so we always go through a Blob.
+export const downloadFile = async (url: string, fileName: string): Promise<void> => {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Download fetch ${r.status}`);
+  const blob = await r.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = fileName || 'download';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  }
+};
+
 // Format file size
 export const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';

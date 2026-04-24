@@ -159,8 +159,8 @@ Rule of thumb: if a customer-facing admin could plausibly want to rotate/change 
 Each integration has zero or more OpenClaw skills bundled with it — the agent sees the skill only while the integration is connected and enabled. Skill ids are mapped to integration ids in `openclaw/workspace/skills.manifest.json`.
 
 **On the sidecar host:**
-- `workspace/skills-source/<id>/SKILL.md` — read-only library populated by `sidecar/deploy.sh` for every skill shipped in the repo.
-- `workspace/skills/<id>/SKILL.md` — active set the agent actually reads.
+- `workspace/skills-source/<id>/SKILL.md` — read-only library populated by `sidecar/deploy.sh` for **every** skill shipped in the repo. Source of truth for the install cycle.
+- `workspace/skills/<id>/SKILL.md` — active set the agent actually reads. Integration-bundled skills (listed under `integrations.*` in the manifest) land here only via the install cycle — `deploy.sh` skips them. Always-on skills (admin-tasks, scheduling, secure-messaging, …) land here directly at deploy.
 - `workspace/skills.manifest.json` — integration → `[skillId, …]` mapping (copied by deploy).
 
 **Lifecycle:**

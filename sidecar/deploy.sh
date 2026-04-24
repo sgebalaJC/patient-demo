@@ -131,21 +131,48 @@ if [ -d "$SKILLS_DIR" ]; then
   REMOTE_STATE_DIR="${REMOTE_STATE_DIR:-/root/.openclaw}"
   REMOTE_SKILLS_DIR="$REMOTE_STATE_DIR/workspace/skills"
   REMOTE_SKILLS_SOURCE="$REMOTE_STATE_DIR/workspace/skills-source"
-  echo "==> Deploying skills to $REMOTE_SKILLS_DIR (active) + $REMOTE_SKILLS_SOURCE (library)"
-  # Figure out who owns the parent state dir so we can chown after writing
-  # as root (e.g. /home/openclaw/.openclaw is owned by user 'openclaw').
+
+  # Compute the set of integration-bundled skill ids from the manifest so
+  # we can route them to the source library (not the active dir). The
+  # install/uninstall cycle, driven by save*Credentials / setEnabled /
+  # disconnect* callables, owns the active copy from here on.
+  if [ -f "$SKILLS_MANIFEST_FILE" ]; then
+    BUNDLED_SKILLS=$(node -e '
+      const m = JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
+      const out = new Set();
+      for (const ids of Object.values(m.integrations || {})) for (const id of ids) out.add(id);
+      process.stdout.write([...out].join(" "));
+    ' "$SKILLS_MANIFEST_FILE" 2>/dev/null || echo "")
+  else
+    BUNDLED_SKILLS=""
+  fi
+  echo "==> Deploying skills to $REMOTE_SKILLS_DIR (always-on) + $REMOTE_SKILLS_SOURCE (integration-bundled library)"
+  [ -n "$BUNDLED_SKILLS" ] && echo "    bundled (source-only): $BUNDLED_SKILLS"
+
+  is_bundled() {
+    for b in $BUNDLED_SKILLS; do [ "$b" = "$1" ] && return 0; done
+    return 1
+  }
+
   REMOTE_OWNER=$(run_remote "stat -c '%U:%G' '$REMOTE_STATE_DIR' 2>/dev/null" | tr -d '\r')
   for skill_dir in "$SKILLS_DIR"/*/; do
     skill_name=$(basename "$skill_dir")
-    # Always populate the read-only library so /skills/sync has a source.
+    # Every skill ships to the read-only source library so /skills/sync
+    # has something to copy from on install.
     run_remote "sudo mkdir -p '$REMOTE_SKILLS_SOURCE/$skill_name'"
-    # Keep populating the active workspace as well (backward-compat —
-    # existing forks rely on it; install/uninstall cycle then takes over).
-    run_remote "sudo mkdir -p '$REMOTE_SKILLS_DIR/$skill_name'"
     if [ -f "${skill_dir}SKILL.md" ]; then
       copy_to_remote "${skill_dir}SKILL.md" "/tmp/skill-${skill_name}.md"
       run_remote "sudo cp /tmp/skill-${skill_name}.md '$REMOTE_SKILLS_SOURCE/$skill_name/SKILL.md'"
-      run_remote "sudo mv /tmp/skill-${skill_name}.md '$REMOTE_SKILLS_DIR/$skill_name/SKILL.md'"
+      if is_bundled "$skill_name"; then
+        # Integration-bundled: the active copy is owned by the
+        # install/uninstall cycle, not the deploy. Clean up the tmp file.
+        run_remote "rm -f /tmp/skill-${skill_name}.md"
+      else
+        # Always-on (admin-tasks, scheduling, secure-messaging, …) —
+        # deploy owns it; copy straight into the active workspace.
+        run_remote "sudo mkdir -p '$REMOTE_SKILLS_DIR/$skill_name'"
+        run_remote "sudo mv /tmp/skill-${skill_name}.md '$REMOTE_SKILLS_DIR/$skill_name/SKILL.md'"
+      fi
     fi
   done
   if [ -f "$SKILLS_MANIFEST_FILE" ]; then

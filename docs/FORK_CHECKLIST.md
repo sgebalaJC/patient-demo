@@ -10,8 +10,7 @@ narrative walkthroughs see the other docs in this folder.
 - [ ] Java 21+ (for Firebase emulators)
 - [ ] A Google Workspace account for the customer (BAA must cover it)
 - [ ] A Stripe account for the customer
-- [ ] A Twilio account for the customer (if SMS is enabled)
-- [ ] A SignalWire account for the customer (if faxes are enabled)
+- [ ] A SignalWire account for the customer (handles both SMS and fax — see [SIGNALWIRE_SMS.md](SIGNALWIRE_SMS.md) for the A2P 10DLC brand/campaign registration that's required before SMS sending will work at scale in the US)
 - [ ] OAuth credentials for any EHR the customer uses (DrChrono, Athena, Elation, eCW, NextGen, Tebra, Greenway, Practice Fusion, Cerner, Epic — admins fill them in at runtime; you only need to whitelist the redirect URI per vendor)
 - [ ] SSH access to a Linux VPS (if shipping the AI agent)
 
@@ -64,17 +63,15 @@ cp functions/.env.example functions/.env
 ```bash
 firebase functions:secrets:set STRIPE_SECRET_KEY
 firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
-firebase functions:secrets:set TWILIO_ACCOUNT_SID
-firebase functions:secrets:set TWILIO_AUTH_TOKEN
-firebase functions:secrets:set TWILIO_PHONE_NUMBER
 firebase functions:secrets:set GOOGLE_SA_KEY       # if using Calendar sync
 firebase functions:secrets:set SLACK_ALERTS_WEBHOOK_URL   # '=disabled' is fine if unused
 
-# Fax — if SignalWire is enabled
+# SignalWire — handles both SMS and fax
 firebase functions:secrets:set SIGNALWIRE_PROJECT_ID
 firebase functions:secrets:set SIGNALWIRE_AUTH_TOKEN
-firebase functions:secrets:set SIGNALWIRE_SPACE_URL
-firebase functions:secrets:set SIGNALWIRE_SIGNING_KEY
+firebase functions:secrets:set SIGNALWIRE_SPACE_URL       # e.g. example.signalwire.com
+firebase functions:secrets:set SIGNALWIRE_SMS_FROM        # E.164 sender DID for SMS
+firebase functions:secrets:set SIGNALWIRE_SIGNING_KEY     # optional — only if configured
 ```
 
 The sidecar reads the SignalWire secrets directly from Secret Manager too
@@ -148,21 +145,26 @@ firebase apphosting:rollouts:create web-patient --git-branch main
 - [ ] **If real SMS is enabled** (Admin → SMS page), also append to
       `/root/sidecar.env`:
       ```
-      TWILIO_ACCOUNT_SID=AC...
-      TWILIO_AUTH_TOKEN=...
-      TWILIO_PHONE_NUMBER=+1...
+      SIGNALWIRE_PROJECT_ID=...
+      SIGNALWIRE_AUTH_TOKEN=...
+      SIGNALWIRE_SPACE_URL=example.signalwire.com
+      SIGNALWIRE_SMS_FROM=+1...
       ```
       Without these, `/admin-api/messaging/send` (outbound send) and
-      `/webhooks/twilio/inbound-sms` (inbound) both fail. Sim mode
-      works fine without them.
+      `/webhooks/signalwire/inbound-sms` (inbound) both fail. Sim mode
+      works fine without them. US production SMS additionally needs
+      A2P 10DLC brand + campaign registration — see
+      [SIGNALWIRE_SMS.md](SIGNALWIRE_SMS.md).
 - [ ] Deploy sidecar: `cd sidecar && ./deploy.sh`
 - [ ] Verify health via admin dashboard → AI Agent page
-- [ ] **If real SMS is enabled:** register the Twilio Messaging Webhook
-      on the customer's Twilio number → URL
-      `http://<sidecar-host>:8081/webhooks/twilio/inbound-sms` (HTTP
-      POST). Requires the TWILIO_AUTH_TOKEN on the VM to match — the
-      handler HMAC-SHA1-verifies every request. Plain HTTP is fine for
-      staging; front with nginx+TLS for HIPAA-hardened production.
+- [ ] **If real SMS is enabled:** register the SignalWire Messaging
+      Webhook on the customer's SignalWire number → URL
+      `http://<sidecar-host>:8081/webhooks/signalwire/inbound-sms`
+      (HTTP POST). Requires the `SIGNALWIRE_AUTH_TOKEN` on the VM to
+      match — the handler HMAC-SHA1-verifies every request (and also
+      accepts the legacy `X-Twilio-Signature` header for tenants
+      porting numbers over). Plain HTTP is fine for staging; front
+      with nginx+TLS for HIPAA-hardened production.
 
 ## 10. Simulation middleware (optional — see [SIMULATION.md](SIMULATION.md))
 

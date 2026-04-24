@@ -4,7 +4,7 @@ Phased plan for expanding the patient portal from its current feature set. Each 
 
 ## Current State
 
-**Built:** Auth (email/password, Google OAuth, email link, phone OTP), patient dashboard, appointments, messages with attachments, prescription refills, document uploads, intake forms, support chat, billing (Stripe), admin dashboard, user management, admin todos, specialist requests, AI agents (admin + patient support), Google Calendar sync, SMS reminders (Twilio), mobile app (Flutter) with biometric auth, three themes.
+**Built:** Auth (email/password, Google OAuth, email link, phone OTP), patient dashboard, appointments, messages with attachments, prescription refills, document uploads, intake forms, support chat, billing (Stripe), admin dashboard, user management, admin todos, specialist requests, AI agents (admin + patient support), Google Calendar sync, SMS reminders (SignalWire), mobile app (Flutter) with biometric auth, three themes.
 
 **Feature flags:** user management, appointments, messages, prescriptions, documents, patient intake, admin tools, admin todos.
 

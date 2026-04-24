@@ -142,27 +142,32 @@ To enable:
    firebase deploy --only "functions:onAppointmentWrite,functions:getAvailableSlots,functions:validateAppointmentSlot" --project patient-demo-project
    ```
 
-## Missing step 5 — Twilio SMS (optional)
+## Missing step 5 — SignalWire SMS (optional)
 
 Phone verification currently throws at runtime (the function is deployed, but
-there's no Twilio account configured). To enable phone sign-in and SMS
+there's no SignalWire account configured). To enable phone sign-in and SMS
 reminders:
 
-1. Create a Twilio account, buy or pick a phone number.
+1. Create a SignalWire account (or reuse the existing fax account — same
+   credentials can drive both), buy or pick a phone number.
 2. Add to `functions/.env`:
    ```
-   TWILIO_ACCOUNT_SID=AC...
-   TWILIO_AUTH_TOKEN=...
-   TWILIO_PHONE_NUMBER=+14155551234
+   SIGNALWIRE_PROJECT_ID=...
+   SIGNALWIRE_AUTH_TOKEN=...
+   SIGNALWIRE_SPACE_URL=example.signalwire.com
+   SIGNALWIRE_SMS_FROM=+14155551234
    ```
 3. Redeploy the phone functions:
    ```bash
    firebase deploy --only "functions:sendPhoneVerificationCode,functions:verifyPhoneCode,functions:sendPhoneLoginCode,functions:verifyPhoneLogin" --project patient-demo-project
    ```
 4. In Firebase console → Authentication → Sign-in method → enable Phone.
+5. Register A2P 10DLC brand + campaign on SignalWire (required for
+   production US SMS — unregistered traffic gets filtered). See
+   [SIGNALWIRE_SMS.md](SIGNALWIRE_SMS.md) for the walkthrough.
 
-Note: Twilio costs ~$0.0075 per SMS. Not free. Only enable if you're actually
-going to demo SMS flow.
+Note: SignalWire SMS is ~$0.004 per segment (cheaper than Twilio). Not free.
+Only enable if you're actually going to demo SMS flow.
 
 ## Missing step 6 — scheduled functions (reminder crons)
 
@@ -182,8 +187,9 @@ firebase deploy --only "functions:calendarReminderScheduler,functions:morningRem
 
 Expect ~$0/month for up to 3 scheduled functions (Firebase's free quota).
 
-Warning: the reminder functions import Twilio and will throw if
-`TWILIO_ACCOUNT_SID` isn't set — set the Twilio env vars first (step 5).
+Warning: the reminder functions call SignalWire and will silently skip the
+send (logging a warning) if `SIGNALWIRE_PROJECT_ID` / `SIGNALWIRE_SMS_FROM`
+aren't set — set the SignalWire env vars first (step 5).
 
 ## Missing step 7 — AI agent (optional, big lift)
 

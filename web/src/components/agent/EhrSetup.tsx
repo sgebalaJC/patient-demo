@@ -218,8 +218,8 @@ export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
           <div className="shrink-0 text-secondary-400">
             <ChevronRight className="h-4 w-4" />
           </div>
-          <div className="shrink-0 bg-secondary-50 rounded-lg p-2">
-            <Icon className="w-6 h-6 text-primary-600" />
+          <div className="shrink-0">
+            <Icon />
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-secondary-900">{provider.name}</h3>
@@ -239,8 +239,8 @@ export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
         <div className="shrink-0 text-secondary-400">
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>
-        <div className="shrink-0 bg-secondary-50 rounded-lg p-2">
-          <Icon className="w-6 h-6 text-primary-600" />
+        <div className="shrink-0">
+          <Icon />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">

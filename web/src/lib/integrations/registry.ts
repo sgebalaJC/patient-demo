@@ -11,8 +11,21 @@
  * the AgentPage Integrations panel pick it up automatically.
  */
 
-import { Stethoscope, Activity } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import type { ComponentType } from 'react';
+import {
+  DrChronoIcon,
+  AthenaIcon,
+  ElationIcon,
+  EcwIcon,
+  NextGenIcon,
+  TebraIcon,
+  GreenwayIcon,
+  PracticeFusionIcon,
+  CernerIcon,
+  EpicIcon,
+} from '../../components/agent/icons/ProductIcons';
+
+export type IntegrationIcon = ComponentType;
 
 export type FieldType = 'text' | 'password' | 'url' | 'checkbox';
 
@@ -35,7 +48,7 @@ export interface EhrProviderDef {
    *  Cloud Function name prefix. */
   id: string;
   name: string;
-  icon: LucideIcon;
+  icon: IntegrationIcon;
   description: string;
   /** Description shown when the integration is authorized + enabled. */
   activeDescription: string;
@@ -69,7 +82,7 @@ export const EHR_PROVIDERS: EhrProviderDef[] = [
   {
     id: 'drchrono',
     name: 'DrChrono',
-    icon: Stethoscope,
+    icon: DrChronoIcon,
     description: 'Connect DrChrono so the admin agent can search patients and manage chart data',
     activeDescription: 'The admin agent can read & write the practice EHR when this integration is enabled',
     clientIdPlaceholder: 'EHR-generated client ID',
@@ -82,7 +95,7 @@ export const EHR_PROVIDERS: EhrProviderDef[] = [
   {
     id: 'athena',
     name: 'Athenahealth',
-    icon: Stethoscope,
+    icon: AthenaIcon,
     description: 'Connect Athenahealth so the admin agent can query the practice EHR',
     activeDescription:
       'The admin agent can read Athena patient and appointment data when this integration is enabled',
@@ -113,7 +126,7 @@ export const EHR_PROVIDERS: EhrProviderDef[] = [
   {
     id: 'elation',
     name: 'Elation Health',
-    icon: Stethoscope,
+    icon: ElationIcon,
     description: 'Connect Elation so the admin agent can query the practice EHR',
     activeDescription:
       'The admin agent can read Elation patient and clinical data when this integration is enabled',
@@ -128,7 +141,7 @@ export const EHR_PROVIDERS: EhrProviderDef[] = [
   {
     id: 'ecw',
     name: 'eClinicalWorks',
-    icon: Activity,
+    icon: EcwIcon,
     description: 'Connect eClinicalWorks via SMART-on-FHIR so the admin agent can query the practice EHR',
     activeDescription:
       'The admin agent can read Patient/Appointment/Encounter FHIR resources when this integration is enabled',
@@ -177,7 +190,7 @@ export const EHR_PROVIDERS: EhrProviderDef[] = [
   {
     id: 'nextgen',
     name: 'NextGen Healthcare',
-    icon: Stethoscope,
+    icon: NextGenIcon,
     description: 'Connect NextGen so the admin agent can query the practice EHR',
     activeDescription:
       'The admin agent can read NextGen patient and chart data when this integration is enabled',
@@ -192,7 +205,7 @@ export const EHR_PROVIDERS: EhrProviderDef[] = [
   {
     id: 'tebra',
     name: 'Tebra (Kareo)',
-    icon: Stethoscope,
+    icon: TebraIcon,
     description:
       'Connect Tebra so the admin agent can query the practice EHR and billing system',
     activeDescription:
@@ -207,7 +220,7 @@ export const EHR_PROVIDERS: EhrProviderDef[] = [
   {
     id: 'greenway',
     name: 'Greenway Health',
-    icon: Stethoscope,
+    icon: GreenwayIcon,
     description: 'Connect Greenway Intergy / Prime Suite so the admin agent can query the practice EHR',
     activeDescription:
       'The admin agent can read Greenway patient and chart data when this integration is enabled',
@@ -222,7 +235,7 @@ export const EHR_PROVIDERS: EhrProviderDef[] = [
   {
     id: 'pfusion',
     name: 'Practice Fusion',
-    icon: Stethoscope,
+    icon: PracticeFusionIcon,
     description: 'Connect Practice Fusion so the admin agent can query the practice EHR',
     activeDescription:
       'The admin agent can read Practice Fusion patient and chart data when this integration is enabled',
@@ -277,7 +290,7 @@ function smartProviders(): EhrProviderDef[] {
     {
       id: 'cerner',
       name: 'Cerner / Oracle Health',
-      icon: Activity,
+      icon: CernerIcon,
       description:
         'Connect Cerner / Oracle Health via SMART-on-FHIR so the admin agent can query the practice EHR',
       activeDescription:
@@ -293,7 +306,7 @@ function smartProviders(): EhrProviderDef[] {
     {
       id: 'epic',
       name: 'Epic',
-      icon: Activity,
+      icon: EpicIcon,
       description:
         'Connect Epic via SMART-on-FHIR so the admin agent can query the practice EHR',
       activeDescription:

@@ -13,7 +13,6 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "start": "serve -s dist",
     "emulators:export-and-stop": "cd .. && (firebase emulators:export . 2>/dev/null || true) && sleep 2 && pkill -f firebase || true",
     "emulators": "npm run emulators:export-and-stop && sleep 1 && cd .. && firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data",
     "emulators:stop": "pkill -f firebase || true",
@@ -32,11 +31,7 @@
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.2.3",
     "react-hook-form": "^7.71.2",
-    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.16.0",
-    "remark-gfm": "^4.0.1",
-    "serve": "^14.2.6",
-    "tailwind-merge": "^3.5.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {

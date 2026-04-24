@@ -31,6 +31,12 @@ import { startHealthMonitor } from "./lib/health-monitor.js";
 
 const PORT = parseInt(process.env.PORT || "8081");
 
+// Bun's default idleTimeout is 10s, which cuts off long-running routes:
+// /backup/create tars the whole workspace, DrChrono file uploads stream
+// large PDFs, and some EHR API responses are genuinely slow. 255s is the
+// max Bun accepts — anything longer requires setting to 0 (disabled).
+const IDLE_TIMEOUT_SECONDS = 255;
+
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://localhost:3000",
@@ -209,10 +215,7 @@ function findRoute(path: string, method: string): { route: Route; params: string
 
 const server = Bun.serve({
   port: PORT,
-  // Bun's default idleTimeout is 10s. Long ops (workspace tar for /backup/create,
-  // large DrChrono uploads, slow DrChrono API responses) need much longer or
-  // they return "Empty reply from server".
-  idleTimeout: 255,
+  idleTimeout: IDLE_TIMEOUT_SECONDS,
   async fetch(request, server) {
     const url = new URL(request.url);
     const path = url.pathname;

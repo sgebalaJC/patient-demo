@@ -4,14 +4,8 @@
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "doctorId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "appointmentDate",
-          "order": "ASCENDING"
-        }
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "appointmentDate", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -19,44 +13,8 @@
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "appointmentDate",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "appointments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "appointmentDate",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "appointments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "appointmentDate",
-          "order": "ASCENDING"
-        }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "appointmentDate", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -64,18 +22,9 @@
       "collectionGroup": "message-threads",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "isActive",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -83,18 +32,8 @@
       "collectionGroup": "message-threads",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "isActive",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -102,14 +41,9 @@
       "collectionGroup": "message-threads",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "isActive",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "unreadForAdmin", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -117,14 +51,9 @@
       "collectionGroup": "message-threads",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "priority",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "priority", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -132,18 +61,9 @@
       "collectionGroup": "patient-documents",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "isActive",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "uploadedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "uploadedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -151,14 +71,8 @@
       "collectionGroup": "prescription-refills",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -166,37 +80,8 @@
       "collectionGroup": "prescription-refills",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "requestedDate",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "prescription-refills",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "requestedDate",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -204,33 +89,8 @@
       "collectionGroup": "thread-messages",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "threadId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "thread-messages",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "threadId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "senderId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "threadId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -238,33 +98,8 @@
       "collectionGroup": "users",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "isActive",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "role",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "role",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "lastName", "order": "ASCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -272,14 +107,8 @@
       "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "recipientRole",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "recipientRole", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -287,18 +116,9 @@
       "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "recipientRole",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "recipientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "recipientRole", "order": "ASCENDING" },
+        { "fieldPath": "recipientId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -306,14 +126,8 @@
       "collectionGroup": "patient-intake-forms",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -321,14 +135,8 @@
       "collectionGroup": "support-chat",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -336,14 +144,8 @@
       "collectionGroup": "patient-intake-forms",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -351,14 +153,8 @@
       "collectionGroup": "specialist-requests",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -366,127 +162,8 @@
       "collectionGroup": "specialist-requests",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "message-threads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "notifications",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "recipientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "role",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "lastName",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "appointments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "appointmentDate",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "message-threads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "isActive",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "unreadForAdmin",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "message-threads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "isActive",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "priority",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "prescription-refills",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -494,14 +171,8 @@
       "collectionGroup": "client-errors",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "level",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "level", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -509,14 +180,8 @@
       "collectionGroup": "prior-auths",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -524,18 +189,9 @@
       "collectionGroup": "prior-auths",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "assignedTo",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "assignedTo", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -543,14 +199,8 @@
       "collectionGroup": "prior-auths",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "patientId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -558,18 +208,9 @@
       "collectionGroup": "prior-auths",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "payerId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "payerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -586,14 +227,8 @@
       "collectionGroup": "payer-policies",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "sourceFetchedAt",
-          "order": "ASCENDING"
-        }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "sourceFetchedAt", "order": "ASCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -601,14 +236,8 @@
       "collectionGroup": "payer-policies",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "payerId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        }
+        { "fieldPath": "payerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -616,14 +245,8 @@
       "collectionGroup": "payer-policies",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -631,18 +254,9 @@
       "collectionGroup": "payer-policy-snapshots",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "payerId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "cptCode",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "fetchedAt",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "payerId", "order": "ASCENDING" },
+        { "fieldPath": "cptCode", "order": "ASCENDING" },
+        { "fieldPath": "fetchedAt", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },
@@ -650,14 +264,8 @@
       "collectionGroup": "prior-auth-events",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "priorAuthId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "timestamp",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "priorAuthId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
       ],
       "density": "SPARSE_ALL"
     },

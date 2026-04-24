@@ -22,7 +22,6 @@ export default defineConfig({
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage', 'firebase/functions'],
           'vendor-ui': ['lucide-react', 'react-hook-form', '@hookform/resolvers', 'zod'],
-          'vendor-markdown': ['react-markdown', 'remark-gfm'],
         },
       },
     },

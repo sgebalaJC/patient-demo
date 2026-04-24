@@ -24,12 +24,6 @@ class FieldLimits {
   static const int messageContentMin = 10;
   static const int messageContentMax = 5000;
 
-  // Todos
-  static const int todoTitleMin = 1;
-  static const int todoTitleMax = 100;
-  static const int todoDescriptionMax = 1000;
-  static const int todoCategoryMax = 100;
-
   // Prescriptions
   static const int medicationNameMin = 2;
   static const int medicationNameMax = 200;

@@ -42,11 +42,6 @@ export const FIELD_LIMITS = {
   messageSubject: { min: 5, max: 200 },
   messageContent: { min: 10, max: 5000 },
 
-  // Todos
-  todoTitle: { min: 1, max: 100 },
-  todoDescription: { max: 1000 },
-  todoCategory: { max: 100 },
-
   // Prescriptions
   medicationName: { min: 2, max: 200 },
   dosage: { max: 200 },

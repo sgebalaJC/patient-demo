@@ -1,9 +1,9 @@
 /**
  * Sidecar-side SMS simulator. Reads/writes `simulation/sms/*`.
  *
- * Real counterpart: Twilio REST API (client.messages.create). In real
- * mode the admin-api messaging case is 501 for now — Twilio calls
- * still go directly from the Cloud Functions.
+ * Real counterpart: SignalWire LaML Messages.json. In real mode the
+ * admin-api messaging case POSTs to SignalWire; Cloud Functions use the
+ * same helper for welcome SMS, reminders, and phone OTP.
  */
 import { getDb } from "../lib/firebase.js";
 import { Timestamp } from "firebase-admin/firestore";

@@ -1270,7 +1270,7 @@ export async function handleAdminApi(
 
       // ── Messaging (SMS) ──
       // Path: /admin-api/messaging/<action>
-      // Sim mode → simulation/sms/* sandbox. Real mode → Twilio REST +
+      // Sim mode → simulation/sms/* sandbox. Real mode → SignalWire LaML +
       // sms-outbound/sms-inbound. inject-inbound is a sim-only helper.
       case "messaging": {
         const sub = parts[1];

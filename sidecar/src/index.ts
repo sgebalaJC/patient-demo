@@ -122,8 +122,8 @@ const ROUTES: Route[] = [
     handler: () => Response.json({ ok: true, service: "patient-sidecar", version: "1.1.0" }),
   },
   {
-    // Twilio inbound webhook is HMAC-verified inside the handler, no CORS.
-    match: "/webhooks/twilio/inbound-sms", scope: "public",
+    // SignalWire inbound webhook is HMAC-verified inside the handler, no CORS.
+    match: "/webhooks/signalwire/inbound-sms", scope: "public",
     handler: ({ request }) => inboundSmsWebhook(request),
   },
 
@@ -238,13 +238,13 @@ const server = Bun.serve({
 
     const { route, params } = hit;
 
-    // Public routes skip rate limit + auth entirely (Twilio, healthz).
-    // Twilio inbound-sms intentionally bypasses CORS too — it's called
-    // server-to-server, not from a browser.
+    // Public routes skip rate limit + auth entirely (SignalWire, healthz).
+    // The SignalWire inbound-sms webhook intentionally bypasses CORS too —
+    // it's called server-to-server, not from a browser.
     if (route.scope === "public") {
       try {
         const res = await route.handler({ request, url, path, method, auth: null, params });
-        return path === "/webhooks/twilio/inbound-sms" ? res : respond(res);
+        return path === "/webhooks/signalwire/inbound-sms" ? res : respond(res);
       } catch (err) {
         console.error(`[sidecar] ${method} ${path} error:`, err);
         return respond(Response.json({ error: "Internal error" }, { status: 500 }));

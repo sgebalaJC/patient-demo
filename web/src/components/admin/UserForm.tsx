@@ -431,7 +431,7 @@ export const UserForm: React.FC<UserFormProps> = ({
                                                     Send welcome SMS
                                                 </span>
                                                 <span className="block text-xs text-secondary-500 mt-0.5">
-                                                    Optional Twilio SMS letting the user know to check their email for the sign-in link.
+                                                    Optional SMS letting the user know to check their email for the sign-in link.
                                                 </span>
                                             </span>
                                         </label>

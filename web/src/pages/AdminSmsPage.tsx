@@ -127,7 +127,7 @@ export const AdminSmsPage: React.FC = () => {
         title="SMS"
         subtitle={simulated
           ? 'Simulated SMS history — reminders, welcome messages, and patient replies land here.'
-          : 'Outbound admin messages + inbound replies captured from Twilio.'}
+          : 'Outbound admin messages + inbound replies captured from SignalWire.'}
       />
 
       <Card className="p-6 space-y-3">
@@ -213,7 +213,7 @@ export const AdminSmsPage: React.FC = () => {
             ? 'No SMS yet. Seed demo data or trigger a welcome SMS to populate.'
             : tab === 'outbound'
               ? 'No outbound SMS yet. Send one above.'
-              : 'No inbound SMS yet. Register the Twilio Messaging Webhook on your number.'}
+              : 'No inbound SMS yet. Register the SignalWire Messaging Webhook on your number.'}
         </Card>
       ) : (
         <Card className="p-0 overflow-hidden">

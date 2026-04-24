@@ -4,7 +4,7 @@
  * `system/settings.simulationMode` and branch into
  * `sidecar/src/sim/<domain>.ts` when on. This module only exists to
  * expose the super-admin seed/clear callables and the in-process
- * simulator helpers that Cloud Functions use to short-circuit Twilio /
+ * simulator helpers that Cloud Functions use to short-circuit SignalWire /
  * Gmail sends in sim mode.
  *
  * See `docs/SIMULATION.md` for the full story.

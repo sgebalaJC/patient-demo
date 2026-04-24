@@ -42,7 +42,7 @@ We collect information you provide directly to us, such as when you create an ac
 We use the information we collect to provide, maintain, and improve our services, including to facilitate communication between patients and healthcare providers, send appointment reminders, and process prescription refill requests.
 
 ### 3. Information Sharing
-We do not sell, trade, or otherwise transfer your personally identifiable information to outside parties. This does not include trusted third parties who assist us in operating our application (such as Twilio for SMS reminders), conducting our business, or servicing you, so long as those parties agree to keep this information confidential.
+We do not sell, trade, or otherwise transfer your personally identifiable information to outside parties. This does not include trusted third parties who assist us in operating our application (such as SignalWire for SMS reminders), conducting our business, or servicing you, so long as those parties agree to keep this information confidential.
 
 ### 4. Data Security
 We implement appropriate security measures to protect your personal information, including encryption of data in transit and at rest, role-based access controls, and regular security audits.

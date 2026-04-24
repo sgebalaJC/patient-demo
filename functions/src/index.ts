@@ -77,7 +77,7 @@ admin.initializeApp();
 // Initialize Firestore
 const db = admin.firestore();
 
-import {sendSms, TWILIO_SECRETS} from "./lib/twilio-helpers.js";
+import {sendSms, SMS_SECRETS} from "./lib/sms-helpers.js";
 
 // CORS, validation, phone normalization, rate limiting, and client-IP
 // helpers are all imported from ./lib/*.
@@ -286,7 +286,7 @@ export const logAuditEvent = onCall({
 
 export const createUserWithAuth = onCall({
   cors: corsOptions,
-  secrets: [...TWILIO_SECRETS],
+  secrets: [...SMS_SECRETS],
 }, async (request) => {
   try {
     logger.info('createUserWithAuth called');
@@ -435,9 +435,9 @@ export const createUserWithAuth = onCall({
 
     logger.info('User created successfully', { uid: userRecord.uid, role });
 
-    // Optional welcome SMS via Twilio (best-effort, non-fatal on failure).
+    // Optional welcome SMS via SignalWire (best-effort, non-fatal on failure).
     // In sim mode the call routes into simulation/sms/outbound — admins see
-    // it in the SMS history panel, real Twilio is not hit.
+    // it in the SMS history panel, real SignalWire is not hit.
     let smsSent = false;
     if (sendWelcomeSms && phoneNumber) {
       try {
@@ -1105,7 +1105,7 @@ import {
  */
 export const onAppointmentWrite = onDocumentWritten({
   document: 'appointments/{appointmentId}',
-  secrets: [...TWILIO_SECRETS],
+  secrets: [...SMS_SECRETS],
 }, async (event) => {
     const appointmentId = event.params.appointmentId;
     const before = event.data?.before?.data();
@@ -1529,16 +1529,16 @@ export const validateAppointmentSlot = onCall({
 
 
 // =============================================================================
-// Phone Verification (Twilio SMS)
+// Phone Verification (SignalWire SMS)
 // =============================================================================
 
 /**
- * Send a 6-digit verification code to a phone number via Twilio SMS.
+ * Send a 6-digit verification code to a phone number via SignalWire SMS.
  * Stores hashed code in Firestore with 10-minute expiry.
  */
 export const sendPhoneVerificationCode = onCall({
   cors: corsOptions,
-  secrets: [...TWILIO_SECRETS],
+  secrets: [...SMS_SECRETS],
 }, async (request) => {
   try {
     const context = request.auth;
@@ -1683,7 +1683,7 @@ export const verifyPhoneCode = onCall({
  */
 export const sendPhoneLoginCode = onCall({
   cors: corsOptions,
-  secrets: [...TWILIO_SECRETS],
+  secrets: [...SMS_SECRETS],
 }, async (request) => {
   try {
     const { phoneNumber } = request.data;
@@ -1698,7 +1698,7 @@ export const sendPhoneLoginCode = onCall({
     const wireTo = toE164(normalized);
 
     // Rate limit by phone number (protects the victim from SMS bombing) AND
-    // by client IP (protects our Twilio budget from an attacker cycling
+    // by client IP (protects our SignalWire budget from an attacker cycling
     // through many different phone numbers). Both must pass.
     await checkRateLimit(normalized, 'phoneLogin', 5, 10);
     await checkRateLimit(clientIp(request), 'phoneLoginIp', 10, 10);

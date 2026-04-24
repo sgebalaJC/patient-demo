@@ -26,8 +26,7 @@
     "nodemailer": "^8.0.5",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38",
-    "stripe": "^17.3.0",
-    "twilio": "^4.19.0"
+    "stripe": "^17.3.0"
   },
   "devDependencies": {
     "@types/archiver": "^7.0.0",

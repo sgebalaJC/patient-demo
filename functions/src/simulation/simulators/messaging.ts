@@ -1,5 +1,5 @@
 /**
- * SMS simulator + seed helpers. Twilio calls from Cloud Functions
+ * SMS simulator + seed helpers. SignalWire calls from Cloud Functions
  * short-circuit here when `system/settings.simulationMode` is on —
  * nothing goes over the wire, the fake message lands in
  * `simulation/sms/outbound/*` and surfaces in the admin SMS history.

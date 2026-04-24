@@ -13,7 +13,7 @@ import * as admin from "firebase-admin";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {logger} from "firebase-functions";
 import {FUNCTIONS_BRANDING} from "./branding.js";
-import {sendSms, TWILIO_SECRETS} from "./lib/twilio-helpers.js";
+import {sendSms, SMS_SECRETS} from "./lib/sms-helpers.js";
 
 function db() {
   return admin.firestore();
@@ -108,7 +108,7 @@ function applyTemplate(template: string, content: string, time: string): string 
 export const calendarReminderScheduler = onSchedule({
   schedule: "*/5 * * * *",
   timeZone: "America/Los_Angeles",
-  secrets: [...TWILIO_SECRETS],
+  secrets: [...SMS_SECRETS],
 }, async () => {
   const calendarId = process.env.GOOGLE_CALENDAR_ID;
   if (!calendarId) {
@@ -177,7 +177,7 @@ export const calendarReminderScheduler = onSchedule({
 export const morningReminderScheduler = onSchedule({
   schedule: "0 8 * * *",
   timeZone: "America/Los_Angeles",
-  secrets: [...TWILIO_SECRETS],
+  secrets: [...SMS_SECRETS],
 }, async () => {
   try {
     const pstDate = new Intl.DateTimeFormat("en-CA", {

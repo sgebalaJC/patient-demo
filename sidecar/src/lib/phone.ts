@@ -9,7 +9,7 @@
  */
 
 /**
- * Lenient E.164 normalizer used by the Twilio send path. Accepts free-text
+ * Lenient E.164 normalizer used by the SignalWire send path. Accepts free-text
  * input (`(442) 500-4657`, `+1 442 500 4657`, `4425004657`) and returns
  * `+1XXXXXXXXXX`. Returns empty string on anything unrecognizable — the
  * caller decides whether that's an error for their flow.

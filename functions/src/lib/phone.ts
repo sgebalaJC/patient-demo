@@ -3,7 +3,7 @@
  * both sides MUST produce the same canonical form.
  *
  * Canonical stored form on `users.phoneNumber` is 10 digits (e.g. `4425004657`).
- * External APIs (Twilio, Firebase Auth) take E.164 (`+1XXXXXXXXXX`).
+ * External APIs (SignalWire, Firebase Auth) take E.164 (`+1XXXXXXXXXX`).
  */
 
 /**

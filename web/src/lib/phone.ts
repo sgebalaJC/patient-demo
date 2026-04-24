@@ -1,7 +1,7 @@
 /**
  * Phone normalization — US-only. Canonical stored format is 10 digits
  * (no `+1`, no punctuation): `"4425004657"`. External APIs that require
- * E.164 (Twilio, Firebase Auth) wrap with `toE164(...)` at the boundary.
+ * E.164 (SignalWire, Firebase Auth) wrap with `toE164(...)` at the boundary.
  *
  * Used by every client path that writes `phoneNumber` to Firestore:
  *  - Admin UserForm edit flow
@@ -52,7 +52,7 @@ export function normalizePhoneNumber(phoneNumber: string | null | undefined): st
  * Output: "(442) 500-4657"
  *
  * Also accepts `+1XXXXXXXXXX` / `1XXXXXXXXXX` so rows read straight from
- * Twilio webhook payloads (sms-inbound `from`, sms-outbound `to`) render
+ * SignalWire webhook payloads (sms-inbound `from`, sms-outbound `to`) render
  * without a second normalize step. Unrecognized shapes return as-is.
  */
 export function formatPhoneDisplay(phoneNumber: string | null | undefined): string {
@@ -71,7 +71,7 @@ export function formatPhoneDisplay(phoneNumber: string | null | undefined): stri
 
 /**
  * Convert a canonical 10-digit phone to E.164 (`+1XXXXXXXXXX`) for
- * external APIs (Twilio, Firebase Auth). Throws on invalid input.
+ * external APIs (SignalWire, Firebase Auth). Throws on invalid input.
  */
 export function toE164(phone10: string): string {
   const digits = phone10.replace(/\D/g, '');

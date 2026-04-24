@@ -1,11 +1,18 @@
 /**
- * Real Twilio SMS — outbound send + inbound webhook.
+ * Real SignalWire SMS — outbound send + inbound webhook.
  *
  * Sim counterpart: `../sim/messaging.ts`. The admin-api messaging case
  * picks between these two based on `system/settings.simulationMode`.
  *
+ * SignalWire's LaML subsystem is Twilio-API-compatible: same form shape
+ * for Messages.json, same HMAC-SHA1-over-sorted-params webhook signature
+ * algorithm. Only the host, auth identity (projectId vs accountSid), and
+ * signature header name differ.
+ *
  * Inbound webhook is mounted BEFORE the auth gate in index.ts and is
- * HMAC-SHA1-verified against Twilio's X-Twilio-Signature header.
+ * HMAC-SHA1-verified against SignalWire's X-SignalWire-Signature header
+ * (with fallback to X-Twilio-Signature for tenants that kept the legacy
+ * header when porting from Twilio).
  *
  * PII logging policy: only SIDs and phone last-4 appear in logs.
  */
@@ -15,24 +22,37 @@ import { toE164Lenient } from "../lib/phone.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-// Cached once on first call — env doesn't change under us, so we don't
-// need to re-read process.env per-request. Stays lazy so a sim-only
-// deployment without Twilio creds doesn't fail at import time.
-let _twilioAuth: { sid: string; token: string; from: string } | null = null;
-function twilioAuth(): { sid: string; token: string; from: string } {
-  if (_twilioAuth) return _twilioAuth;
-  const sid = process.env.TWILIO_ACCOUNT_SID || "";
-  const token = process.env.TWILIO_AUTH_TOKEN || "";
-  const from = process.env.TWILIO_PHONE_NUMBER || "";
-  if (!sid || !token || !from) {
-    throw new Error("Twilio credentials missing (TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER)");
+// Cached once on first call — env doesn't change under us. Stays lazy so
+// a sim-only deployment without SignalWire creds doesn't fail at import
+// time.
+let _swAuth: {
+  projectId: string;
+  authToken: string;
+  spaceUrl: string;
+  from: string;
+} | null = null;
+function swAuth(): {
+  projectId: string;
+  authToken: string;
+  spaceUrl: string;
+  from: string;
+} {
+  if (_swAuth) return _swAuth;
+  const projectId = process.env.SIGNALWIRE_PROJECT_ID || "";
+  const authToken = process.env.SIGNALWIRE_AUTH_TOKEN || "";
+  const spaceUrl = (process.env.SIGNALWIRE_SPACE_URL || "").replace(/\/+$/, "");
+  const from = process.env.SIGNALWIRE_SMS_FROM || "";
+  if (!projectId || !authToken || !spaceUrl || !from) {
+    throw new Error(
+      "SignalWire SMS credentials missing (SIGNALWIRE_PROJECT_ID/AUTH_TOKEN/SPACE_URL/SMS_FROM)",
+    );
   }
-  _twilioAuth = { sid, token, from };
-  return _twilioAuth;
+  _swAuth = { projectId, authToken, spaceUrl, from };
+  return _swAuth;
 }
 
 // ---------------------------------------------------------------------------
-// Outbound — real Twilio send
+// Outbound — real SignalWire LaML send
 // ---------------------------------------------------------------------------
 
 export async function realSmsSend(request: Request): Promise<Response> {
@@ -49,12 +69,12 @@ export async function realSmsSend(request: Request): Promise<Response> {
   if (!text) return Response.json({ error: "Message body required" }, { status: 400 });
   if (text.length > 1600) return Response.json({ error: "Message exceeds 1600 characters" }, { status: 400 });
 
-  const { sid: accountSid, token, from } = twilioAuth();
+  const { projectId, authToken, spaceUrl, from } = swAuth();
   const form = new URLSearchParams({ From: from, To: toNormalized, Body: text });
-  const basic = Buffer.from(`${accountSid}:${token}`).toString("base64");
+  const basic = Buffer.from(`${projectId}:${authToken}`).toString("base64");
 
   const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+    `https://${spaceUrl}/api/laml/2010-04-01/Accounts/${projectId}/Messages.json`,
     {
       method: "POST",
       headers: {
@@ -67,16 +87,16 @@ export async function realSmsSend(request: Request): Promise<Response> {
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    console.error(`[sms] Twilio send failed ${res.status}`, errText.slice(0, 200));
+    console.error(`[sms] SignalWire send failed ${res.status}`, errText.slice(0, 200));
     return Response.json(
-      { error: `Twilio error ${res.status}: ${errText.slice(0, 200)}` },
+      { error: `SignalWire error ${res.status}: ${errText.slice(0, 200)}` },
       { status: 502 },
     );
   }
 
-  const twilioBody = (await res.json()) as { sid: string; status: string };
-  const msgSid = twilioBody.sid;
-  const status = twilioBody.status || "queued";
+  const swBody = (await res.json()) as { sid: string; status: string };
+  const msgSid = swBody.sid;
+  const status = swBody.status || "queued";
 
   await getDb().collection("sms-outbound").doc(msgSid).set({
     sid: msgSid,
@@ -96,7 +116,7 @@ export async function realSmsSend(request: Request): Promise<Response> {
 // Inbound webhook — public, signature-verified
 // ---------------------------------------------------------------------------
 
-function verifyTwilioSignature(
+function verifySignature(
   url: string,
   params: Record<string, string>,
   signature: string,
@@ -122,11 +142,14 @@ export async function inboundSmsWebhook(request: Request): Promise<Response> {
   const params: Record<string, string> = {};
   for (const [k, v] of new URLSearchParams(raw)) params[k] = v;
 
+  // Prefer the signing-key-scoped secret if present, else fall back to the
+  // API auth token. SignalWire signs webhooks with whichever the tenant
+  // configured; legacy Twilio-ported accounts typically use the auth token.
   let token: string;
   try {
-    token = twilioAuth().token;
+    token = process.env.SIGNALWIRE_SIGNING_KEY || swAuth().authToken;
   } catch {
-    console.error("[sms-inbound] TWILIO_AUTH_TOKEN missing — cannot verify");
+    console.error("[sms-inbound] SIGNALWIRE_AUTH_TOKEN missing — cannot verify");
     return new Response("Server misconfigured", { status: 500 });
   }
 
@@ -135,8 +158,14 @@ export async function inboundSmsWebhook(request: Request): Promise<Response> {
   const reqUrl = new URL(request.url);
   const effectiveUrl = fwdHost ? `${fwdProto}://${fwdHost}${reqUrl.pathname}${reqUrl.search}` : request.url;
 
-  const signature = request.headers.get("x-twilio-signature") || "";
-  if (!signature || !verifyTwilioSignature(effectiveUrl, params, signature, token)) {
+  // SignalWire sets X-SignalWire-Signature. Accept X-Twilio-Signature too
+  // so the webhook keeps working if the tenant ports over from Twilio and
+  // points the existing webhook URL at SignalWire mid-migration.
+  const signature =
+    request.headers.get("x-signalwire-signature") ||
+    request.headers.get("x-twilio-signature") ||
+    "";
+  if (!signature || !verifySignature(effectiveUrl, params, signature, token)) {
     console.warn("[sms-inbound] signature check failed", {
       url: effectiveUrl,
       sigPresent: !!signature,

@@ -5,7 +5,7 @@ narrative walkthroughs see the other docs in this folder.
 
 ## 0. Prerequisites
 
-- [ ] Node 20, npm, Firebase CLI (`npm install -g firebase-tools`)
+- [ ] Node 22, npm, Firebase CLI (`npm install -g firebase-tools`)
 - [ ] Flutter 3.41+ and Dart 3.11+
 - [ ] Java 21+ (for Firebase emulators)
 - [ ] A Google Workspace account for the customer (BAA must cover it)

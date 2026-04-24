@@ -10,7 +10,7 @@ Generic HIPAA-posture patient engagement platform. Fork per customer, one dedica
 - **External:** SignalWire (SMS + fax via LaML), Google Maps, Google Workspace (Gmail/Calendar/Drive), Stripe (billing), Anthropic via OpenClaw gateway (agent LLM calls)
 - **EHR integrations:** DrChrono, Athena, Elation, eClinicalWorks, NextGen, Tebra, Greenway, Practice Fusion, Cerner, Epic — all via sidecar admin-api with OAuth per practice
 - **AI agents:** OpenClaw admin + patient support agents on a customer-owned VPS, proxied via Cloud Functions
-- **Node:** v20
+- **Node:** v22
 
 ## Project Structure
 
@@ -32,7 +32,7 @@ mobile/        # Flutter patient app
     constants.dart, colors.dart, firebase_config.dart
   lib/services/firestore/   # Per-collection service classes incl. subscriptions_service.dart
   lib/widgets/              # Shared widgets (SubscriptionStatusCard, etc.)
-functions/     # Cloud Functions (Node 20)
+functions/     # Cloud Functions (Node 22)
   src/branding.ts    # adapter over _fork.config.ts (auto-copied by prebuild)
   src/index.ts       # Shared entry (SMS reminders, user management, calendar sync)
   src/stripe.ts      # Stripe Checkout, cancel, webhook → Firestore mirror

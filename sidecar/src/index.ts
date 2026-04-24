@@ -6,6 +6,11 @@
  *
  * Auth: Bearer token from SIDECAR_API_KEY env var, optionally with user context headers
  * Port: 8081 (configurable via PORT env)
+ *
+ * Routing: table-driven. Each Route in ROUTES below declares its path
+ * matcher, method, and visibility (public / admin-only / authed-any).
+ * The dispatcher walks ROUTES top-to-bottom; first match wins. Auth +
+ * admin gating is enforced centrally by the dispatcher, not per-handler.
  */
 
 import { validateAuth, type AuthResult } from "./lib/auth.js";
@@ -19,6 +24,9 @@ import { handleCreate, handleList, handleRestore, handleDelete, handleDownload }
 import { handleListSkills, handleReadSkill } from "./routes/skills.js";
 import { handleAdminApi } from "./routes/admin-api.js";
 import { handleSnapshot } from "./routes/snapshot.js";
+import {
+  handleCronList, handleCronAdd, handleCronDelete, handleCronRun, handleCronRuns,
+} from "./routes/cron.js";
 import { startHealthMonitor } from "./lib/health-monitor.js";
 
 const PORT = parseInt(process.env.PORT || "8081");
@@ -65,11 +73,138 @@ function corsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-/** Admin-only routes — patients can only access /chat */
-const ADMIN_ONLY_PREFIXES = ["/files", "/status", "/restart", "/stats", "/config", "/backup", "/cron", "/admin-api", "/snapshot"];
+// ─── Route table ──────────────────────────────────────────────────────
+// Each Route declares how a request is matched and who may call it.
+// - `match: string`             → exact path
+// - `match: { prefix: string }` → `path.startsWith(prefix)`
+// - `match: RegExp`             → regex; capture groups become `params`
+// - `method: string[]`          → allowed methods (omit for any)
+// - `scope: "public"`           → no auth required (health, webhooks)
+// - `scope: "admin"`            → authed + user-context must be admin
+// - `scope: "any"`              → authed, any role (patients can hit /chat)
 
-function isAdminOnlyRoute(path: string): boolean {
-  return ADMIN_ONLY_PREFIXES.some(prefix => path.startsWith(prefix));
+type MatchSpec = string | { prefix: string } | RegExp;
+type Scope = "public" | "admin" | "any";
+type HandlerCtx = {
+  request: Request;
+  url: URL;
+  path: string;
+  method: string;
+  auth: AuthResult | null;
+  /** Regex capture groups when `match` is a RegExp. */
+  params: string[];
+};
+type Handler = (ctx: HandlerCtx) => Response | Promise<Response>;
+
+interface Route {
+  match: MatchSpec;
+  method?: string[];
+  scope: Scope;
+  handler: Handler;
+}
+
+function matches(spec: MatchSpec, path: string): RegExpExecArray | string[] | null {
+  if (typeof spec === "string") return path === spec ? [] : null;
+  if (spec instanceof RegExp) return spec.exec(path);
+  return path.startsWith(spec.prefix) ? [] : null;
+}
+
+const ROUTES: Route[] = [
+  // ── Public ─────────────────────────────────────────────────────────
+  {
+    match: "/healthz", method: ["GET"], scope: "public",
+    handler: () => Response.json({ ok: true, service: "patient-sidecar", version: "1.1.0" }),
+  },
+  {
+    // Twilio inbound webhook is HMAC-verified inside the handler, no CORS.
+    match: "/webhooks/twilio/inbound-sms", scope: "public",
+    handler: ({ request }) => inboundSmsWebhook(request),
+  },
+
+  // ── Chat (any authed role, incl. patients) ─────────────────────────
+  {
+    match: "/chat", method: ["POST"], scope: "any",
+    handler: ({ request, auth }) => handleChat(request, auth!.user),
+  },
+
+  // ── Files (admin) ──────────────────────────────────────────────────
+  {
+    match: { prefix: "/files" }, scope: "admin",
+    handler: async ({ request, url, path, method }) => {
+      const filePath = decodeURIComponent(path.replace("/files/", "").replace("/files", ""));
+      if (method === "GET" && !filePath) {
+        const pattern = url.searchParams.get("pattern") || "";
+        return listFiles(pattern);
+      }
+      if (method === "GET" && filePath) return readFile(filePath);
+      if (method === "PUT" && filePath) return writeFileTo(filePath, request);
+      if (method === "DELETE" && filePath) return deleteFilePath(filePath);
+      return Response.json({ error: "Not found" }, { status: 404 });
+    },
+  },
+
+  // ── Skills (admin) ─────────────────────────────────────────────────
+  { match: "/skills", method: ["GET"], scope: "admin", handler: () => handleListSkills() },
+  {
+    match: /^\/skills\/([\w-]+)$/, method: ["GET"], scope: "admin",
+    handler: ({ params }) => handleReadSkill(params[0]),
+  },
+
+  // ── Status / Restart / Stats / Config (admin) ──────────────────────
+  { match: "/status", method: ["GET"], scope: "admin", handler: () => handleStatus() },
+  { match: "/restart", method: ["POST"], scope: "admin", handler: () => handleRestart() },
+  { match: "/stats", method: ["GET"], scope: "admin", handler: () => handleStats() },
+  { match: "/config", method: ["GET"], scope: "admin", handler: () => readConfig() },
+  { match: "/config", method: ["PATCH"], scope: "admin", handler: ({ request }) => patchConfig(request) },
+
+  // ── Backup (admin) ─────────────────────────────────────────────────
+  { match: "/backup/create", method: ["POST"], scope: "admin", handler: () => handleCreate() },
+  { match: "/backup/list", method: ["GET"], scope: "admin", handler: () => handleList() },
+  { match: "/backup/restore", method: ["POST"], scope: "admin", handler: ({ request }) => handleRestore(request) },
+  {
+    match: /^\/backup\/([^/]+)\/download$/, method: ["GET"], scope: "admin",
+    handler: ({ params }) => handleDownload(params[0]),
+  },
+  {
+    match: /^\/backup\/([^/]+)$/, method: ["DELETE"], scope: "admin",
+    handler: ({ params }) => handleDelete(params[0]),
+  },
+
+  // ── Cron (admin) ───────────────────────────────────────────────────
+  { match: "/cron", method: ["GET"], scope: "admin", handler: () => handleCronList() },
+  { match: "/cron", method: ["POST"], scope: "admin", handler: ({ request }) => handleCronAdd(request) },
+  {
+    match: /^\/cron\/([\w-]+)$/, method: ["DELETE"], scope: "admin",
+    handler: ({ params }) => handleCronDelete(params[0]),
+  },
+  {
+    match: /^\/cron\/([\w-]+)\/run$/, method: ["POST"], scope: "admin",
+    handler: ({ params }) => handleCronRun(params[0]),
+  },
+  {
+    match: /^\/cron\/([\w-]+)\/runs$/, method: ["GET"], scope: "admin",
+    handler: ({ params }) => handleCronRuns(params[0]),
+  },
+
+  // ── Snapshot (admin) ───────────────────────────────────────────────
+  { match: "/snapshot/openclaw", method: ["GET"], scope: "admin", handler: () => handleSnapshot() },
+
+  // ── Admin API proxy (admin) ────────────────────────────────────────
+  {
+    match: { prefix: "/admin-api" }, scope: "admin",
+    handler: ({ request, url, path, method }) => handleAdminApi(method, path, url, request),
+  },
+];
+
+function findRoute(path: string, method: string): { route: Route; params: string[] } | null {
+  for (const route of ROUTES) {
+    const m = matches(route.match, path);
+    if (!m) continue;
+    if (route.method && !route.method.includes(method)) continue;
+    const params = Array.isArray(m) ? Array.from(m).slice(1) : [];
+    return { route, params };
+  }
+  return null;
 }
 
 const server = Bun.serve({
@@ -89,228 +224,50 @@ const server = Bun.serve({
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
 
-    // Helper to attach CORS headers to all responses
     const respond = (res: Response): Response => {
       const headers = corsHeaders(origin);
-      for (const [k, v] of Object.entries(headers)) {
-        res.headers.set(k, v);
-      }
+      for (const [k, v] of Object.entries(headers)) res.headers.set(k, v);
       return res;
     };
 
-    // Health check — no auth required
-    if (path === "/healthz" && method === "GET") {
-      return respond(Response.json({ ok: true, service: "patient-sidecar", version: "1.1.0" }));
+    const hit = findRoute(path, method);
+    if (!hit) return respond(Response.json({ error: "Not found" }, { status: 404 }));
+
+    const { route, params } = hit;
+
+    // Public routes skip rate limit + auth entirely (Twilio, healthz).
+    // Twilio inbound-sms intentionally bypasses CORS too — it's called
+    // server-to-server, not from a browser.
+    if (route.scope === "public") {
+      try {
+        const res = await route.handler({ request, url, path, method, auth: null, params });
+        return path === "/webhooks/twilio/inbound-sms" ? res : respond(res);
+      } catch (err) {
+        console.error(`[sidecar] ${method} ${path} error:`, err);
+        return respond(Response.json({ error: "Internal error" }, { status: 500 }));
+      }
     }
 
-    // Twilio inbound SMS webhook — public, HMAC-verified inside the handler.
-    // No CORS headers (Twilio server-side, not a browser). Must be BEFORE
-    // the auth gate below.
-    if (path === "/webhooks/twilio/inbound-sms") {
-      return await inboundSmsWebhook(request);
-    }
-
-    // Rate limit
+    // Rate-limit non-public routes.
     const clientIp = getClientIp(request, server);
     if (checkRateLimit(clientIp)) {
       return respond(Response.json({ error: "Rate limited" }, { status: 429 }));
     }
 
-    // Auth check for all other endpoints
-    const authResult = validateAuth(request);
-    if (!authResult) {
-      return respond(Response.json({ error: "Unauthorized" }, { status: 401 }));
-    }
+    // Auth required for everything below.
+    const auth = validateAuth(request);
+    if (!auth) return respond(Response.json({ error: "Unauthorized" }, { status: 401 }));
 
-    // Enforce admin-only routes.
-    //
-    // When the caller comes via the CF proxy (user-context), require
-    // role === 'admin'. Previously we only rejected `patient`, which let
-    // the `assistant` role reach /admin-api/*, /files, /config, /backup —
-    // an out-of-band escalation because Firestore rules never grant
-    // assistants admin privileges.
-    //
-    // Direct api-key calls (no user context) are allowed — those are
-    // internal/backup/scheduled callers that already hold SIDECAR_API_KEY.
-    if (isAdminOnlyRoute(path)) {
-      if (authResult.mode === "user-context" && authResult.user?.role !== "admin") {
-        return respond(Response.json({ error: "Admin access required" }, { status: 403 }));
-      }
+    // Admin gate — user-context callers must have role=admin. Direct api-key
+    // callers (no user context) are internal/backup/scheduled and are
+    // allowed. Previously assistants could reach admin routes because the
+    // old check only rejected patients — see git blame for context.
+    if (route.scope === "admin" && auth.mode === "user-context" && auth.user?.role !== "admin") {
+      return respond(Response.json({ error: "Admin access required" }, { status: 403 }));
     }
 
     try {
-      // ── Chat ────────────────────────────────────
-      if (path === "/chat" && method === "POST") {
-        return respond(await handleChat(request, authResult.user));
-      }
-
-      // ── Files ───────────────────────────────────
-      if (path.startsWith("/files")) {
-        const filePath = decodeURIComponent(path.replace("/files/", "").replace("/files", ""));
-
-        if (method === "GET" && !filePath) {
-          const pattern = url.searchParams.get("pattern") || "";
-          return respond(listFiles(pattern));
-        }
-        if (method === "GET" && filePath) return respond(readFile(filePath));
-        if (method === "PUT" && filePath) return respond(await writeFileTo(filePath, request));
-        if (method === "DELETE" && filePath) return respond(deleteFilePath(filePath));
-      }
-
-      // ── Skills ───────────────────────────────────
-      // Skills are deployed via sidecar/deploy.sh into
-      // /root/.openclaw/workspace/skills/<id>/SKILL.md. The sidecar enumerates
-      // them directly from disk — no openclaw CLI dependency, no registry
-      // file. Read /skills/:id to get the full SKILL.md body.
-      if (path === "/skills" && method === "GET") {
-        return respond(handleListSkills());
-      }
-      const skillReadMatch = path.match(/^\/skills\/([\w-]+)$/);
-      if (skillReadMatch && method === "GET") {
-        return respond(handleReadSkill(skillReadMatch[1]));
-      }
-
-      // ── Status / Restart ────────────────────────
-      if (path === "/status" && method === "GET") return respond(await handleStatus());
-      if (path === "/restart" && method === "POST") return respond(await handleRestart());
-
-      // ── Stats ───────────────────────────────────
-      if (path === "/stats" && method === "GET") return respond(await handleStats());
-
-      // ── Config ──────────────────────────────────
-      if (path === "/config" && method === "GET") return respond(readConfig());
-      if (path === "/config" && method === "PATCH") return respond(await patchConfig(request));
-
-      // ── Backup ──────────────────────────────────
-      if (path === "/backup/create" && method === "POST") return respond(await handleCreate());
-      if (path === "/backup/list" && method === "GET") return respond(handleList());
-      if (path === "/backup/restore" && method === "POST") return respond(await handleRestore(request));
-      if (path.startsWith("/backup/") && path.endsWith("/download") && method === "GET") {
-        const name = path.replace("/backup/", "").replace("/download", "");
-        return respond(handleDownload(name));
-      }
-      if (path.startsWith("/backup/") && method === "DELETE") {
-        const name = path.replace("/backup/", "");
-        return respond(handleDelete(name));
-      }
-
-      // ── Cron ──────────────────────────────────
-      if (path === "/cron" && method === "GET") {
-        try {
-          const { execSync } = await import("child_process");
-          const out = execSync("/usr/bin/openclaw cron list --json", {
-            timeout: 15000, encoding: "utf-8",
-            env: { ...process.env, HOME: "/root" },
-            stdio: ["pipe", "pipe", "pipe"],
-          });
-          const jsonStart = out.indexOf("[");
-          const jsonEnd = out.lastIndexOf("]");
-          const json = (jsonStart >= 0 && jsonEnd > jsonStart)
-            ? out.slice(jsonStart, jsonEnd + 1) : "[]";
-          return respond(new Response(json, { headers: { "Content-Type": "application/json" } }));
-        } catch (err) {
-          console.error("[cron] list failed:", err);
-          return respond(Response.json([]));
-        }
-      }
-
-      if (path === "/cron" && method === "POST") {
-        try {
-          const body = await request.json() as Record<string, any>;
-          const { spawnSync } = await import("child_process");
-          const args = ["cron", "add"];
-          if (body.name) args.push("--name", String(body.name));
-          if (body.cron) args.push("--cron", String(body.cron));
-          if (body.at) args.push("--at", String(body.at));
-          if (body.tz) args.push("--tz", String(body.tz));
-          if (body.message) args.push("--message", String(body.message));
-          if (body.session) args.push("--session", String(body.session));
-          if (body.announce) args.push("--announce");
-          const result = spawnSync("/usr/bin/openclaw", args, {
-            timeout: 15000, encoding: "utf-8",
-            env: { ...process.env, HOME: "/root" },
-            stdio: ["pipe", "pipe", "pipe"],
-          });
-          if (result.status !== 0) {
-            return respond(Response.json({ error: "Cron add failed" }, { status: 500 }));
-          }
-          return respond(Response.json({ ok: true, output: (result.stdout as string).trim() }));
-        } catch (err: any) {
-          console.error("[cron] add failed:", err.message);
-          return respond(Response.json({ error: "Cron add failed" }, { status: 500 }));
-        }
-      }
-
-      if (path.match(/^\/cron\/[\w-]+$/) && method === "DELETE") {
-        try {
-          const jobId = path.split("/")[2];
-          const { spawnSync } = await import("child_process");
-          const result = spawnSync("/usr/bin/openclaw", ["cron", "delete", jobId], {
-            timeout: 15000, encoding: "utf-8",
-            env: { ...process.env, HOME: "/root" },
-            stdio: ["pipe", "pipe", "pipe"],
-          });
-          if (result.status !== 0) {
-            return respond(Response.json({ error: "Cron delete failed" }, { status: 500 }));
-          }
-          return respond(Response.json({ ok: true }));
-        } catch (err: any) {
-          console.error("[cron] delete failed:", err);
-          return respond(Response.json({ error: "Cron delete failed" }, { status: 500 }));
-        }
-      }
-
-      if (path.match(/^\/cron\/[\w-]+\/run$/) && method === "POST") {
-        try {
-          const jobId = path.split("/")[2];
-          const { spawnSync } = await import("child_process");
-          const result = spawnSync("/usr/bin/openclaw", ["cron", "run", jobId], {
-            timeout: 180000, encoding: "utf-8",
-            env: { ...process.env, HOME: "/root" },
-            stdio: ["pipe", "pipe", "pipe"],
-          });
-          if (result.status !== 0) {
-            return respond(Response.json({ error: "Cron run failed" }, { status: 500 }));
-          }
-          return respond(Response.json({ ok: true, output: (result.stdout as string).trim() }));
-        } catch (err: any) {
-          console.error("[cron] run failed:", err);
-          return respond(Response.json({ error: "Cron run failed" }, { status: 500 }));
-        }
-      }
-
-      if (path.match(/^\/cron\/[\w-]+\/runs$/) && method === "GET") {
-        try {
-          const jobId = path.split("/")[2];
-          const { spawnSync } = await import("child_process");
-          const result = spawnSync("/usr/bin/openclaw", ["cron", "runs", "--id", jobId, "--json"], {
-            timeout: 15000, encoding: "utf-8",
-            env: { ...process.env, HOME: "/root" },
-            stdio: ["pipe", "pipe", "pipe"],
-          });
-          const out = result.stdout as string;
-          const jsonStart = out.indexOf("[");
-          const jsonEnd = out.lastIndexOf("]");
-          const json = (jsonStart >= 0 && jsonEnd > jsonStart)
-            ? out.slice(jsonStart, jsonEnd + 1) : "[]";
-          return respond(new Response(json, { headers: { "Content-Type": "application/json" } }));
-        } catch (err) {
-          console.error("[cron] runs failed:", err);
-          return respond(Response.json([]));
-        }
-      }
-
-      // ── Snapshot ──────────────────────────────
-      if (path === "/snapshot/openclaw" && method === "GET") {
-        return respond(await handleSnapshot());
-      }
-
-      // ── Admin API ─────────────────────────────
-      if (path.startsWith("/admin-api")) {
-        return respond(await handleAdminApi(method, path, url, request));
-      }
-
-      return respond(Response.json({ error: "Not found" }, { status: 404 }));
+      return respond(await route.handler({ request, url, path, method, auth, params }));
     } catch (err) {
       console.error(`[sidecar] ${method} ${path} error:`, err);
       return respond(Response.json({ error: "Internal error" }, { status: 500 }));

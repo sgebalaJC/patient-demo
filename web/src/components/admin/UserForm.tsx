@@ -9,17 +9,16 @@ import {User} from '../../types';
 import {Timestamp} from 'firebase/firestore';
 import {userOperations} from '../../lib/firestore';
 import {Users, User as UserIcon, Mail, Shield, CheckCircle2, Phone, Calendar, Send, MessageSquare} from 'lucide-react';
-import { FIELD_LIMITS } from '../../lib/validation';
+import { emailField, firstNameField, lastNameField, phoneField } from '../../lib/validation';
 import { Modal } from '../ui/Modal';
 import { sendInviteLink } from '../../lib/firebase';
 import { normalizePhoneNumber } from '../../lib/phone';
 
 const userSchema = z.object({
-    email: z.string().max(FIELD_LIMITS.email.max, 'Email is too long').email('Please enter a valid email'),
-    firstName: z.string().min(FIELD_LIMITS.firstName.min, `First name must be at least ${FIELD_LIMITS.firstName.min} characters`).max(FIELD_LIMITS.firstName.max, `First name must be less than ${FIELD_LIMITS.firstName.max} characters`),
-    lastName: z.string().min(FIELD_LIMITS.lastName.min, `Last name must be at least ${FIELD_LIMITS.lastName.min} characters`).max(FIELD_LIMITS.lastName.max, `Last name must be less than ${FIELD_LIMITS.lastName.max} characters`),
-    phoneNumber: z.string()
-        .max(FIELD_LIMITS.phoneNumber.max, 'Phone number is too long')
+    email: emailField({ required: false }),
+    firstName: firstNameField(),
+    lastName: lastNameField(),
+    phoneNumber: phoneField()
         .refine(
             (val) => val === '' || /^\+?[\d\s\-\(\)]{10,}$/.test(val.replace(/\s/g, '')),
             'Please enter a valid phone number'

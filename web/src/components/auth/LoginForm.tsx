@@ -8,10 +8,11 @@ import { ErrorAlert } from '../ui/ErrorAlert';
 import { Input } from '../ui/Input';
 import { OAuthButtons } from './OAuthButtons';
 import { signInWithEmail } from '../../lib/firebase';
+import { emailField } from '../../lib/validation';
 import logger from "../../lib/logger";
 
 const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
+  email: emailField({ required: false }),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 

@@ -7,16 +7,12 @@ import {Button} from '../ui/Button';
 import {ErrorAlert} from '../ui/ErrorAlert';
 import {Input} from '../ui/Input';
 import {messageThreadOperations} from '../../lib/firestore';
-import { FIELD_LIMITS } from '../../lib/validation';
+import { newMessageBaseSchema } from '../../lib/validation';
 import logger from "../../lib/logger";
 import { Modal } from '../ui/Modal';
 import { useAuth } from '../../hooks/useAuth';
 
-const newMessageSchema = z.object({
-    subject: z.string().min(1, 'Subject is required').min(FIELD_LIMITS.messageSubject.min, `Subject must be at least ${FIELD_LIMITS.messageSubject.min} characters`).max(FIELD_LIMITS.messageSubject.max, `Subject must be less than ${FIELD_LIMITS.messageSubject.max} characters`),
-    message: z.string().min(1, 'Message is required').min(FIELD_LIMITS.messageContent.min, `Message must be at least ${FIELD_LIMITS.messageContent.min} characters`).max(FIELD_LIMITS.messageContent.max, `Message must be less than ${FIELD_LIMITS.messageContent.max} characters`),
-    priority: z.enum(['low', 'normal', 'high', 'urgent']),
-});
+const newMessageSchema = z.object(newMessageBaseSchema);
 
 type NewMessageFormData = z.infer<typeof newMessageSchema>;
 

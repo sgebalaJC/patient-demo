@@ -9,16 +9,14 @@ import { Input } from '../ui/Input';
 import { messageThreadOperations, userOperations } from '../../lib/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { User } from '../../types';
-import { FIELD_LIMITS } from '../../lib/validation';
+import { newMessageBaseSchema } from '../../lib/validation';
 import logger from '../../lib/logger';
 import { Modal } from '../ui/Modal';
 import { formatPhoneDisplay } from '../../lib/phone';
 
 const adminNewMessageSchema = z.object({
+    ...newMessageBaseSchema,
     patientId: z.string().min(1, 'Please select a patient'),
-    subject: z.string().min(1, 'Subject is required').min(FIELD_LIMITS.messageSubject.min, `Subject must be at least ${FIELD_LIMITS.messageSubject.min} characters`).max(FIELD_LIMITS.messageSubject.max, `Subject must be less than ${FIELD_LIMITS.messageSubject.max} characters`),
-    message: z.string().min(1, 'Message is required').min(FIELD_LIMITS.messageContent.min, `Message must be at least ${FIELD_LIMITS.messageContent.min} characters`).max(FIELD_LIMITS.messageContent.max, `Message must be less than ${FIELD_LIMITS.messageContent.max} characters`),
-    priority: z.enum(['low', 'normal', 'high', 'urgent']),
 });
 
 type AdminNewMessageFormData = z.infer<typeof adminNewMessageSchema>;

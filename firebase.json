@@ -1,7 +1,5 @@
 {
   "emulators": {
-    "dataconnect": {
-    },
     "firestore": {
       "port": 8080
     },
@@ -21,9 +19,6 @@
     },
     "singleProjectMode": true
   },
-  "dataconnect": {
-    "source": "dataconnect"
-  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
@@ -38,8 +33,6 @@
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local",
-        "firebase-debug.log",
-        "firebase-debug.*.log",
         ".runtimeconfig.json"
       ],
       "predeploy": [

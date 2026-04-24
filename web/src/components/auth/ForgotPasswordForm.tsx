@@ -7,11 +7,12 @@ import { Button } from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { Input } from '../ui/Input';
 import { resetPassword } from '../../lib/firebase';
+import { emailField } from '../../lib/validation';
 import { BRANDING } from '../../config/branding';
 import logger from '../../lib/logger';
 
 const forgotPasswordSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
+  email: emailField({ required: false }),
 });
 
 type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;

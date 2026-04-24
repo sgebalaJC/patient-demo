@@ -9,7 +9,6 @@
 
 import {
   addDoc,
-  collection,
   limit,
   onSnapshot,
   orderBy,
@@ -18,7 +17,7 @@ import {
   Timestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collections } from './base';
 
 export interface AdminChannelMessage {
   id: string;
@@ -27,8 +26,6 @@ export interface AdminChannelMessage {
   text: string;
   createdAt?: Timestamp | null;
 }
-
-const COLLECTION = 'admin-channel-messages';
 
 /**
  * Live subscription to the most recent `max` messages, ordered oldest-first
@@ -40,7 +37,7 @@ export function subscribeAdminChannel(
   onError: (err: Error) => void,
 ): Unsubscribe {
   const q = query(
-    collection(db, COLLECTION),
+    collections.adminChannelMessages,
     orderBy('createdAt', 'desc'),
     limit(max),
   );
@@ -63,7 +60,7 @@ export async function sendAdminChannelMessage(
   senderName: string,
   text: string,
 ): Promise<string> {
-  const ref = await addDoc(collection(db, COLLECTION), {
+  const ref = await addDoc(collections.adminChannelMessages, {
     senderId,
     senderName,
     text,

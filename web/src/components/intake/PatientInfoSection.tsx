@@ -6,7 +6,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { PatientInfoForm } from '../../types';
-import { FIELD_LIMITS } from '../../lib/validation';
+import { FIELD_LIMITS, emailField, phoneField } from '../../lib/validation';
 import { InsuranceDropdown } from './InsuranceDropdown';
 import { PharmacyDropdown } from '../refills/PharmacyDropdown';
 import { User } from 'lucide-react';
@@ -16,14 +16,14 @@ import logger from '../../lib/logger';
 const patientInfoSchema = z.object({
   fullName: z.string().min(2, 'Full name is required').max(FIELD_LIMITS.firstName.max + FIELD_LIMITS.lastName.max),
   dateOfBirth: z.string().min(1, 'Date of birth is required'),
-  phoneNumber: z.string().min(7, 'Valid phone number is required').max(FIELD_LIMITS.phoneNumber.max),
+  phoneNumber: phoneField({ required: true }),
   gender: z.enum(['male', 'female']),
-  emailAddress: z.string().email('Valid email is required').max(FIELD_LIMITS.email.max),
+  emailAddress: emailField({ required: false }),
   address: z.string().min(1, 'Address is required').max(FIELD_LIMITS.pharmacyAddress.max),
 
   emergencyContactName: z.string().min(1, 'Emergency contact name is required').max(FIELD_LIMITS.firstName.max + FIELD_LIMITS.lastName.max),
   emergencyContactRelationship: z.string().min(1, 'Relationship is required').max(100),
-  emergencyContactPhone: z.string().min(7, 'Valid phone number is required').max(FIELD_LIMITS.phoneNumber.max),
+  emergencyContactPhone: phoneField({ required: true }),
 
   insuranceProvider: z.string().max(200).optional().or(z.literal('')),
   policyNumber: z.string().max(100).optional().or(z.literal('')),

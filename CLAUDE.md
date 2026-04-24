@@ -151,6 +151,5 @@ Before first deploy to a new customer project:
 
 ## Notes
 
-- `dataconnect/` unused, can be removed
 - No test suite yet
 - When adding new collections: update `firestore.rules` and `firestore.indexes.json` in the same change. Add composite indexes for any `where()` + `orderBy()` query.

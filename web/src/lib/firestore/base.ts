@@ -45,6 +45,7 @@ export const collections = {
   get payerCandidates() { return collection(db, simPath('payer-candidates')); },
   get targetCpts() { return collection(db, simPath('target-cpts')); },
   get priorAuthEvents() { return collection(db, simPath('prior-auth-events')); },
+  get adminChannelMessages() { return collection(db, simPath('admin-channel-messages')); },
 };
 
 // Utility functions

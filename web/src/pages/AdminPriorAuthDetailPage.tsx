@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useFirestoreListener } from '../hooks/useFirestoreListener';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ClipboardCheck, CheckCircle2, XCircle, HelpCircle, MessageSquarePlus, Send, ExternalLink } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
@@ -34,30 +35,18 @@ export const AdminPriorAuthDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, userProfile } = useAuth();
   const { enabled: simulated } = useSimulationMode();
-  const [pa, setPa] = useState<PriorAuth | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [statusAction, setStatusAction] = useState<PriorAuthStatus | ''>('');
   const [statusMeta, setStatusMeta] = useState<Record<string, string>>({});
   const [runningCheck, setRunningCheck] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!paId) return;
-    const unsub = subscribeToPriorAuth(
-      paId,
-      (next) => {
-        setPa(next);
-        setLoading(false);
-      },
-      (err) => {
-        setError(err.message);
-        setLoading(false);
-      },
-      simulated,
-    );
-    return unsub;
-  }, [paId, simulated]);
+  const { data: pa = null, loading, error: listenerError } = useFirestoreListener<PriorAuth | null>(
+    (onData, onError) => subscribeToPriorAuth(paId!, onData, onError, simulated),
+    { enabled: !!paId, initial: null, deps: [paId, simulated] },
+  );
+  const error = actionError ?? (listenerError ? listenerError.message : null);
+  const setError = setActionError;
 
   async function addNote(): Promise<void> {
     if (!paId || !user || !userProfile || !noteText.trim()) return;

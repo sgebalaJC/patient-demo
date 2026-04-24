@@ -9,15 +9,15 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { auth, db } from '../../lib/firebase';
-import { FIELD_LIMITS } from '../../lib/validation';
+import { emailField, firstNameField, lastNameField, phoneField } from '../../lib/validation';
 import { BRANDING } from '../../config/branding';
 import logger from '../../lib/logger';
 
 const bootstrapSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Please enter a valid email').max(FIELD_LIMITS.email.max),
-  firstName: z.string().min(FIELD_LIMITS.firstName.min, `First name must be at least ${FIELD_LIMITS.firstName.min} characters`).max(FIELD_LIMITS.firstName.max),
-  lastName: z.string().min(FIELD_LIMITS.lastName.min, `Last name must be at least ${FIELD_LIMITS.lastName.min} characters`).max(FIELD_LIMITS.lastName.max),
-  phoneNumber: z.string().max(FIELD_LIMITS.phoneNumber.max).optional(),
+  email: emailField(),
+  firstName: firstNameField(),
+  lastName: lastNameField(),
+  phoneNumber: phoneField().optional(),
 });
 
 type BootstrapFormData = z.infer<typeof bootstrapSchema>;

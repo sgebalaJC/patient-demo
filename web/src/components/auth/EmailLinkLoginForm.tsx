@@ -8,11 +8,12 @@ import { ErrorAlert } from '../ui/ErrorAlert';
 import { Input } from '../ui/Input';
 import { OAuthButtons } from './OAuthButtons';
 import { sendLoginLink } from '../../lib/firebase';
+import { emailField } from '../../lib/validation';
 import { BRANDING } from '../../config/branding';
 import logger from '../../lib/logger';
 
 const emailLinkSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Please enter a valid email address'),
+  email: emailField(),
 });
 
 type EmailLinkFormData = z.infer<typeof emailLinkSchema>;

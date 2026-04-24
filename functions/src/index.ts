@@ -7,14 +7,16 @@
  */
 
 import {FUNCTIONS_BRANDING} from "./branding.js";
-import {isSuperAdminEmail, assertAdmin as assertCallerIsAdmin} from "./superAdmins.js";
+import {assertAdmin as assertCallerIsAdmin} from "./superAdmins.js";
 import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail, refillStatusEmail} from "./email.js";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onCall, onRequest} from "firebase-functions/v2/https";
 import {corsOptions, isProduction} from "./lib/cors.js";
 import {normalizePhoneNumber, toE164} from "./lib/phone.js";
-import {FIELD_LIMITS, VALID_ROLES, validateStringField} from "./lib/validation.js";
+import {FIELD_LIMITS, VALID_ROLES} from "./lib/validation.js";
+import {validateUserProfileFields} from "./lib/user-profile.js";
+import {requireAdmin, requireAuth, requireSuperAdmin} from "./lib/auth.js";
 import {checkRateLimit, clientIp} from "./lib/rate-limit.js";
 
 import {
@@ -91,34 +93,21 @@ export const updateUserAuth = onCall({
   try {
     logger.info('updateUserAuth called');
 
-    const context = request.auth;
-    if (!context) {
-      throw new Error('Authentication required');
-    }
-
-    // Rate limit: 20 updates per 10 minutes per admin
-    await checkRateLimit(context.uid, 'updateUser', 20, 10);
-
-    await assertCallerIsAdmin(context);
+    const context = await requireAdmin(request, { rateLimitKey: 'updateUser' });
 
     const { uid } = request.data;
     if (!uid || typeof uid !== 'string') {
       throw new Error('User UID is required for updates');
     }
 
-    // Validate and sanitize optional fields
-    const email = request.data.email
-      ? validateStringField(request.data.email, 'email', { max: FIELD_LIMITS.email.max })
-      : undefined;
-    const firstName = request.data.firstName
-      ? validateStringField(request.data.firstName, 'firstName', FIELD_LIMITS.firstName)
-      : undefined;
-    const lastName = request.data.lastName
-      ? validateStringField(request.data.lastName, 'lastName', FIELD_LIMITS.lastName)
-      : undefined;
-    const role = request.data.role
-      ? validateStringField(request.data.role, 'role', FIELD_LIMITS.role)
-      : undefined;
+    // Only pass through defined fields — undefined means "do not update".
+    const profile = validateUserProfileFields({
+      ...(request.data.email !== undefined ? { email: request.data.email } : {}),
+      ...(request.data.firstName !== undefined ? { firstName: request.data.firstName } : {}),
+      ...(request.data.lastName !== undefined ? { lastName: request.data.lastName } : {}),
+      ...(request.data.role !== undefined ? { role: request.data.role } : {}),
+    });
+    const { email, firstName, lastName, role } = profile;
     const isActive = typeof request.data.isActive === 'boolean' ? request.data.isActive : undefined;
     const emailVerified = typeof request.data.emailVerified === 'boolean' ? request.data.emailVerified : undefined;
 
@@ -191,11 +180,7 @@ export const setUserPassword = onCall({
   cors: corsOptions,
 }, async (request) => {
   try {
-    const context = request.auth;
-    if (!context) throw new Error('Authentication required');
-
-    await checkRateLimit(context.uid, 'setUserPassword', 20, 10);
-    await assertCallerIsAdmin(context);
+    const context = await requireAdmin(request, { rateLimitKey: 'setUserPassword' });
 
     const { uid, password } = request.data ?? {};
     if (!uid || typeof uid !== 'string') {
@@ -247,10 +232,7 @@ export const logAuditEvent = onCall({
   cors: corsOptions
 }, async (request) => {
   try {
-    const context = request.auth;
-    if (!context) {
-      throw new Error('Authentication required');
-    }
+    const context = requireAuth(request);
 
     const { action, resourceType, resourceId, metadata } = request.data;
 
@@ -309,24 +291,24 @@ export const createUserWithAuth = onCall({
   try {
     logger.info('createUserWithAuth called');
 
-    const context = request.auth;
-    if (!context) {
-      throw new Error('Authentication required');
-    }
-
-    // Rate limit: 10 creates per 10 minutes per admin
-    await checkRateLimit(context.uid, 'createUser', 10, 10);
-
-    await assertCallerIsAdmin(context);
+    const context = await requireAdmin(request, {
+      rateLimitKey: 'createUser',
+      maxRequests: 10,
+    });
 
     // Validate and sanitize input
-    const email = validateStringField(request.data.email, 'email', { max: FIELD_LIMITS.email.max });
-    const firstName = validateStringField(request.data.firstName, 'firstName', FIELD_LIMITS.firstName);
-    const lastName = validateStringField(request.data.lastName, 'lastName', FIELD_LIMITS.lastName);
-    const role = validateStringField(request.data.role, 'role', FIELD_LIMITS.role);
-    const rawPhoneNumber = request.data.phoneNumber
-      ? validateStringField(request.data.phoneNumber, 'phoneNumber', { max: FIELD_LIMITS.phoneNumber.max })
-      : '';
+    const profile = validateUserProfileFields({
+      email: request.data.email,
+      firstName: request.data.firstName,
+      lastName: request.data.lastName,
+      role: request.data.role,
+      phoneNumber: request.data.phoneNumber,
+    });
+    const email = profile.email!;
+    const firstName = profile.firstName!;
+    const lastName = profile.lastName!;
+    const role = profile.role!;
+    const rawPhoneNumber = profile.phoneNumber ?? '';
     const sendWelcomeSms = request.data.sendWelcomeSms === true;
 
     if (!VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
@@ -592,12 +574,16 @@ export const onBootstrapRequestCreated = onDocumentCreated({
     let lastName: string;
     let phoneNumber: string;
     try {
-      email = validateStringField(data.email, 'email', { max: FIELD_LIMITS.email.max });
-      firstName = validateStringField(data.firstName, 'firstName', FIELD_LIMITS.firstName);
-      lastName = validateStringField(data.lastName, 'lastName', FIELD_LIMITS.lastName);
-      phoneNumber = data.phoneNumber
-        ? validateStringField(data.phoneNumber, 'phoneNumber', { max: FIELD_LIMITS.phoneNumber.max })
-        : '';
+      const profile = validateUserProfileFields({
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phoneNumber: data.phoneNumber,
+      });
+      email = profile.email!;
+      firstName = profile.firstName!;
+      lastName = profile.lastName!;
+      phoneNumber = profile.phoneNumber ?? '';
     } catch (validationErr: any) {
       await writeError('VALIDATION_FAILED', validationErr.message || 'Invalid input');
       return;
@@ -756,10 +742,7 @@ export const deleteAccount = onCall({
   cors: corsOptions
 }, async (request) => {
   try {
-    const context = request.auth;
-    if (!context) {
-      throw new Error('Authentication required');
-    }
+    const context = requireAuth(request);
 
     const { targetUserId } = request.data;
     const uidToDelete = targetUserId || context.uid;
@@ -2495,8 +2478,7 @@ import {
  * Calendar must be present (reminders depend on it).
  */
 export const googleWorkspaceAuthorize = onCall({}, async (request) => {
-  if (!request.auth) throw new Error('Authentication required');
-  await assertCallerIsAdmin(request.auth);
+  const authContext = await requireAdmin(request);
 
   const services = ((request.data?.services as string) || 'gmail,calendar,drive')
     .split(',').filter(Boolean) as GoogleService[];
@@ -2520,7 +2502,7 @@ export const googleWorkspaceAuthorize = onCall({}, async (request) => {
   const secret = new TextEncoder().encode(encKey);
 
   const state = await new SignJWT({
-    userId: request.auth.uid,
+    userId: authContext.uid,
     services,
     calendarId,
     ...(returnUrl ? {returnUrl} : {}),
@@ -2648,8 +2630,7 @@ export const googleWorkspaceCallback = onRequest({
  * the two modes are mutually exclusive.
  */
 export const saveGoogleWorkspaceServiceAccount = onCall({}, async (request) => {
-  if (!request.auth) throw new Error('Authentication required');
-  await assertCallerIsAdmin(request.auth);
+  const authContext = await requireAdmin(request);
 
   const saKeyJson = (request.data?.saKeyJson as string) || '';
   const subject = ((request.data?.subject as string) || '').trim();
@@ -2709,7 +2690,7 @@ export const saveGoogleWorkspaceServiceAccount = onCall({}, async (request) => {
     grantedScopes: allScopesForServices(services),
     connectedAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    connectedBy: request.auth.uid,
+    connectedBy: authContext.uid,
   };
   await db.collection('integrations').doc('google-workspace').set(doc);
 
@@ -2723,8 +2704,7 @@ export const saveGoogleWorkspaceServiceAccount = onCall({}, async (request) => {
  * in-doc, which goes away with the doc deletion.
  */
 export const disconnectGoogleWorkspace = onCall({}, async (request) => {
-  if (!request.auth) throw new Error('Authentication required');
-  await assertCallerIsAdmin(request.auth);
+  await requireAdmin(request);
 
   const ref = db.collection('integrations').doc('google-workspace');
   const snap = await ref.get();
@@ -3111,17 +3091,14 @@ export {
  * can sign in as that user in the browser.
  */
 export const impersonateUser = onCall(async (request) => {
-  if (!request.auth) throw new Error('Authentication required');
-  if (!isSuperAdminEmail(request.auth.token?.email)) {
-    throw new Error('Super admin access required');
-  }
+  const context = requireSuperAdmin(request);
   const {targetUid} = request.data as {targetUid?: string};
   if (!targetUid || typeof targetUid !== 'string') {
     throw new Error('targetUid is required');
   }
   const token = await admin.auth().createCustomToken(targetUid);
   logger.info('super admin impersonation', {
-    superAdminUid: request.auth.uid,
+    superAdminUid: context.uid,
     targetUid,
   });
   return {token};

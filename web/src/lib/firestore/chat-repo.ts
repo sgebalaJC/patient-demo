@@ -23,11 +23,31 @@ import {
   where,
   serverTimestamp,
   DocumentSnapshot,
+  Timestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import type { ChatAttachment, AgentChatMessage } from './agent-chat';
 
-export type { ChatAttachment, AgentChatMessage as ChatMessage };
+export interface ChatAttachment {
+  name: string;
+  mimeType: string;
+  size?: number;
+  /** Cloud Storage download URL — set after upload, persisted with the message. */
+  url?: string;
+  /** Storage path (`chat-attachments/...`) for cleanup on hard delete. */
+  storagePath?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  senderId?: string;
+  senderName?: string;
+  attachments?: ChatAttachment[];
+  createdAt: Timestamp;
+}
+
+type AgentChatMessage = ChatMessage;
 
 export interface ChatLoadResult {
   messages: AgentChatMessage[];

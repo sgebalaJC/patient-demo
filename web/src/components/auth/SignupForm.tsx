@@ -8,24 +8,19 @@ import { ErrorAlert } from '../ui/ErrorAlert';
 import { Input } from '../ui/Input';
 import { OAuthButtons } from './OAuthButtons';
 import { signUpWithEmail } from '../../lib/firebase';
-import { FIELD_LIMITS } from '../../lib/validation';
+import { emailField, firstNameField, lastNameField, passwordField, phoneField } from '../../lib/validation';
 import logger from "../../lib/logger";
 
 const signupSchema = z.object({
-  firstName: z.string().min(1, 'First name is required').min(FIELD_LIMITS.firstName.min, `First name must be at least ${FIELD_LIMITS.firstName.min} characters`).max(FIELD_LIMITS.firstName.max, `First name must be less than ${FIELD_LIMITS.firstName.max} characters`),
-  lastName: z.string().min(1, 'Last name is required').min(FIELD_LIMITS.lastName.min, `Last name must be at least ${FIELD_LIMITS.lastName.min} characters`).max(FIELD_LIMITS.lastName.max, `Last name must be less than ${FIELD_LIMITS.lastName.max} characters`),
-  phoneNumber: z.string()
-    .min(1, 'Phone number is required')
-    .max(FIELD_LIMITS.phoneNumber.max, `Phone number is too long`)
+  firstName: firstNameField(),
+  lastName: lastNameField(),
+  phoneNumber: phoneField({ required: true })
     .refine(
       (val) => /^\+?[\d\s\-\(\)]{10,}$/.test(val.replace(/\s/g, '')),
       'Please enter a valid phone number'
     ),
-  email: z.string().min(1, 'Email is required').max(FIELD_LIMITS.email.max, 'Email is too long').email('Please enter a valid email address'),
-  password: z.string()
-    .min(1, 'Password is required')
-    .min(FIELD_LIMITS.password.min, `Password must be at least ${FIELD_LIMITS.password.min} characters`)
-    .max(FIELD_LIMITS.password.max, `Password must be less than ${FIELD_LIMITS.password.max} characters`)
+  email: emailField(),
+  password: passwordField()
     .regex(/(?=.*[a-z])/, 'Password must contain at least one lowercase letter')
     .regex(/(?=.*[A-Z])/, 'Password must contain at least one uppercase letter')
     .regex(/(?=.*\d)/, 'Password must contain at least one number'),

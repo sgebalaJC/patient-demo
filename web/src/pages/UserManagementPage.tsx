@@ -51,7 +51,7 @@ import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import logger from '../lib/logger';
 import { alert as modalAlert } from '../lib/modals';
 export const UserManagementPage: React.FC = () => {
-  const { user, userProfile } = useAuth();
+  const { userProfile } = useAuth();
   const { enabled: simulated } = useSimulationMode();
   const isAdminUser = isAdminRole(userProfile?.role);
   const [isFormOpen, setIsFormOpen] = useState(false);

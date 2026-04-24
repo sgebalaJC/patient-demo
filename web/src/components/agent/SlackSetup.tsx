@@ -134,9 +134,9 @@ export const SlackSetup: React.FC<SlackSetupProps> = ({
             <button
               onClick={() => setExpanded((v) => !v)}
               disabled={status === 'saving'}
-              className="text-xs px-3 py-1.5 rounded-md bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
+              className="text-xs px-3 py-1.5 rounded-md border border-secondary-300 text-secondary-700 hover:bg-secondary-50 transition-colors disabled:opacity-50"
             >
-              {expanded ? 'Cancel' : 'Connect'}
+              {expanded ? 'Cancel' : 'Configure'}
             </button>
           )}
         </div>

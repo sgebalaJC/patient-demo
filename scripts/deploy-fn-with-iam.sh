@@ -40,7 +40,22 @@
 set -euo pipefail
 
 # --- per-fork configuration ----------------------------------------------
-PROJECT="${FIREBASE_PROJECT:-patient-demo-project}"
+# FIREBASE_PROJECT must be set explicitly: we used to fall back to
+# patient-demo-project, which meant a misconfigured shell could silently
+# redeploy to the shared demo project. Read it from `.firebaserc` when
+# possible, otherwise require the env var.
+if [ -z "${FIREBASE_PROJECT:-}" ]; then
+  RC_FILE="$(dirname "$0")/../.firebaserc"
+  if [ -f "$RC_FILE" ]; then
+    FIREBASE_PROJECT="$(node -e 'try { process.stdout.write(require(process.argv[1]).projects?.default || ""); } catch { process.stdout.write(""); }' "$RC_FILE" 2>/dev/null || true)"
+  fi
+fi
+if [ -z "${FIREBASE_PROJECT:-}" ]; then
+  echo "error: FIREBASE_PROJECT is not set and .firebaserc has no default project." >&2
+  echo "  set FIREBASE_PROJECT explicitly (e.g. FIREBASE_PROJECT=my-fork-id)" >&2
+  exit 64
+fi
+PROJECT="$FIREBASE_PROJECT"
 REGION="${FIREBASE_REGION:-us-west1}"
 REQUIRED_ACCOUNT="${FIREBASE_ADMIN_ACCOUNT:-}"  # leave empty to skip account check
 # -------------------------------------------------------------------------

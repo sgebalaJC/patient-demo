@@ -59,7 +59,29 @@ fi
 
 echo "==> Building sidecar binary..."
 cd "$SCRIPT_DIR"
-bun run build
+
+# Extract the fork's CORS allow-list from /fork.config.ts and inject via
+# Bun's build-time define, so the compiled binary carries the right portal
+# origin per customer. Falls back to empty — then the deployed process relies
+# on SIDECAR_ALLOWED_ORIGINS env (see index.ts).
+FORK_ORIGINS=$(node -e '
+  const src = require("fs").readFileSync("../fork.config.ts", "utf8");
+  const m = src.match(/additionalOrigins:\s*\[([^\]]*)\]/);
+  if (!m) { process.stdout.write(""); process.exit(0); }
+  const origins = Array.from(m[1].matchAll(/["\x27]([^"\x27]+)["\x27]/g)).map(x => x[1]);
+  process.stdout.write(origins.join(","));
+' 2>/dev/null || echo "")
+
+if [[ -n "$FORK_ORIGINS" ]]; then
+  echo "    fork origins: $FORK_ORIGINS"
+  bun build src/index.ts \
+    --compile \
+    --outfile patient-sidecar \
+    --target=bun-linux-x64 \
+    --define "SIDECAR_FORK_ORIGINS=\"${FORK_ORIGINS}\""
+else
+  bun run build
+fi
 
 # Self-heal runtime deps for document/image pipelines. pdftoppm from
 # poppler-utils (PDF→JPG), `convert` from imagemagick (PNG/WEBP/GIF→JPG),

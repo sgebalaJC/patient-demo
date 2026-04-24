@@ -37,19 +37,60 @@ const PORT = parseInt(process.env.PORT || "8081");
 // max Bun accepts — anything longer requires setting to 0 (disabled).
 const IDLE_TIMEOUT_SECONDS = 255;
 
-const ALLOWED_ORIGINS = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://patient.example.com",
-];
+// CORS allow-list. Env var `SIDECAR_ALLOWED_ORIGINS` is a CSV override
+// (used for staging/localhost deployments and CI). When unset, we fall back
+// to a per-fork list injected via Bun's build-time define from
+// `fork.config.ts.urls.additionalOrigins`, so the same binary deploys to
+// every customer with their own portal origin baked in at deploy time —
+// no more hardcoded `example.com` leaking between forks.
+const FORK_ALLOWED_ORIGINS: string[] = (() => {
+  // Supplied by the deploy script via `bun build --define`:
+  //   --define SIDECAR_FORK_ORIGINS='"https://demo.aureliamd.com,..."'
+  // If nothing is defined we return an empty list; the env var covers dev.
+  try {
+    const raw = (globalThis as any).SIDECAR_FORK_ORIGINS as string | undefined;
+    if (!raw) return [];
+    return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+})();
 
-// Simple rate limiter: 100 requests per minute per IP
+const ALLOWED_ORIGINS: string[] = (() => {
+  const fromEnv = (process.env.SIDECAR_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const merged = [...new Set([...fromEnv, ...FORK_ALLOWED_ORIGINS])];
+  // Dev fallback: if neither env nor fork-config supplied origins, allow
+  // localhost so `bun dev` still works. Production deploys should always
+  // set one of the two.
+  return merged.length > 0 ? merged : ["http://localhost:5173", "http://localhost:3000"];
+})();
+
+// Simple rate limiter: 100 requests per minute per IP. Capped at
+// MAX_IPS so a distributed attack cycling through IPs can't blow up memory
+// faster than the cleanup timer can reclaim it.
+const RATE_LIMITER_MAX_IPS = 10_000;
 const rateLimiter = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const entry = rateLimiter.get(ip);
   if (!entry || now > entry.resetAt) {
+    if (rateLimiter.size >= RATE_LIMITER_MAX_IPS) {
+      // Evict the oldest entry by resetAt to make room. O(n) scan, but
+      // only hit when we're at the cap — rare and bounded.
+      let oldestKey: string | null = null;
+      let oldestResetAt = Infinity;
+      for (const [k, v] of rateLimiter) {
+        if (v.resetAt < oldestResetAt) {
+          oldestResetAt = v.resetAt;
+          oldestKey = k;
+        }
+      }
+      if (oldestKey) rateLimiter.delete(oldestKey);
+    }
     rateLimiter.set(ip, { count: 1, resetAt: now + 60000 });
     return false;
   }

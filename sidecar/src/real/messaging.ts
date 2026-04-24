@@ -55,6 +55,11 @@ function swAuth(): {
 // Outbound — real SignalWire LaML send
 // ---------------------------------------------------------------------------
 
+// SignalWire (and Twilio LaML) enforce a 1600-char cap per outbound SMS
+// (concatenated long message). Reject anything longer at the boundary so
+// callers get a clear 400 instead of an opaque provider error.
+const MAX_SMS_BODY_CHARS = 1600;
+
 export async function realSmsSend(request: Request): Promise<Response> {
   let body: { to?: string; body?: string; kind?: string };
   try {
@@ -67,7 +72,12 @@ export async function realSmsSend(request: Request): Promise<Response> {
   if (!toNormalized) return Response.json({ error: "Valid recipient phone required" }, { status: 400 });
   const text = typeof body.body === "string" ? body.body.trim() : "";
   if (!text) return Response.json({ error: "Message body required" }, { status: 400 });
-  if (text.length > 1600) return Response.json({ error: "Message exceeds 1600 characters" }, { status: 400 });
+  if (text.length > MAX_SMS_BODY_CHARS) {
+    return Response.json(
+      { error: `Message exceeds ${MAX_SMS_BODY_CHARS} characters` },
+      { status: 400 },
+    );
+  }
 
   const { projectId, authToken, spaceUrl, from } = swAuth();
   const form = new URLSearchParams({ From: from, To: toNormalized, Body: text });

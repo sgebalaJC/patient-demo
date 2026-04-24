@@ -5,16 +5,20 @@ import { WORKSPACE } from "../lib/paths.js";
 
 // Whitelist to keep shell metacharacters (`;`, backticks, `$()`, `|`, `&`,
 // newlines, spaces) out of any path we pass to a child process or resolve
-// against WORKSPACE. `safePath` previously let these through because
-// `path.resolve` preserves them — a /files?pattern=";cmd;#" would pass the
-// prefix check and then be parsed by the shell.
-const SAFE_PATH = /^[A-Za-z0-9._/\-]*$/;
+// against WORKSPACE. Tightened: segments must be non-empty, cannot start
+// with `.`, and cannot contain `..`. Consecutive slashes and leading
+// slashes are rejected too — the workspace path is relative.
+//
+// Empty path is allowed only for the list-all case, which is handled
+// before this regex is consulted.
+const SAFE_PATH = /^[A-Za-z0-9_\-][A-Za-z0-9._\-]*(?:\/[A-Za-z0-9_\-][A-Za-z0-9._\-]*)*$/;
 
 function safePath(path: string): string | null {
+  if (!path) return null;
   if (!SAFE_PATH.test(path)) return null;
   if (path.includes("..")) return null;
   const resolved = resolve(WORKSPACE, path);
-  if (!resolved.startsWith(WORKSPACE)) return null;
+  if (!resolved.startsWith(WORKSPACE + "/") && resolved !== WORKSPACE) return null;
   return resolved;
 }
 
@@ -69,6 +73,8 @@ export function deleteFilePath(path: string): Response {
 
 /** GET /files?pattern=... — list workspace files */
 export function listFiles(pattern: string): Response {
+  // Empty pattern means "list everything under WORKSPACE"; validated paths
+  // are resolved through safePath(). Reject anything else.
   const searchDir = pattern ? safePath(pattern) : WORKSPACE;
   if (!searchDir) return Response.json({ error: "Invalid pattern" }, { status: 400 });
 

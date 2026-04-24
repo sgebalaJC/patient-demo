@@ -19,36 +19,31 @@
 
 import { getDb } from "../lib/firebase.js";
 import { toE164Lenient } from "../lib/phone.js";
+import { loadSignalwireConfig } from "../lib/signalwire-config.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-// Cached once on first call — env doesn't change under us. Stays lazy so
-// a sim-only deployment without SignalWire creds doesn't fail at import
-// time.
-let _swAuth: {
+// Resolve SignalWire creds via the admin-managed integrations doc +
+// Secret Manager, falling back to env for dev. Lazy so a sim-only
+// deployment without any creds doesn't fail at import time.
+async function swAuth(): Promise<{
   projectId: string;
   authToken: string;
   spaceUrl: string;
   from: string;
-} | null = null;
-function swAuth(): {
-  projectId: string;
-  authToken: string;
-  spaceUrl: string;
-  from: string;
-} {
-  if (_swAuth) return _swAuth;
-  const projectId = process.env.SIGNALWIRE_PROJECT_ID || "";
-  const authToken = process.env.SIGNALWIRE_AUTH_TOKEN || "";
-  const spaceUrl = (process.env.SIGNALWIRE_SPACE_URL || "").replace(/\/+$/, "");
-  const from = process.env.SIGNALWIRE_SMS_FROM || "";
-  if (!projectId || !authToken || !spaceUrl || !from) {
+}> {
+  const cfg = await loadSignalwireConfig();
+  if (!cfg || !cfg.smsFrom) {
     throw new Error(
-      "SignalWire SMS credentials missing (SIGNALWIRE_PROJECT_ID/AUTH_TOKEN/SPACE_URL/SMS_FROM)",
+      "SignalWire SMS credentials missing — configure via admin UI (Agent → Integrations → SignalWire) or set SIGNALWIRE_PROJECT_ID/AUTH_TOKEN/SPACE_URL/SMS_FROM env vars",
     );
   }
-  _swAuth = { projectId, authToken, spaceUrl, from };
-  return _swAuth;
+  return {
+    projectId: cfg.projectId,
+    authToken: cfg.authToken,
+    spaceUrl: cfg.spaceUrl,
+    from: cfg.smsFrom,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +74,7 @@ export async function realSmsSend(request: Request): Promise<Response> {
     );
   }
 
-  const { projectId, authToken, spaceUrl, from } = swAuth();
+  const { projectId, authToken, spaceUrl, from } = await swAuth();
   const form = new URLSearchParams({ From: from, To: toNormalized, Body: text });
   const basic = Buffer.from(`${projectId}:${authToken}`).toString("base64");
 
@@ -157,9 +152,12 @@ export async function inboundSmsWebhook(request: Request): Promise<Response> {
   // configured; legacy Twilio-ported accounts typically use the auth token.
   let token: string;
   try {
-    token = process.env.SIGNALWIRE_SIGNING_KEY || swAuth().authToken;
+    // SIGNALWIRE_SIGNING_KEY stays env-only: it's a webhook-specific secret
+    // the admin typically sets on the sidecar host itself (separate from
+    // the LaML auth token) and there's no dashboard field for it yet.
+    token = process.env.SIGNALWIRE_SIGNING_KEY || (await swAuth()).authToken;
   } catch {
-    console.error("[sms-inbound] SIGNALWIRE_AUTH_TOKEN missing — cannot verify");
+    console.error("[sms-inbound] SignalWire auth token unavailable — cannot verify");
     return new Response("Server misconfigured", { status: 500 });
   }
 

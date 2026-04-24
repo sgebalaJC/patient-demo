@@ -270,9 +270,15 @@ export async function runSendOutboundFax(
   const toNormalized = normalizeFaxNumber(to || "");
   const safeSubject = (subject || "").slice(0, 200).replace(/[\r\n]+/g, " ");
 
-  const swProjectId = await readSecret("SIGNALWIRE_PROJECT_ID");
-  const swAuthToken = await readSecret("SIGNALWIRE_AUTH_TOKEN");
-  const swSpaceUrl = (await readSecret("SIGNALWIRE_SPACE_URL")).replace(/\/+$/, "");
+  // Pull routing from the admin-managed integration doc first (projectId
+  // + spaceUrl + auth token via Secret Manager), falling back to the
+  // legacy per-secret Secret Manager entries for forks that haven't
+  // migrated.
+  const { loadSignalwireConfig } = await import("./signalwire-config.js");
+  const cfg = await loadSignalwireConfig();
+  const swProjectId = cfg?.projectId || (await readSecret("SIGNALWIRE_PROJECT_ID"));
+  const swAuthToken = cfg?.authToken || (await readSecret("SIGNALWIRE_AUTH_TOKEN"));
+  const swSpaceUrl = (cfg?.spaceUrl || (await readSecret("SIGNALWIRE_SPACE_URL"))).replace(/\/+$/, "");
 
   const bucket = admin.storage().bucket();
 

@@ -3,8 +3,25 @@ import {
   serverTimestamp,
   writeBatch,
   Timestamp,
+  type DocumentSnapshot,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+
+/**
+ * Standard Firestore doc → typed object adapter. Use everywhere that
+ * a module returns shaped rows to the UI instead of reinventing
+ * `{ id, ...data }` casts per file.
+ *
+ * Returns `null` when the doc does not exist, so callers can branch
+ * without a separate `.exists()` check.
+ */
+export function mapDoc<T>(
+  snap: DocumentSnapshot | QueryDocumentSnapshot,
+): (T & { id: string }) | null {
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...(snap.data() as T) };
+}
 
 // Helper function to log authentication context
 export const logAuthContext = (_operation: string) => {

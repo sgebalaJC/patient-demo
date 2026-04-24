@@ -9,6 +9,7 @@
  */
 import * as admin from "firebase-admin";
 import {PDFDocument, StandardFonts, rgb} from "pdf-lib";
+import {FUNCTIONS_BRANDING} from "../../branding.js";
 
 /** Reserved US "555" range, never routable. */
 export const SIM_FAX_NUMBER = "+15559990000";
@@ -381,7 +382,7 @@ function outboundSpecs(): FaxPdfSpec[] {
   return [
     {
       header: {
-        title: "Aurelia MD",
+        title: FUNCTIONS_BRANDING.practiceName,
         addressLines: ["500 Main Street, Suite 300", "Demo City, CA 90001"],
         phone: "(555) 999-0000",
         tagline: "Patient-centered primary care",
@@ -394,7 +395,7 @@ function outboundSpecs(): FaxPdfSpec[] {
         sex: "Female",
         examDate: "04/20/2026",
         accession: "AUR4402015",
-        requestedBy: "AURELIA MD CLINIC",
+        requestedBy: FUNCTIONS_BRANDING.practiceName.toUpperCase(),
         requestAddress: ["500 Main Street, Suite 300", "Demo City, CA 90001"],
       },
       procedure: "REFERRAL — DERMATOLOGY",
@@ -405,7 +406,7 @@ function outboundSpecs(): FaxPdfSpec[] {
         {heading: "TRIED:", text: "Over-the-counter hydrocortisone 1% — partial relief."},
       ],
       conclusion: ["Referring for dermatology evaluation and biopsy if indicated."],
-      dictatedBy: "Admin, Aurelia MD",
+      dictatedBy: `Admin, ${FUNCTIONS_BRANDING.practiceName}`,
       dictatedAt: "04/20/2026 11:15 AM",
       pageCount: 1,
       faxHeaderTime: "04-20-2026 11:20 AM PT",
@@ -413,7 +414,7 @@ function outboundSpecs(): FaxPdfSpec[] {
     },
     {
       header: {
-        title: "Aurelia MD",
+        title: FUNCTIONS_BRANDING.practiceName,
         addressLines: ["500 Main Street, Suite 300", "Demo City, CA 90001"],
         phone: "(555) 999-0000",
         tagline: "Patient-centered primary care",
@@ -426,7 +427,7 @@ function outboundSpecs(): FaxPdfSpec[] {
         sex: "Male",
         examDate: "04/18/2026",
         accession: "AUR4403018",
-        requestedBy: "AURELIA MD CLINIC",
+        requestedBy: FUNCTIONS_BRANDING.practiceName.toUpperCase(),
         requestAddress: ["500 Main Street, Suite 300", "Demo City, CA 90001"],
       },
       procedure: "PRIOR AUTHORIZATION — BIOLOGIC THERAPY",
@@ -437,7 +438,7 @@ function outboundSpecs(): FaxPdfSpec[] {
         {heading: "SUPPORT:", text: "Documented failure of methotrexate 15 mg weekly × 12 weeks; intolerable transaminase elevation."},
       ],
       conclusion: ["Please review attached step-therapy documentation and approve."],
-      dictatedBy: "Admin, Aurelia MD",
+      dictatedBy: `Admin, ${FUNCTIONS_BRANDING.practiceName}`,
       dictatedAt: "04/18/2026 03:40 PM",
       pageCount: 2,
       faxHeaderTime: "04-18-2026 3:44 PM PT",

@@ -54,7 +54,7 @@ export const AdminDashboardPage: React.FC = () => {
         if (!user || !userProfile) return;
 
         try {
-            const response = await prescriptionRefillOperations.getAllRefills(10, 1, 'all');
+            const response = await prescriptionRefillOperations.getAllRefills(10, undefined, 'all');
 
             if (response.success && response.data) {
                 // Get the 3 most recent refill requests

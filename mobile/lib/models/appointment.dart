@@ -37,7 +37,7 @@ class Appointment {
     required this.id,
     required this.patientId,
     required this.appointmentDate,
-    this.duration = 20, // defaultAppointmentDuration
+    this.duration = 20, // keep in sync with branding.defaultAppointmentDuration
     this.appointmentType = AppointmentType.consultation,
     this.reason,
     this.notes,

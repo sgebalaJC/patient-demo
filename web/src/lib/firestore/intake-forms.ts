@@ -9,10 +9,9 @@ import {
   orderBy,
   limit,
   serverTimestamp,
-  Timestamp,
   DocumentData,
 } from 'firebase/firestore';
-import { collections } from './base';
+import { collections, mapDoc } from './base';
 import { PatientIntakeForm, ApiResponse } from '../../types';
 import logger from "../logger";
 
@@ -29,11 +28,8 @@ export const intakeFormOperations = {
       );
 
       const snapshot = await getDocs(formsQuery);
-      if (!snapshot.empty) {
-        const doc = snapshot.docs[0];
-        return { success: true, data: { id: doc.id, ...doc.data() } as PatientIntakeForm };
-      }
-
+      const mapped = snapshot.empty ? null : mapDoc<PatientIntakeForm>(snapshot.docs[0]);
+      if (mapped) return { success: true, data: mapped };
       return { success: false, error: 'No intake form found' };
     } catch (error: any) {
       logger.error('Error getting intake form:', error);
@@ -55,13 +51,12 @@ export const intakeFormOperations = {
 
       const docRef = await addDoc(collections.patientIntakeForms, newIntakeForm);
 
-      const formWithTimestamp = { 
-        id: docRef.id, 
-        ...newIntakeForm,
-        createdAt: newIntakeForm.createdAt as unknown as Timestamp,
-        updatedAt: newIntakeForm.updatedAt as unknown as Timestamp
-      };
-      return { success: true, data: formWithTimestamp as unknown as PatientIntakeForm };
+      // Read back to pick up server-resolved timestamps — beats hand-forging
+      // the shape with `as unknown as Timestamp` casts.
+      const snap = await getDoc(docRef);
+      const mapped = mapDoc<PatientIntakeForm>(snap);
+      if (!mapped) return { success: false, error: 'Failed to read back created form' };
+      return { success: true, data: mapped };
     } catch (error: any) {
       logger.error('Error creating intake form:', error);
       return { success: false, error: error.message };

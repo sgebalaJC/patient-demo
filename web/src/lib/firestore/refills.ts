@@ -86,16 +86,18 @@ export const prescriptionRefillOperations = {
     }
   },
 
-  // Get all refill requests (for admin access) - Updated with offset-based pagination and server-side filtering
+  // Get all refill requests (for admin access). Cursor-based pagination —
+  // matches `getPendingRefills` + `getPatientRefills` so the three admin
+  // refill queries all behave the same way under deletions/concurrent writes.
   async getAllRefills(
     limitParam: number = 10,
-    page: number = 1,
+    lastDocId?: string,
     statusFilter: 'all' | 'pending' | 'approved' | 'denied' | 'completed' = 'all'
   ): Promise<ApiResponse<{
     refills: PrescriptionRefillRequest[],
     total: number,
+    lastDocId?: string,
     hasMore: boolean,
-    currentPage: number,
     statusCounts: {
       all: number,
       pending: number,
@@ -107,60 +109,61 @@ export const prescriptionRefillOperations = {
     try {
       logAuthContext('getAllRefills');
 
-      // First get total count and calculate status counts for all documents
-      const countQuery = query(collections.prescriptionRefills);
-      const countSnapshot = await getDocs(countQuery);
-
-      // Calculate status counts from all documents (not just paginated results)
-      const allRefillsForCounts = countSnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      } as PrescriptionRefillRequest));
-      
+      // Status-count rollup over the whole collection. Runs one full read;
+      // acceptable at current volumes and kept here so the UI's tab counts
+      // don't need a separate round-trip.
+      const countSnapshot = await getDocs(query(collections.prescriptionRefills));
       const statusCounts = {
-        all: allRefillsForCounts.length,
-        pending: allRefillsForCounts.filter(r => r.status === 'pending').length,
-        approved: allRefillsForCounts.filter(r => r.status === 'approved').length,
-        denied: allRefillsForCounts.filter(r => r.status === 'denied').length,
-        completed: allRefillsForCounts.filter(r => r.status === 'completed').length,
-      };
-      
-      // Get all refills first, then apply offset-based pagination
-      let refillsQuery = query(
-        collections.prescriptionRefills,
-        orderBy('createdAt', 'desc')
-      );
-
-      const snapshot = await getDocs(refillsQuery);
-
-      // Map all documents and handle legacy data (with doctorId) and new data (without doctorId)
-      let allRefills = snapshot.docs.map(doc => {
-        const data = doc.data();
-        // Remove doctorId if it exists for backward compatibility
-        const { doctorId, ...refillData } = data;
-        return { id: doc.id, ...refillData } as PrescriptionRefillRequest;
+        all: countSnapshot.size,
+        pending: 0,
+        approved: 0,
+        denied: 0,
+        completed: 0,
+      } as { all: number; pending: number; approved: number; denied: number; completed: number };
+      countSnapshot.docs.forEach((d) => {
+        const status = (d.data() as PrescriptionRefillRequest).status;
+        if (status && status in statusCounts) {
+          (statusCounts as any)[status] += 1;
+        }
       });
 
-      // Apply server-side status filtering
-      let filteredRefills = allRefills;
-      if (statusFilter !== 'all') {
-        filteredRefills = allRefills.filter(refill => refill.status === statusFilter);
+      const total = statusFilter === 'all' ? statusCounts.all : statusCounts[statusFilter];
+
+      // Cursor-paged fetch. One extra row is requested to detect hasMore
+      // without a second count query.
+      const baseConstraints: any[] = [];
+      if (statusFilter !== 'all') baseConstraints.push(where('status', '==', statusFilter));
+      baseConstraints.push(orderBy('createdAt', 'desc'));
+
+      let cursorSnap = null;
+      if (lastDocId) {
+        const lastDocRef = doc(collections.prescriptionRefills, lastDocId);
+        const snap = await getDoc(lastDocRef);
+        if (snap.exists()) cursorSnap = snap;
+        else logger.warn('Last document not found, starting from beginning');
       }
 
-      // Apply offset-based pagination to filtered results
-      const startIndex = (page - 1) * limitParam;
-      const endIndex = startIndex + limitParam;
-      const refills = filteredRefills.slice(startIndex, endIndex);
-      const hasMore = endIndex < filteredRefills.length;
+      const refillsQuery = cursorSnap
+        ? query(collections.prescriptionRefills, ...baseConstraints, startAfter(cursorSnap), limit(limitParam + 1))
+        : query(collections.prescriptionRefills, ...baseConstraints, limit(limitParam + 1));
+
+      const snapshot = await getDocs(refillsQuery);
+      const docs = snapshot.docs.map((d) => {
+        const { doctorId: _legacy, ...rest } = d.data() as any;
+        return { id: d.id, ...rest } as PrescriptionRefillRequest;
+      });
+      const hasMore = docs.length > limitParam;
+      const refills = hasMore ? docs.slice(0, limitParam) : docs;
+      const newLastDocId = refills.length > 0 ? refills[refills.length - 1].id : undefined;
 
       return {
         success: true,
         data: {
           refills,
-          total: filteredRefills.length, // Use filtered count for pagination, not total count
+          total,
+          lastDocId: newLastDocId,
           hasMore,
-          currentPage: page,
-          statusCounts
+          statusCounts,
         }
       };
     } catch (error: any) {

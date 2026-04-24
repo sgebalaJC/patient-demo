@@ -22,6 +22,7 @@ import { ConfirmModal } from '../ui/ConfirmModal';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import logger from "../../lib/logger";
 import { formatDisplayName } from '../../lib/user-helpers';
+import { formatMessageStamp } from '../../lib/date-helpers';
 
 interface MessageThreadViewProps {
     thread: MessageThread;
@@ -191,21 +192,6 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
 
     const isMessageRead = (_message: ThreadMessage, _userId: string) => {
         return true; // All sent messages treated as delivered
-    };
-
-    const formatMessageTime = (timestamp: any) => {
-        if (!timestamp?.toDate) return '';
-        const date = timestamp.toDate();
-        const now = new Date();
-        const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
-        if (diffInHours < 24) {
-            return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-        } else if (diffInHours < 24 * 7) {
-            return date.toLocaleDateString([], {weekday: 'short', hour: '2-digit', minute: '2-digit'});
-        } else {
-            return date.toLocaleDateString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
-        }
     };
 
     const getStatusColor = getThreadStatusColor;
@@ -386,7 +372,7 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
                                         </div>
                                         <div className="flex items-center space-x-2">
                       <span className={`text-xs ${isOwnMessage ? 'text-white opacity-75' : 'text-secondary-500'}`}>
-                        {formatMessageTime(message.createdAt)}
+                        {formatMessageStamp(message.createdAt)}
                       </span>
                                             {isOwnMessage && isRead && (
                                                 <CheckCircle2 className="w-3 h-3 text-green-300"/>

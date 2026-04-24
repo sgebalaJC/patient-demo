@@ -22,7 +22,8 @@ import { Modal } from '../ui/Modal';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { useSimulationMode } from '../../hooks/useSimulationMode';
 import { usePdfPreview } from '../../hooks/usePdfPreview';
-import { downloadFile } from '../../lib/storage';
+import { downloadFile, formatFileSize } from '../../lib/storage';
+import { formatDateTime } from '../../lib/date-helpers';
 
 interface PatientDocumentManagementProps {
   isOpen: boolean;
@@ -182,25 +183,8 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
     setImageRotation(prev => (prev + 90) % 360);
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (timestamp: any) => {
-    if (!timestamp?.toDate) return 'Unknown';
-    return timestamp.toDate().toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
+  const formatDate = (timestamp: any) =>
+    timestamp?.toDate ? formatDateTime(timestamp) : 'Unknown';
 
   return (
     <>

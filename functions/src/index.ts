@@ -11,7 +11,7 @@ import {assertAdmin as assertCallerIsAdmin} from "./superAdmins.js";
 import {sendEmail as sendTransactionalEmail, appointmentConfirmedEmail, appointmentCancelledEmail, welcomeEmail, refillStatusEmail} from "./email.js";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {onSchedule} from "firebase-functions/v2/scheduler";
-import {onCall, onRequest} from "firebase-functions/v2/https";
+import {onCall, onRequest, HttpsError} from "firebase-functions/v2/https";
 import {corsOptions, isProduction} from "./lib/cors.js";
 import {normalizePhoneNumber, toE164} from "./lib/phone.js";
 import {FIELD_LIMITS, VALID_ROLES} from "./lib/validation.js";
@@ -28,7 +28,6 @@ import {
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
-import * as crypto from "crypto";
 
 // Pin all functions to us-west1. This MUST run before any re-export below,
 // because `onCall`/`onRequest`/`onSchedule` snapshot the current default at
@@ -78,6 +77,7 @@ admin.initializeApp();
 const db = admin.firestore();
 
 import {sendSms, SMS_SECRETS} from "./lib/sms-helpers.js";
+import {issueCode, checkCode} from "./lib/phone-verification.js";
 
 // CORS, validation, phone normalization, rate limiting, and client-IP
 // helpers are all imported from ./lib/*.
@@ -96,7 +96,7 @@ export const updateUserAuth = onCall({
 
     const { uid } = request.data;
     if (!uid || typeof uid !== 'string') {
-      throw new Error('User UID is required for updates');
+      throw new HttpsError('invalid-argument', 'User UID is required for updates');
     }
 
     // Only pass through defined fields — undefined means "do not update".
@@ -111,7 +111,7 @@ export const updateUserAuth = onCall({
     const emailVerified = typeof request.data.emailVerified === 'boolean' ? request.data.emailVerified : undefined;
 
     if (role && !VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
-      throw new Error(`Invalid role. Must be one of: ${VALID_ROLES.join(', ')}`);
+      throw new HttpsError('invalid-argument', `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}`);
     }
 
     // Update Firebase Auth user
@@ -183,16 +183,16 @@ export const setUserPassword = onCall({
 
     const { uid, password } = request.data ?? {};
     if (!uid || typeof uid !== 'string') {
-      throw new Error('User UID is required');
+      throw new HttpsError('invalid-argument', 'User UID is required');
     }
     if (typeof password !== 'string') {
-      throw new Error('Password must be a string');
+      throw new HttpsError('invalid-argument', 'Password must be a string');
     }
     if (password.length < FIELD_LIMITS.password.min) {
-      throw new Error(`Password must be at least ${FIELD_LIMITS.password.min} characters`);
+      throw new HttpsError('invalid-argument', `Password must be at least ${FIELD_LIMITS.password.min} characters`);
     }
     if (password.length > FIELD_LIMITS.password.max) {
-      throw new Error(`Password must be less than ${FIELD_LIMITS.password.max} characters`);
+      throw new HttpsError('invalid-argument', `Password must be less than ${FIELD_LIMITS.password.max} characters`);
     }
 
     await admin.auth().updateUser(uid, { password });
@@ -236,7 +236,7 @@ export const logAuditEvent = onCall({
     const { action, resourceType, resourceId, metadata } = request.data;
 
     if (!action || typeof action !== 'string') {
-      throw new Error('action is required');
+      throw new HttpsError('invalid-argument', 'action is required');
     }
 
     // Look up actor role from Firestore (don't trust client-provided role)
@@ -312,7 +312,7 @@ export const createUserWithAuth = onCall({
     const sendWelcomeSms = request.data.sendWelcomeSms === true;
 
     if (!VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
-      throw new Error(`Invalid role. Must be one of: ${VALID_ROLES.join(', ')}`);
+      throw new HttpsError('invalid-argument', `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}`);
     }
 
     // Normalize phone to canonical 10-digit US form so later phone-OTP
@@ -839,7 +839,7 @@ export const exportPatientData = onCall({
   try {
     const context = request.auth;
     if (!context) {
-      throw new Error("Authentication required");
+      throw new HttpsError('unauthenticated', 'Authentication required');
     }
 
     const patientId = context.uid;
@@ -848,7 +848,7 @@ export const exportPatientData = onCall({
     const callerDoc = await db.collection("users").doc(patientId).get();
     const callerData = callerDoc.data();
     if (!callerDoc.exists || callerData?.role !== "patient") {
-      throw new Error("Only patients can export their own data");
+      throw new HttpsError('permission-denied', 'Only patients can export their own data');
     }
 
     // Rate limit: 1 export per 60 minutes
@@ -1377,12 +1377,12 @@ export const getAvailableSlots = onCall({
   try {
     const context = request.auth;
     if (!context) {
-      throw new Error('Authentication required');
+      throw new HttpsError('unauthenticated', 'Authentication required');
     }
 
     const { date } = request.data;
     if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      throw new Error('Valid date (YYYY-MM-DD) is required');
+      throw new HttpsError('invalid-argument', 'Valid date (YYYY-MM-DD) is required');
     }
 
     // Get busy times from Google Calendar (empty if integration not configured)
@@ -1475,12 +1475,12 @@ export const validateAppointmentSlot = onCall({
   try {
     const context = request.auth;
     if (!context) {
-      throw new Error('Authentication required');
+      throw new HttpsError('unauthenticated', 'Authentication required');
     }
 
     const { appointmentDate, appointmentId } = request.data;
     if (!appointmentDate || typeof appointmentDate !== 'string') {
-      throw new Error('appointmentDate (ISO string) is required');
+      throw new HttpsError('invalid-argument', 'appointmentDate (ISO string) is required');
     }
 
     const slotStart = new Date(appointmentDate);
@@ -1543,7 +1543,7 @@ export const sendPhoneVerificationCode = onCall({
   try {
     const context = request.auth;
     if (!context) {
-      throw new Error('Authentication required');
+      throw new HttpsError('unauthenticated', 'Authentication required');
     }
 
     // Rate limit: 5 SMS per 10 minutes per user
@@ -1551,34 +1551,25 @@ export const sendPhoneVerificationCode = onCall({
 
     const { phoneNumber } = request.data;
     if (!phoneNumber || typeof phoneNumber !== 'string') {
-      throw new Error('Phone number is required');
+      throw new HttpsError('invalid-argument', 'Phone number is required');
     }
 
     const normalized = normalizePhoneNumber(phoneNumber);
     if (!/^\d{10}$/.test(normalized)) {
-      throw new Error('Please enter a valid US phone number');
+      throw new HttpsError('invalid-argument', 'Please enter a valid US phone number');
     }
     const wireTo = toE164(normalized);
 
-    // Generate 6-digit code
-    const code = crypto.randomInt(100000, 999999).toString();
-
-    // Hash before storing (don't store plain codes)
-    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-
-    // Store in Firestore with 10-minute expiry
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await db.collection('phone-verifications').doc(context.uid).set({
+    const { code } = await issueCode({
+      collection: 'phone-verifications',
+      docId: context.uid,
       phoneNumber: normalized,
-      codeHash,
-      expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-      attempts: 0,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ttlMinutes: 10,
     });
 
     const body = `Your ${FUNCTIONS_BRANDING.shortName} verification code is: ${code}`;
     const result = await sendSms({to: wireTo, body, kind: 'verification', context: 'phone-verify-otp'});
-    if (!result.sent) throw new Error('SMS service not configured');
+    if (!result.sent) throw new HttpsError('failed-precondition', 'SMS service not configured');
 
     logger.info(`Verification code ${result.sim ? 'recorded (sim)' : 'sent'}`, { uid: context.uid });
     return { success: true, message: 'Verification code sent' };
@@ -1599,49 +1590,25 @@ export const verifyPhoneCode = onCall({
   try {
     const context = request.auth;
     if (!context) {
-      throw new Error('Authentication required');
+      throw new HttpsError('unauthenticated', 'Authentication required');
     }
 
     const { code } = request.data;
     if (!code || typeof code !== 'string' || code.length !== 6) {
-      throw new Error('Please enter a 6-digit verification code');
+      throw new HttpsError('invalid-argument', 'Please enter a 6-digit verification code');
     }
 
-    const verificationRef = db.collection('phone-verifications').doc(context.uid);
-    const verificationDoc = await verificationRef.get();
+    const outcome = await checkCode({
+      collection: 'phone-verifications',
+      docId: context.uid,
+      code,
+    });
+    if (!outcome.ok) return { success: false, error: outcome.error };
 
-    if (!verificationDoc.exists) {
-      return { success: false, error: 'No verification pending. Please request a new code.' };
-    }
-
-    const data = verificationDoc.data()!;
-
-    // Check expiry
-    if (data.expiresAt.toDate() < new Date()) {
-      await verificationRef.delete();
-      return { success: false, error: 'Code expired. Please request a new one.' };
-    }
-
-    // Check attempts (max 5)
-    if (data.attempts >= 5) {
-      await verificationRef.delete();
-      return { success: false, error: 'Too many attempts. Please request a new code.' };
-    }
-
-    // Increment attempts
-    await verificationRef.update({ attempts: data.attempts + 1 });
-
-    // Verify code
-    const inputHash = crypto.createHash('sha256').update(code).digest('hex');
-    if (inputHash !== data.codeHash) {
-      return { success: false, error: 'Incorrect code. Please try again.' };
-    }
-
-    // Code matches — update user profile
+    const newPhone = outcome.phoneNumber;
     const userRef = db.collection('users').doc(context.uid);
     const userDoc = await userRef.get();
     const oldPhone = userDoc.data()?.phoneNumber || '';
-    const newPhone = data.phoneNumber;
 
     // Check phone number uniqueness (skip if unchanged)
     if (oldPhone !== newPhone) {
@@ -1650,7 +1617,6 @@ export const verifyPhoneCode = onCall({
         .limit(1)
         .get();
       if (!existingUsers.empty) {
-        await verificationRef.delete();
         return { success: false, error: 'This phone number is already associated with another account.' };
       }
     }
@@ -1660,9 +1626,6 @@ export const verifyPhoneCode = onCall({
       phoneVerified: true,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-
-    // Clean up verification doc
-    await verificationRef.delete();
 
     // If phone number actually changed, update upcoming Calendar events
     if (oldPhone !== newPhone && (await hasCalendarConfigured())) {
@@ -1688,12 +1651,12 @@ export const sendPhoneLoginCode = onCall({
   try {
     const { phoneNumber } = request.data;
     if (!phoneNumber || typeof phoneNumber !== 'string') {
-      throw new Error('Phone number is required');
+      throw new HttpsError('invalid-argument', 'Phone number is required');
     }
 
     const normalized = normalizePhoneNumber(phoneNumber);
     if (!/^\d{10}$/.test(normalized)) {
-      throw new Error('Please enter a valid US phone number');
+      throw new HttpsError('invalid-argument', 'Please enter a valid US phone number');
     }
     const wireTo = toE164(normalized);
 
@@ -1703,23 +1666,16 @@ export const sendPhoneLoginCode = onCall({
     await checkRateLimit(normalized, 'phoneLogin', 5, 10);
     await checkRateLimit(clientIp(request), 'phoneLoginIp', 10, 10);
 
-    // Generate 6-digit code
-    const code = crypto.randomInt(100000, 999999).toString();
-    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-
-    // Store in phone-login-codes with 5-minute expiry
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-    await db.collection('phone-login-codes').doc(normalized).set({
+    const { code } = await issueCode({
+      collection: 'phone-login-codes',
+      docId: normalized,
       phoneNumber: normalized,
-      codeHash,
-      expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-      attempts: 0,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ttlMinutes: 5,
     });
 
     const body = `Your ${FUNCTIONS_BRANDING.shortName} login code is: ${code}`;
     const result = await sendSms({to: wireTo, body, kind: 'verification', context: 'phone-login-otp'});
-    if (!result.sent) throw new Error('SMS service not configured');
+    if (!result.sent) throw new HttpsError('failed-precondition', 'SMS service not configured');
 
     logger.info(`Phone login code ${result.sim ? 'recorded (sim)' : 'sent'}`, { phone: normalized.slice(-4) });
     return { success: true, message: 'Verification code sent' };
@@ -1742,47 +1698,20 @@ export const verifyPhoneLogin = onCall({
     const { phoneNumber, code, firstName, lastName } = request.data;
 
     if (!phoneNumber || typeof phoneNumber !== 'string') {
-      throw new Error('Phone number is required');
+      throw new HttpsError('invalid-argument', 'Phone number is required');
     }
     if (!code || typeof code !== 'string' || code.length !== 6) {
-      throw new Error('Please enter a 6-digit verification code');
+      throw new HttpsError('invalid-argument', 'Please enter a 6-digit verification code');
     }
 
     const normalized = normalizePhoneNumber(phoneNumber);
 
-    // Look up verification record
-    const verificationRef = db.collection('phone-login-codes').doc(normalized);
-    const verificationDoc = await verificationRef.get();
-
-    if (!verificationDoc.exists) {
-      return { success: false, error: 'No verification pending. Please request a new code.' };
-    }
-
-    const data = verificationDoc.data()!;
-
-    // Check expiry
-    if (data.expiresAt.toDate() < new Date()) {
-      await verificationRef.delete();
-      return { success: false, error: 'Code expired. Please request a new one.' };
-    }
-
-    // Check attempts (max 5)
-    if (data.attempts >= 5) {
-      await verificationRef.delete();
-      return { success: false, error: 'Too many attempts. Please request a new code.' };
-    }
-
-    // Increment attempts
-    await verificationRef.update({ attempts: data.attempts + 1 });
-
-    // Verify code
-    const inputHash = crypto.createHash('sha256').update(code).digest('hex');
-    if (inputHash !== data.codeHash) {
-      return { success: false, error: 'Incorrect code. Please try again.' };
-    }
-
-    // Code is valid — clean up
-    await verificationRef.delete();
+    const outcome = await checkCode({
+      collection: 'phone-login-codes',
+      docId: normalized,
+      code,
+    });
+    if (!outcome.ok) return { success: false, error: outcome.error };
 
     // Look up existing user by phone number
     const usersSnapshot = await db.collection('users')
@@ -2411,20 +2340,20 @@ export const googleWorkspaceAuthorize = onCall({}, async (request) => {
   const calendarId = (request.data?.calendarId as string || '').trim();
   const returnUrl = (request.data?.returnUrl as string) || null;
 
-  if (!calendarId) throw new Error('calendarId is required');
+  if (!calendarId) throw new HttpsError('invalid-argument', 'calendarId is required');
   if (!services.includes('calendar')) {
-    throw new Error('Calendar must be among the enabled services');
+    throw new HttpsError('failed-precondition', 'Calendar must be among the enabled services');
   }
 
   // Enforce mode exclusivity — refuse if a service-account integration
   // is already active. Disconnect-then-reconnect is the intended flow.
   const existing = await db.collection('integrations').doc('google-workspace').get();
   if (existing.exists && existing.data()?.authMode === 'service-account') {
-    throw new Error('A service-account integration is already active. Disconnect it first.');
+    throw new HttpsError('failed-precondition', 'A service-account integration is already active. Disconnect it first.');
   }
 
   const encKey = process.env.GOOGLE_WORKSPACE_ENCRYPTION_KEY;
-  if (!encKey) throw new Error('GOOGLE_WORKSPACE_ENCRYPTION_KEY not configured');
+  if (!encKey) throw new HttpsError('failed-precondition', 'GOOGLE_WORKSPACE_ENCRYPTION_KEY not configured');
   const secret = new TextEncoder().encode(encKey);
 
   const state = await new SignJWT({
@@ -2477,14 +2406,14 @@ export const googleWorkspaceCallback = onRequest({
   let returnUrl: string | null = null;
   try {
     const encKey = process.env.GOOGLE_WORKSPACE_ENCRYPTION_KEY;
-    if (!encKey) throw new Error('Encryption key not configured');
+    if (!encKey) throw new HttpsError('failed-precondition', 'Encryption key not configured');
     const secret = new TextEncoder().encode(encKey);
     const {payload} = await jwtVerify(state, secret);
     userId = payload.userId as string;
     requestedServices = (payload.services as GoogleService[]) || ['gmail'];
     calendarId = (payload.calendarId as string) || '';
     returnUrl = (payload.returnUrl as string) || null;
-    if (!userId || !calendarId) throw new Error('Invalid state');
+    if (!userId || !calendarId) throw new HttpsError('failed-precondition', 'Invalid state');
   } catch {
     res.redirect(`${redirectBase}?tab=integrations&gws_error=invalid_state`);
     return;
@@ -2563,34 +2492,34 @@ export const saveGoogleWorkspaceServiceAccount = onCall({}, async (request) => {
   const calendarId = ((request.data?.calendarId as string) || '').trim();
   const servicesIn = (request.data?.services as string[]) || ['gmail', 'calendar', 'drive'];
 
-  if (!saKeyJson) throw new Error('Service-account JSON key is required');
-  if (!subject) throw new Error('Subject email is required');
-  if (!calendarId) throw new Error('calendarId is required');
+  if (!saKeyJson) throw new HttpsError('invalid-argument', 'Service-account JSON key is required');
+  if (!subject) throw new HttpsError('invalid-argument', 'Subject email is required');
+  if (!calendarId) throw new HttpsError('invalid-argument', 'calendarId is required');
 
   // Sanity-parse the key so we don't write garbage into Secret Manager.
   let saClientEmail: string;
   try {
     const key = JSON.parse(saKeyJson) as {client_email?: string; private_key?: string; type?: string};
     if (!key.client_email || !key.private_key) {
-      throw new Error('Key is missing client_email or private_key');
+      throw new HttpsError('invalid-argument', 'Key is missing client_email or private_key');
     }
     if (key.type && key.type !== 'service_account') {
-      throw new Error(`Key type must be 'service_account', got '${key.type}'`);
+      throw new HttpsError('invalid-argument', `Key type must be 'service_account', got '${key.type}'`);
     }
     saClientEmail = key.client_email;
   } catch (err: any) {
-    throw new Error(`Invalid service-account JSON: ${err.message}`);
+    throw new HttpsError('invalid-argument', `Invalid service-account JSON: ${err.message}`);
   }
 
   // Enforce mode exclusivity
   const existing = await db.collection('integrations').doc('google-workspace').get();
   if (existing.exists && existing.data()?.authMode === 'oauth') {
-    throw new Error('An OAuth integration is already active. Disconnect it first.');
+    throw new HttpsError('failed-precondition', 'An OAuth integration is already active. Disconnect it first.');
   }
 
   const services = servicesIn as GoogleService[];
   if (!services.includes('calendar')) {
-    throw new Error('Calendar must be among the enabled services');
+    throw new HttpsError('failed-precondition', 'Calendar must be among the enabled services');
   }
 
   // Stash the key FIRST so the access-token mint can find it. We'll roll
@@ -2602,7 +2531,7 @@ export const saveGoogleWorkspaceServiceAccount = onCall({}, async (request) => {
     await verifyCalendarAccess(accessToken, calendarId);
   } catch (err: any) {
     await deleteGoogleServiceAccountKey().catch(() => {});
-    throw new Error(`Service-account setup failed: ${err.message}`);
+    throw new HttpsError('internal', `Service-account setup failed: ${err.message}`);
   }
 
   const doc: GoogleWorkspaceIntegration & Record<string, unknown> = {
@@ -2685,7 +2614,7 @@ export const googleWorkspaceProxy = onRequest({
     let body: Record<string, unknown>;
     try {
       body = req.body as Record<string, unknown>;
-      if (!body || typeof body !== 'object') throw new Error('Invalid body');
+      if (!body || typeof body !== 'object') throw new HttpsError('invalid-argument', 'Invalid body');
     } catch {
       res.status(400).json({error: 'Invalid JSON body'});
       return;
@@ -2731,25 +2660,25 @@ async function handleGmailAction(
   }
   case 'read': {
     const messageId = body.messageId as string;
-    if (!messageId) throw new Error('messageId required');
+    if (!messageId) throw new HttpsError('invalid-argument', 'messageId required');
     const msg = await getFullMessage(accessToken, messageId);
-    if (!msg) throw new Error('Message not found');
+    if (!msg) throw new HttpsError('not-found', 'Message not found');
     return {email: msg};
   }
   case 'send': {
     const {to, subject, body: emailBody} = body as {
       to: string; subject: string; body: string;
     };
-    if (!to || !subject || !emailBody) throw new Error('to, subject, and body required');
+    if (!to || !subject || !emailBody) throw new HttpsError('invalid-argument', 'to, subject, and body required');
     return await sendEmail(accessToken, to, subject, emailBody, email);
   }
   case 'reply': {
     const {messageId, body: replyBody} = body as {messageId: string; body: string};
-    if (!messageId || !replyBody) throw new Error('messageId and body required');
+    if (!messageId || !replyBody) throw new HttpsError('invalid-argument', 'messageId and body required');
     return await replyToEmail(accessToken, messageId, replyBody, email);
   }
   default:
-    throw new Error('Invalid Gmail action. Use: inbox, read, send, reply');
+    throw new HttpsError('invalid-argument', 'Invalid Gmail action. Use: inbox, read, send, reply');
   }
 }
 
@@ -2769,30 +2698,30 @@ async function handleCalendarAction(
   }
   case 'get': {
     const eventId = body.eventId as string;
-    if (!eventId) throw new Error('eventId required');
+    if (!eventId) throw new HttpsError('invalid-argument', 'eventId required');
     const event = await wsGetEvent(accessToken, eventId, calendarId);
-    if (!event) throw new Error('Event not found');
+    if (!event) throw new HttpsError('not-found', 'Event not found');
     return {event};
   }
   case 'create': {
     const event = body.event as Record<string, unknown>;
-    if (!event) throw new Error('event object required');
+    if (!event) throw new HttpsError('invalid-argument', 'event object required');
     return {event: await wsCreateEvent(accessToken, event as Parameters<typeof wsCreateEvent>[1], calendarId)};
   }
   case 'update': {
     const eventId = body.eventId as string;
     const updates = body.updates as Record<string, unknown>;
-    if (!eventId || !updates) throw new Error('eventId and updates required');
+    if (!eventId || !updates) throw new HttpsError('invalid-argument', 'eventId and updates required');
     return {event: await wsUpdateEvent(accessToken, eventId, updates, calendarId)};
   }
   case 'delete': {
     const eventId = body.eventId as string;
-    if (!eventId) throw new Error('eventId required');
+    if (!eventId) throw new HttpsError('invalid-argument', 'eventId required');
     await wsDeleteEvent(accessToken, eventId, calendarId);
     return {ok: true};
   }
   default:
-    throw new Error('Invalid Calendar action. Use: list, get, create, update, delete');
+    throw new HttpsError('invalid-argument', 'Invalid Calendar action. Use: list, get, create, update, delete');
   }
 }
 
@@ -2809,14 +2738,14 @@ async function handleDriveAction(
   }
   case 'get': {
     const fileId = body.fileId as string;
-    if (!fileId) throw new Error('fileId required');
+    if (!fileId) throw new HttpsError('invalid-argument', 'fileId required');
     const file = await getFile(accessToken, fileId);
-    if (!file) throw new Error('File not found');
+    if (!file) throw new HttpsError('not-found', 'File not found');
     return {file};
   }
   case 'read': {
     const fileId = body.fileId as string;
-    if (!fileId) throw new Error('fileId required');
+    if (!fileId) throw new HttpsError('invalid-argument', 'fileId required');
     const file = await getFile(accessToken, fileId);
     const content = await getFileContent(accessToken, fileId);
     return {file, content};
@@ -2825,11 +2754,11 @@ async function handleDriveAction(
     const {name, content, mimeType, folderId} = body as {
       name: string; content: string; mimeType?: string; folderId?: string;
     };
-    if (!name || !content) throw new Error('name and content required');
+    if (!name || !content) throw new HttpsError('invalid-argument', 'name and content required');
     return {file: await createFile(accessToken, name, content, mimeType, folderId)};
   }
   default:
-    throw new Error('Invalid Drive action. Use: list, get, read, create');
+    throw new HttpsError('invalid-argument', 'Invalid Drive action. Use: list, get, read, create');
   }
 }
 
@@ -3020,7 +2949,7 @@ export const impersonateUser = onCall(async (request) => {
   const context = requireSuperAdmin(request);
   const {targetUid} = request.data as {targetUid?: string};
   if (!targetUid || typeof targetUid !== 'string') {
-    throw new Error('targetUid is required');
+    throw new HttpsError('invalid-argument', 'targetUid is required');
   }
   const token = await admin.auth().createCustomToken(targetUid);
   logger.info('super admin impersonation', {

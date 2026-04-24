@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/firestore/appointments_service.dart';
 import '../../services/firestore/notification_helper.dart';
+import '../../config/branding.dart';
 import '../../config/colors.dart';
-import '../../config/constants.dart';
 import '../../widgets/bottom_sheet_header.dart';
 
 class BookAppointmentSheet extends StatefulWidget {
@@ -153,7 +153,7 @@ class _BookAppointmentSheetState extends State<BookAppointmentSheet> {
         'patientId': uid,
         'appointmentDate': Timestamp.fromDate(appointmentDate),
         'appointmentType': _appointmentType,
-        'duration': defaultAppointmentDuration,
+        'duration': branding.defaultAppointmentDuration,
         'status': 'scheduled',
         'reminderSent': false,
       });

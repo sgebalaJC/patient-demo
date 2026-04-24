@@ -4,6 +4,7 @@ import { sidecar } from '../../lib/sidecar';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { EmptyState } from '../ui/EmptyState';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { formatDateTime } from '../../lib/date-helpers';
 
 interface Backup {
   name: string;
@@ -78,15 +79,7 @@ export const AgentBackups: React.FC = () => {
     }
   };
 
-  const formatDate = (iso: string) => {
-    return new Date(iso).toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const formatDate = (iso: string) => formatDateTime(iso);
 
   if (loading) return <LoadingSpinner />;
 

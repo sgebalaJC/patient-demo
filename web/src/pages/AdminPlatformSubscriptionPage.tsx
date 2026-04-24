@@ -16,6 +16,7 @@ import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { XCircle } from 'lucide-react';
+import { formatDate as fmtDate, formatDateTime } from '../lib/date-helpers';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { AccessDenied } from '../components/ui/AccessDenied';
@@ -50,24 +51,14 @@ function formatTokens(n: number): string {
 
 function formatDate(epochSeconds?: number | null): string | null {
   if (!epochSeconds) return null;
-  return new Date(epochSeconds * 1000).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return fmtDate(new Date(epochSeconds * 1000));
 }
 
 function formatTimestamp(ts: any): string | null {
   if (!ts) return null;
   const ms = typeof ts?.toMillis === 'function' ? ts.toMillis() : ts;
   if (!ms) return null;
-  return new Date(ms).toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatDateTime(new Date(ms));
 }
 
 function progressBarColor(pct: number): string {

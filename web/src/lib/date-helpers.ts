@@ -50,3 +50,22 @@ export const formatRelative = (value: DateLike): string => {
   }
   return formatDate(date);
 };
+
+/**
+ * Compact stamp for message-list rows:
+ *   < 24h         → "2:30 PM"
+ *   < 7 days      → "Tue 2:30 PM"
+ *   else          → "Mar 15 2:30 PM"
+ */
+export const formatMessageStamp = (value: DateLike): string => {
+  if (!value) return '';
+  const date = toDate(value);
+  const diffHours = (Date.now() - date.getTime()) / (1000 * 60 * 60);
+  if (diffHours < 24) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  if (diffHours < 24 * 7) {
+    return date.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};

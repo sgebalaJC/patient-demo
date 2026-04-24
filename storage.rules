@@ -14,10 +14,23 @@ service firebase.storage {
         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
 
-    // Patient documents — owner can read/write, admins can read
+    // Patient documents — owner can read/write, admins can read.
+    // Writes capped at 25 MB with a content-type allowlist so a patient can't
+    // host arbitrary binaries or DoS storage cost via this path.
+    function patientDocContentTypeOk() {
+      return request.resource.contentType.matches('image/.*')
+        || request.resource.contentType == 'application/pdf'
+        || request.resource.contentType == 'application/msword'
+        || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        || request.resource.contentType == 'text/plain';
+    }
     match /patients/{patientId}/documents/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == patientId;
+      allow read: if request.auth != null && request.auth.uid == patientId;
       allow read: if isAdmin();
+      allow write: if request.auth != null
+        && request.auth.uid == patientId
+        && request.resource.size < 25 * 1024 * 1024
+        && patientDocContentTypeOk();
     }
 
     // Message attachments — only thread participants (patient or admin) can access

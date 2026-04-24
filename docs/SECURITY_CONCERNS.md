@@ -2,6 +2,16 @@
 
 Open items we've consciously deferred. Each entry: what the risk is, why we're accepting it for now, and what moves us off it.
 
+## Closed 2026-04-24 (ported from patient-showmd)
+
+Backported from a deep audit of the parent project:
+- `thread-messages` create now requires thread ownership via `hasCreateThreadAccess()` (was only `senderId==auth.uid`) — `firestore.rules`.
+- Patient-initiated admin notification fan-out constrained to a type allowlist + title/message/isRead/readBy field checks; broadcast-only types are Admin-SDK-only — `firestore.rules`.
+- SignalWire signature compare switched to `crypto.timingSafeEqual`; optional host pinning via `SIGNALWIRE_ALLOWED_HOSTS` — `functions/src/signalwire-webhook.ts`.
+- Patient-documents storage writes now capped at 25 MB with MIME allowlist (image/*, pdf, doc/docx, txt) — `storage.rules`.
+- `verifyPhoneLogin` new users created `isActive:false` so they hit the admin activation gate — `functions/src/index.ts`.
+- `bootstrap-requests` unauth'd `delete` removed (kept unauth'd `get` for token polling) — `firestore.rules`.
+
 > **Fork note.** The values below (`5.78.123.70`, `patient-demo-project`,
 > `kitt-hetzner` SSH key, `firebase-adminsdk-fbsvc@…`) are the current demo
 > deployment. Replace them with the customer's VPS IP, Firebase project,

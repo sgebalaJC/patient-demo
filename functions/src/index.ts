@@ -1797,7 +1797,11 @@ export const verifyPhoneLogin = onCall({
     // Set custom claims
     await admin.auth().setCustomUserClaims(userRecord.uid, { role: 'patient' });
 
-    // Create Firestore user profile
+    // Create Firestore user profile. isActive=false so self-registered
+    // patients land in the admin-activation queue — parity with email/Google
+    // sign-up (firestore.rules users/create enforces isActive:false). Without
+    // this, anyone with any cell number becomes an active patient without
+    // admin review.
     const userProfile = {
       firstName: trimmedFirst,
       lastName: trimmedLast,
@@ -1805,7 +1809,7 @@ export const verifyPhoneLogin = onCall({
       role: 'patient',
       phoneNumber: normalized,
       phoneVerified: true,
-      isActive: true,
+      isActive: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -1814,7 +1818,7 @@ export const verifyPhoneLogin = onCall({
 
     const token = await admin.auth().createCustomToken(userRecord.uid, { role: 'patient' });
 
-    logger.info('Phone registration successful', { uid: userRecord.uid });
+    logger.info('Phone registration successful (pending activation)', { uid: userRecord.uid });
 
     // Audit log
     logger.info('[AUDIT]', {

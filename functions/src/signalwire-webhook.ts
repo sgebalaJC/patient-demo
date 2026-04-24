@@ -19,6 +19,7 @@ import type {Request, Response} from "express";
 import {logger} from "firebase-functions";
 import {onRequest} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import * as crypto from "crypto";
 import {
   signalwireProjectId,
   signalwireAuthToken,
@@ -44,6 +45,15 @@ function db() {
 // Functions v2 routing can mangle the path seen by the container.
 // ---------------------------------------------------------------------------
 
+// Constant-time string compare — HMAC base64 outputs are same length for the
+// same algo, so length-mismatch rejection doesn't leak anything meaningful.
+export function timingSafeStringEqual(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a, "utf8");
+  const bBuf = Buffer.from(b, "utf8");
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
 function verifySignalWireSignature(
   signature: string | undefined,
   authTokens: string[],
@@ -58,7 +68,9 @@ function verifySignalWireSignature(
     for (const url of candidateUrls) {
       const expected = computeSignalwireSignature(tok, url, params);
       lastExpected = expected;
-      if (expected === signature) return {ok: true, expected, matchedUrl: url, matchedTokenIdx: i};
+      if (timingSafeStringEqual(expected, signature)) {
+        return {ok: true, expected, matchedUrl: url, matchedTokenIdx: i};
+      }
     }
   }
   return {ok: false, expected: lastExpected};
@@ -75,6 +87,16 @@ function verifySignalWireSignature(
 function buildSigCandidateUrls(req: Request, functionName: string): string[] {
   const proto = (req.headers["x-forwarded-proto"] as string) || "https";
   const host = req.headers["host"] as string;
+  // Optional host pinning: set SIGNALWIRE_ALLOWED_HOSTS="host1,host2" to
+  // reject requests whose Host header isn't on the allowlist. The HMAC
+  // already binds URL, so a spoofed host alone can't forge, but this
+  // tightens the accepted URL set as belt-and-braces.
+  const allowed = (process.env.SIGNALWIRE_ALLOWED_HOSTS || "")
+    .split(",").map((h) => h.trim()).filter(Boolean);
+  if (allowed.length > 0 && !allowed.includes(host)) {
+    logger.warn("[signalwire] Host not in allowlist", {host, allowed});
+    return [];
+  }
   const incoming = req.originalUrl || req.url || "/";
   const baseUrl = `${proto}://${host}${incoming}`;
   const out = [baseUrl];

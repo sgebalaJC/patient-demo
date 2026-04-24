@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../providers/auth_provider.dart';
 import 'package:provider/provider.dart';
+import '../config/branding.dart';
 import '../config/colors.dart';
 
 class AdminBlockedModal extends StatelessWidget {
@@ -45,7 +46,7 @@ class AdminBlockedModal extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     'This app is designed for patients only. '
-                    'Admin and staff accounts must use the web portal at patient.example.com to manage the system.',
+                    'Admin and staff accounts must use the web portal at ${branding.domain} to manage the system.',
                     style: TextStyle(
                       fontSize: 15,
                       color: Colors.grey.shade600,

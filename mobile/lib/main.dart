@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'config/firebase_config.dart';
 import 'config/colors.dart';
 import 'config/branding.dart';
+import 'providers/app_settings_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'services/auth_service.dart';
@@ -18,6 +19,7 @@ import 'screens/profile_screen.dart';
 import 'widgets/admin_blocked_modal.dart';
 import 'widgets/inactive_account_screen.dart';
 import 'widgets/biometric_lock_screen.dart';
+import 'widgets/simulation_mode_blocked_screen.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -45,6 +47,7 @@ class PatientPortalApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => AppSettingsProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
@@ -70,8 +73,9 @@ class PatientPortalApp extends StatelessWidget {
 }
 
 /// Routes users based on auth state:
+/// - simulationMode on → Sim-blocked screen (mobile does not branch to simulation/*)
 /// - Unauthenticated → Login
-/// - Admin/Assistant → Blocked modal
+/// - Admin / unknown role → Blocked modal
 /// - Inactive patient → Pending activation screen
 /// - Biometric locked → Biometric prompt
 /// - Active patient → Main app
@@ -80,8 +84,11 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, auth, _) {
+    return Consumer2<AppSettingsProvider, AuthProvider>(
+      builder: (context, settings, auth, _) {
+        if (settings.simulationMode) {
+          return const SimulationModeBlockedScreen();
+        }
         switch (auth.status) {
           case AuthStatus.uninitialized:
             return const Scaffold(

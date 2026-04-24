@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../providers/app_settings_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/constants.dart';
 import '../../config/colors.dart';
 import '../../config/branding.dart';
+import 'email_link_login_screen.dart';
 import 'register_screen.dart';
 import 'phone_login_screen.dart';
 
@@ -305,28 +307,76 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 12),
+
+                      // Email link sign in (passwordless).
+                      // Primary path for admin-invited patients per the web
+                      // portal's passwordless-by-default posture.
+                      SizedBox(
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          onPressed: auth.loading
+                              ? null
+                              : () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const EmailLinkLoginScreen(),
+                                    ),
+                                  );
+                                },
+                          icon: const Icon(Icons.mail_outline),
+                          label: const Text('Email me a sign-in link'),
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 24),
 
-                      // Register link
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            "Don't have an account? ",
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const RegisterScreen(),
+                      // Register link — gated on system/settings.registrationEnabled.
+                      // When self-signup is off, patients are created by the practice
+                      // and sign in via the methods above; hiding the link avoids a
+                      // wasted form fill that the Cloud Function will reject.
+                      Consumer<AppSettingsProvider>(
+                        builder: (context, settings, _) {
+                          if (!settings.registrationEnabled) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                'New accounts are created by your practice. If you were invited, sign in above using the method you were given.',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 13,
                                 ),
-                              );
-                            },
-                            child: const Text('Sign Up'),
-                          ),
-                        ],
+                                textAlign: TextAlign.center,
+                              ),
+                            );
+                          }
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                "Don't have an account? ",
+                                style: TextStyle(color: Colors.grey.shade600),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const RegisterScreen(),
+                                    ),
+                                  );
+                                },
+                                child: const Text('Sign Up'),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),

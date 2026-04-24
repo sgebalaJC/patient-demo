@@ -2,7 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Mobile is patient-only — admin is parsed but blocked at the auth gate.
 // `super_admin` from web is mapped to `admin` here for safety.
-enum UserRole { patient, admin }
+// Unknown roles (e.g. `assistant` used by the sidecar agent identity, or any
+// future staff role) map to `unknown` and are blocked at the gate — default-
+// allowing unknown roles as `patient` would silently grant access.
+enum UserRole { patient, admin, unknown }
 
 class AppUser {
   final String id;
@@ -98,11 +101,13 @@ class AppUser {
 
   static UserRole _parseRole(String? role) {
     switch (role) {
+      case 'patient':
+        return UserRole.patient;
       case 'admin':
       case 'super_admin':
         return UserRole.admin;
       default:
-        return UserRole.patient;
+        return UserRole.unknown;
     }
   }
 

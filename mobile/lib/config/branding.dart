@@ -123,6 +123,16 @@ class Branding {
   /// Public customer-facing domain, without protocol
   final String domain;
 
+  /// Android package name (matches `applicationId` in
+  /// `mobile/android/app/build.gradle.kts`). Used by email-link sign-in
+  /// so Firebase can generate a link that deep-opens this app — must
+  /// match the real package id or the link opens the wrong app.
+  final String androidPackageName;
+
+  /// iOS bundle id (matches `PRODUCT_BUNDLE_IDENTIFIER` in the Xcode
+  /// project). Used by email-link sign-in for the same reason.
+  final String iosBundleId;
+
   /// Public support email
   final String supportEmail;
 
@@ -166,6 +176,8 @@ class Branding {
     required this.shortName,
     required this.legalEntity,
     required this.domain,
+    required this.androidPackageName,
+    required this.iosBundleId,
     required this.supportEmail,
     required this.fromEmail,
     this.supportPhone,
@@ -187,6 +199,8 @@ const branding = Branding(
   shortName: 'Aurelia MD',
   legalEntity: 'Aurelia Primary Care, LLC',
   domain: 'patient-demo-project.web.app',
+  androidPackageName: 'com.aureliamd.patient',
+  iosBundleId: 'com.aureliamd.patient',
   supportEmail: 'support@aureliamd.com',
   fromEmail: 'noreply@aureliamd.com',
   supportPhone: null,

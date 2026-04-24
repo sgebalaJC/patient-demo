@@ -82,7 +82,8 @@ class AuthProvider extends ChangeNotifier {
   void _resolveStatus(AppUser? profile) {
     if (profile == null) {
       _status = AuthStatus.unauthenticated;
-    } else if (profile.role == UserRole.admin) {
+    } else if (profile.role == UserRole.admin ||
+        profile.role == UserRole.unknown) {
       _status = AuthStatus.adminBlocked;
     } else if (!profile.isActive) {
       _status = AuthStatus.inactive;
@@ -260,6 +261,55 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Send a passwordless sign-in link to the patient's email.
+  /// Returns true on success, false if an error was recorded on `error`.
+  Future<bool> sendSignInLink(String email) async {
+    _setLoading(true);
+    _error = null;
+    try {
+      await _authService.sendSignInLink(email);
+      return true;
+    } on FirebaseAuthException catch (e) {
+      _error = _mapAuthError(e.code);
+      return false;
+    } catch (e) {
+      _error = 'Failed to send sign-in link';
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Retrieve the email stashed by a prior `sendSignInLink` call.
+  Future<String?> getStoredEmailForSignIn() {
+    return _authService.getStoredEmailForSignIn();
+  }
+
+  /// Complete email-link sign-in. `email` comes from SharedPreferences or
+  /// is re-entered by the user (e.g. device mismatch), `link` is either
+  /// pasted or captured via a deep-link handler.
+  Future<bool> completeEmailLinkSignIn({
+    required String email,
+    required String link,
+  }) async {
+    _setLoading(true);
+    _error = null;
+    try {
+      await _authService.completeEmailLinkSignIn(email: email, link: link);
+      _biometricPassed = true;
+      await _biometricService.markLoggedIn();
+      return true;
+    } on FirebaseAuthException catch (e) {
+      _error = _mapAuthError(e.code);
+      return false;
+    } catch (e) {
+      _error = 'Sign-in failed. Please request a new link.';
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   Future<void> signOut() async {
     if (_firebaseUser != null) {
       await _fcmService.clearToken(_firebaseUser!.uid);
@@ -297,6 +347,12 @@ class AuthProvider extends ChangeNotifier {
         return 'Too many attempts. Please try again later';
       case 'invalid-credential':
         return 'Invalid email or password';
+      case 'invalid-email-link':
+        return 'That sign-in link is invalid or expired. Please request a new one.';
+      case 'expired-action-code':
+        return 'That sign-in link has expired. Please request a new one.';
+      case 'invalid-action-code':
+        return 'That sign-in link is invalid. Please request a new one.';
       default:
         return 'Authentication failed. Please try again';
     }

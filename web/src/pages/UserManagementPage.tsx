@@ -523,7 +523,7 @@ export const UserManagementPage: React.FC = () => {
                           )}
                         </Button>
                       )}
-                      {isSuperAdminEmail(user?.email) && (
+                      {isSuperAdminEmail(userProfile?.email) && user.id !== userProfile?.id && (
                         <Button
                           variant="secondary"
                           size="sm"

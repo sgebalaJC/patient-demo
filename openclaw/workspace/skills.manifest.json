@@ -1,0 +1,16 @@
+{
+  "_description": "Maps integration ids to the skill ids that should be installed/uninstalled with them. Used by the sidecar /admin-api/skills/sync endpoint to copy SKILL.md files between the read-only 'skills-source' library (written by deploy.sh) and the active workspace/skills directory (seen by the agent).",
+  "integrations": {
+    "google-workspace": ["google-workspace"],
+    "drchrono": ["drchrono", "attach-to-drchrono"],
+    "athena": ["athena"],
+    "elation": ["elation"],
+    "ecw": ["ecw"],
+    "nextgen": ["nextgen"],
+    "tebra": ["tebra"],
+    "greenway": ["greenway"],
+    "pfusion": ["pfusion"],
+    "cerner": ["cerner"],
+    "epic": ["epic"]
+  }
+}

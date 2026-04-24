@@ -21,7 +21,7 @@ import { handleStatus, handleRestart } from "./routes/container.js";
 import { handleStats } from "./routes/stats.js";
 import { readConfig, patchConfig } from "./routes/config.js";
 import { handleCreate, handleList, handleRestore, handleDelete, handleDownload } from "./routes/backup.js";
-import { handleListSkills, handleReadSkill } from "./routes/skills.js";
+import { handleListSkills, handleReadSkill, handleSkillSync } from "./routes/skills.js";
 import { handleAdminApi } from "./routes/admin-api.js";
 import { handleSnapshot } from "./routes/snapshot.js";
 import {
@@ -192,6 +192,7 @@ const ROUTES: Route[] = [
 
   // ── Skills (admin) ─────────────────────────────────────────────────
   { match: "/skills", method: ["GET"], scope: "admin", handler: () => handleListSkills() },
+  { match: "/skills/sync", method: ["POST"], scope: "admin", handler: ({ request }) => handleSkillSync(request) },
   {
     match: /^\/skills\/([\w-]+)$/, method: ["GET"], scope: "admin",
     handler: ({ params }) => handleReadSkill(params[0]),

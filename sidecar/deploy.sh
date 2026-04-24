@@ -120,6 +120,7 @@ if [ -f "$CLI_SCRIPT" ]; then
 fi
 
 SKILLS_DIR="$SCRIPT_DIR/../openclaw/workspace/skills"
+SKILLS_MANIFEST_FILE="$SCRIPT_DIR/../openclaw/workspace/skills.manifest.json"
 if [ -d "$SKILLS_DIR" ]; then
   # Discover where Aurelia's runtime + sidecar actually read skills from.
   # OPENCLAW_STATE_DIR in /root/sidecar.env wins; if absent we default to
@@ -129,20 +130,30 @@ if [ -d "$SKILLS_DIR" ]; then
   REMOTE_STATE_DIR=$(run_remote "grep -E '^OPENCLAW_STATE_DIR=' /root/sidecar.env 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\"" | tr -d '\r')
   REMOTE_STATE_DIR="${REMOTE_STATE_DIR:-/root/.openclaw}"
   REMOTE_SKILLS_DIR="$REMOTE_STATE_DIR/workspace/skills"
-  echo "==> Deploying skills to $REMOTE_SKILLS_DIR"
+  REMOTE_SKILLS_SOURCE="$REMOTE_STATE_DIR/workspace/skills-source"
+  echo "==> Deploying skills to $REMOTE_SKILLS_DIR (active) + $REMOTE_SKILLS_SOURCE (library)"
   # Figure out who owns the parent state dir so we can chown after writing
   # as root (e.g. /home/openclaw/.openclaw is owned by user 'openclaw').
   REMOTE_OWNER=$(run_remote "stat -c '%U:%G' '$REMOTE_STATE_DIR' 2>/dev/null" | tr -d '\r')
   for skill_dir in "$SKILLS_DIR"/*/; do
     skill_name=$(basename "$skill_dir")
+    # Always populate the read-only library so /skills/sync has a source.
+    run_remote "sudo mkdir -p '$REMOTE_SKILLS_SOURCE/$skill_name'"
+    # Keep populating the active workspace as well (backward-compat —
+    # existing forks rely on it; install/uninstall cycle then takes over).
     run_remote "sudo mkdir -p '$REMOTE_SKILLS_DIR/$skill_name'"
     if [ -f "${skill_dir}SKILL.md" ]; then
       copy_to_remote "${skill_dir}SKILL.md" "/tmp/skill-${skill_name}.md"
+      run_remote "sudo cp /tmp/skill-${skill_name}.md '$REMOTE_SKILLS_SOURCE/$skill_name/SKILL.md'"
       run_remote "sudo mv /tmp/skill-${skill_name}.md '$REMOTE_SKILLS_DIR/$skill_name/SKILL.md'"
     fi
   done
+  if [ -f "$SKILLS_MANIFEST_FILE" ]; then
+    copy_to_remote "$SKILLS_MANIFEST_FILE" "/tmp/skills.manifest.json"
+    run_remote "sudo mv /tmp/skills.manifest.json '$REMOTE_STATE_DIR/workspace/skills.manifest.json'"
+  fi
   if [ -n "$REMOTE_OWNER" ] && [ "$REMOTE_OWNER" != "root:root" ]; then
-    run_remote "sudo chown -R '$REMOTE_OWNER' '$REMOTE_SKILLS_DIR'"
+    run_remote "sudo chown -R '$REMOTE_OWNER' '$REMOTE_SKILLS_DIR' '$REMOTE_SKILLS_SOURCE' '$REMOTE_STATE_DIR/workspace/skills.manifest.json'"
   fi
 fi
 

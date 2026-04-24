@@ -154,6 +154,24 @@ Some things look like integrations but shouldn't be in the admin panel:
 
 Rule of thumb: if a customer-facing admin could plausibly want to rotate/change it without touching code, it belongs in the panel. Otherwise keep it at fork level.
 
+## Skill bundling
+
+Each integration has zero or more OpenClaw skills bundled with it — the agent sees the skill only while the integration is connected and enabled. Skill ids are mapped to integration ids in `openclaw/workspace/skills.manifest.json`.
+
+**On the sidecar host:**
+- `workspace/skills-source/<id>/SKILL.md` — read-only library populated by `sidecar/deploy.sh` for every skill shipped in the repo.
+- `workspace/skills/<id>/SKILL.md` — active set the agent actually reads.
+- `workspace/skills.manifest.json` — integration → `[skillId, …]` mapping (copied by deploy).
+
+**Lifecycle:**
+- Connect (saveCredentials, OAuth callback) → Cloud Function POSTs `/skills/sync {integrationId, enabled:true}` → sidecar copies each mapped skill from `skills-source/` to `skills/`.
+- Enable toggle (EHR `setEnabled`) → same endpoint with the new enabled value.
+- Disconnect → `/skills/sync {enabled:false}` → sidecar removes the mapped skills from `skills/` (library untouched, so re-connect is instant).
+
+The sync call is fire-and-forget (Cloud Function logs but never fails on sidecar-down); the integration doc is the source of truth and the next successful sync re-converges.
+
+Adding an integration skill: drop `openclaw/workspace/skills/<id>/SKILL.md` in the repo and add an entry to `skills.manifest.json` under `integrations.<integrationId>`. No code changes in the sidecar or Cloud Functions — the generic `/skills/sync` handler picks it up.
+
 ## Sim/real middleware
 
 The `system/settings.simulationMode` flag flips every integration between real vendor calls and a seeded Firestore sandbox. Each integration's runtime loader should check `isSimulationOn()` and early-return the sim branch. See [`SIMULATION.md`](SIMULATION.md) for the detach path and how to add a new domain.

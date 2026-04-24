@@ -24,6 +24,7 @@ import {
   SIDECAR_API_KEY_SECRET,
   sidecarUrlEnv,
   sidecarApiKeyEnv,
+  syncIntegrationSkill,
 } from "./lib/sidecar.js";
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
 import {logger} from "firebase-functions";
@@ -2381,6 +2382,7 @@ export const googleWorkspaceAuthorize = onCall({}, async (request) => {
  */
 export const googleWorkspaceCallback = onRequest({
   cors: true,
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
 }, async (req, res) => {
   // Redirect target: the configured portal URL in prod, local Vite in dev.
   const frontendUrl = isProduction()
@@ -2462,6 +2464,7 @@ export const googleWorkspaceCallback = onRequest({
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       connectedBy: userId,
     });
+    await syncIntegrationSkill('google-workspace', true);
 
     const params = new URLSearchParams({
       tab: 'integrations',
@@ -2487,7 +2490,9 @@ export const googleWorkspaceCallback = onRequest({
  * integration doc. Refuses if an OAuth integration is already active —
  * the two modes are mutually exclusive.
  */
-export const saveGoogleWorkspaceServiceAccount = onCall({}, async (request) => {
+export const saveGoogleWorkspaceServiceAccount = onCall({
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
+}, async (request) => {
   const authContext = await requireAdmin(request);
 
   const saKeyJson = (request.data?.saKeyJson as string) || '';
@@ -2551,6 +2556,7 @@ export const saveGoogleWorkspaceServiceAccount = onCall({}, async (request) => {
     connectedBy: authContext.uid,
   };
   await db.collection('integrations').doc('google-workspace').set(doc);
+  await syncIntegrationSkill('google-workspace', true);
 
   return {success: true, email: subject, services};
 });
@@ -2561,7 +2567,9 @@ export const saveGoogleWorkspaceServiceAccount = onCall({}, async (request) => {
  * a re-connect starts clean. OAuth mode stores the refresh-token cipher
  * in-doc, which goes away with the doc deletion.
  */
-export const disconnectGoogleWorkspace = onCall({}, async (request) => {
+export const disconnectGoogleWorkspace = onCall({
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
+}, async (request) => {
   await requireAdmin(request);
 
   const ref = db.collection('integrations').doc('google-workspace');
@@ -2572,6 +2580,7 @@ export const disconnectGoogleWorkspace = onCall({}, async (request) => {
     await deleteGoogleServiceAccountKey();
   }
   await ref.delete();
+  await syncIntegrationSkill('google-workspace', false);
   return {success: true};
 });
 
@@ -2583,7 +2592,9 @@ export const disconnectGoogleWorkspace = onCall({}, async (request) => {
  * means "keep existing" so admins can rotate other fields without
  * re-pasting the token.
  */
-export const saveSignalwireCredentials = onCall({}, async (request) => {
+export const saveSignalwireCredentials = onCall({
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
+}, async (request) => {
   const authContext = await requireAdmin(request);
 
   const projectId = ((request.data?.projectId as string) || '').trim();
@@ -2631,6 +2642,7 @@ export const saveSignalwireCredentials = onCall({}, async (request) => {
   }
   await ref.set(doc, {merge: true});
   invalidateSignalwireConfig();
+  await syncIntegrationSkill('signalwire', true);
 
   return {success: true};
 });
@@ -2640,13 +2652,16 @@ export const saveSignalwireCredentials = onCall({}, async (request) => {
  * and removes the auth token from Secret Manager so a reconnect starts
  * clean. Fax number / SMS senders go with the doc.
  */
-export const disconnectSignalwire = onCall({}, async (request) => {
+export const disconnectSignalwire = onCall({
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
+}, async (request) => {
   await requireAdmin(request);
 
   const ref = db.collection('integrations').doc('signalwire');
   await deleteSignalwireAuthToken().catch(() => {});
   await ref.delete().catch(() => {});
   invalidateSignalwireConfig();
+  await syncIntegrationSkill('signalwire', false);
   return {success: true};
 });
 

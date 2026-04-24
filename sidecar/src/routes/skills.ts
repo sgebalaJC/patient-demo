@@ -1,6 +1,14 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "fs";
 import { join } from "path";
-import { WORKSPACE } from "../lib/paths.js";
+import { SKILLS_MANIFEST, SKILLS_SOURCE, WORKSPACE } from "../lib/paths.js";
 
 // Skills live alongside the rest of the OpenClaw workspace so Aurelia's
 // runtime + this sidecar see the same directory. Honor OPENCLAW_STATE_DIR
@@ -11,6 +19,10 @@ const WORKSPACE_SKILLS = join(WORKSPACE, "skills");
 if (!existsSync(WORKSPACE_SKILLS)) {
   mkdirSync(WORKSPACE_SKILLS, { recursive: true });
 }
+
+// ── id / integrationId validators ─────────────────────────────────────
+const ID_RE = /^[A-Za-z0-9_-]+$/;
+const isValidId = (id: string): boolean => ID_RE.test(id);
 
 export interface SkillInfo {
   id: string;
@@ -76,7 +88,7 @@ export function handleListSkills(): Response {
 
 /** GET /skills/:id — return the full SKILL.md body for one installed skill. */
 export function handleReadSkill(id: string): Response {
-  if (!/^[A-Za-z0-9_-]+$/.test(id)) {
+  if (!isValidId(id)) {
     return Response.json({ error: "Invalid skill id" }, { status: 400 });
   }
   const path = join(WORKSPACE_SKILLS, id, "SKILL.md");
@@ -85,6 +97,95 @@ export function handleReadSkill(id: string): Response {
   }
   try {
     return Response.json({ id, content: readFileSync(path, "utf-8") });
+  } catch (err) {
+    return Response.json({ error: String(err) }, { status: 500 });
+  }
+}
+
+// ── install / uninstall / sync ────────────────────────────────────────
+//
+// Integration-bundled skills live in two places on the host:
+//  - SKILLS_SOURCE (workspace/skills-source/) — read-only library,
+//    populated by `sidecar/deploy.sh` for every skill in the repo.
+//  - WORKSPACE_SKILLS (workspace/skills/)     — active set the agent
+//    actually sees. Written only in response to a connect/disconnect.
+//
+// Non-integration skills (admin-tasks, scheduling, secure-messaging, …)
+// are deployed directly into workspace/skills and never touched here.
+
+function readManifest(): Record<string, string[]> {
+  if (!existsSync(SKILLS_MANIFEST)) return {};
+  try {
+    const raw = JSON.parse(readFileSync(SKILLS_MANIFEST, "utf-8"));
+    const integs = raw?.integrations;
+    if (!integs || typeof integs !== "object") return {};
+    const out: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(integs)) {
+      if (Array.isArray(v) && v.every((s) => typeof s === "string" && isValidId(s))) {
+        out[k] = v as string[];
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function installSkillImpl(id: string): { installed: boolean; reason?: string } {
+  const src = join(SKILLS_SOURCE, id);
+  const dst = join(WORKSPACE_SKILLS, id);
+  if (!existsSync(src) || !statSync(src).isDirectory()) {
+    return { installed: false, reason: "source_missing" };
+  }
+  mkdirSync(WORKSPACE_SKILLS, { recursive: true });
+  // Remove any stale copy first so nested files deleted upstream don't
+  // linger. cpSync overlays but won't prune removed entries.
+  rmSync(dst, { recursive: true, force: true });
+  cpSync(src, dst, { recursive: true });
+  return { installed: true };
+}
+
+function uninstallSkillImpl(id: string): { removed: boolean } {
+  const dst = join(WORKSPACE_SKILLS, id);
+  if (!existsSync(dst)) return { removed: false };
+  rmSync(dst, { recursive: true, force: true });
+  return { removed: true };
+}
+
+/**
+ * POST /skills/sync
+ * Body: { integrationId: string, enabled: boolean }
+ *
+ * Looks up the skill ids bundled with `integrationId` in the manifest
+ * and either installs (copies from skills-source → skills) or removes
+ * them, atomically for the integration as a whole.
+ *
+ * Idempotent: installing a skill that's already present just overwrites
+ * with the current source; uninstalling one that's already gone returns
+ * removed=false. No error either way.
+ */
+export async function handleSkillSync(request: Request): Promise<Response> {
+  try {
+    const body = (await request.json()) as { integrationId?: string; enabled?: boolean };
+    const integrationId = body?.integrationId;
+    const enabled = body?.enabled;
+    if (!integrationId || !isValidId(integrationId)) {
+      return Response.json({ error: "integrationId required" }, { status: 400 });
+    }
+    if (typeof enabled !== "boolean") {
+      return Response.json({ error: "enabled (boolean) required" }, { status: 400 });
+    }
+    const manifest = readManifest();
+    const skillIds = manifest[integrationId] ?? [];
+    if (skillIds.length === 0) {
+      // No skills bundled with this integration — e.g. Slack. Not an error.
+      return Response.json({ integrationId, enabled, skills: [], noop: true });
+    }
+    const results = skillIds.map((id) => ({
+      id,
+      ...(enabled ? installSkillImpl(id) : uninstallSkillImpl(id)),
+    }));
+    return Response.json({ integrationId, enabled, skills: results });
   } catch (err) {
     return Response.json({ error: String(err) }, { status: 500 });
   }

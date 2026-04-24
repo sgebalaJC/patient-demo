@@ -23,6 +23,7 @@ import {
   setEhrClientSecret,
   deleteEhrClientSecret,
 } from "./secret-manager.js";
+import {syncIntegrationSkill, SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET} from "./sidecar.js";
 
 const FUNCTIONS_REGION = "us-west1";
 
@@ -334,34 +335,42 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
   });
 
   // ─── setEnabled ────────────────────────────────────────────────────
-  const setEnabled = onCall({}, async (request: CallableRequest<any>) => {
-    assertSuperAdmin(request.auth);
-    const enabled = Boolean(request.data?.enabled);
-    await db().doc(spec.configDoc).set({
-      enabled,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-    return { ok: true, enabled };
-  });
+  const setEnabled = onCall(
+    {secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET]},
+    async (request: CallableRequest<any>) => {
+      assertSuperAdmin(request.auth);
+      const enabled = Boolean(request.data?.enabled);
+      await db().doc(spec.configDoc).set({
+        enabled,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      await syncIntegrationSkill(spec.provider, enabled);
+      return { ok: true, enabled };
+    },
+  );
 
   // ─── disconnect ────────────────────────────────────────────────────
   // Removes the public doc, the private token subdoc, and the Secret
   // Manager clientSecret. Replaces the old browser-side
   // `deleteDoc(integrations/{id})` path — that left the private subdoc
   // and SM secret orphaned.
-  const disconnect = onCall({}, async (request: CallableRequest<any>) => {
-    assertSuperAdmin(request.auth);
-    const ref = db().doc(spec.configDoc);
-    await Promise.all([
-      privateCredsRef(spec.configDoc).delete().catch(() => {}),
-      deleteEhrClientSecret(spec.provider).catch((err) => {
-        logger.warn(`[${spec.provider}] failed to delete SM secret`, { message: err.message });
-      }),
-    ]);
-    await ref.delete().catch(() => {});
-    logger.info(`[${spec.provider}] disconnected`, { uid: request.auth!.uid });
-    return { ok: true };
-  });
+  const disconnect = onCall(
+    {secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET]},
+    async (request: CallableRequest<any>) => {
+      assertSuperAdmin(request.auth);
+      const ref = db().doc(spec.configDoc);
+      await Promise.all([
+        privateCredsRef(spec.configDoc).delete().catch(() => {}),
+        deleteEhrClientSecret(spec.provider).catch((err) => {
+          logger.warn(`[${spec.provider}] failed to delete SM secret`, { message: err.message });
+        }),
+      ]);
+      await ref.delete().catch(() => {});
+      await syncIntegrationSkill(spec.provider, false);
+      logger.info(`[${spec.provider}] disconnected`, { uid: request.auth!.uid });
+      return { ok: true };
+    },
+  );
 
   // ─── getAccessToken (server-side helper) ───────────────────────────
   async function getAccessToken(): Promise<string> {

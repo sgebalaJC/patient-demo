@@ -23,7 +23,6 @@ import {
     ArrowUpDown,
     ChevronUp,
     ChevronDown,
-    Send,
     CheckCircle2,
     KeyRound,
     Eye,
@@ -32,7 +31,6 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { signInWithCustomToken } from 'firebase/auth';
 import { functions, auth } from '../lib/firebase';
-import { sendInviteLink } from '../lib/firebase';
 import { isSuperAdminEmail } from '../lib/roles';
 import { UserForm } from '../components/admin/UserForm';
 import { PatientDocumentManagement } from '../components/admin/PatientDocumentManagement';
@@ -58,10 +56,6 @@ export const UserManagementPage: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
-
-  // Resend-invite state
-  const [resendingInviteFor, setResendingInviteFor] = useState<string | null>(null);
-  const [resendInviteFlash, setResendInviteFlash] = useState<{ uid: string; ok: boolean } | null>(null);
 
   // Sort state
   const [sortBy, setSortBy] = useState<UserSortField>('lastName');
@@ -144,22 +138,6 @@ export const UserManagementPage: React.FC = () => {
     } else {
       paged.refresh();
       refreshCounts();
-    }
-  };
-
-  const handleResendInvite = async (user: User) => {
-    if (!user.email) return;
-    setResendingInviteFor(user.id);
-    setResendInviteFlash(null);
-    try {
-      await sendInviteLink(user.email);
-      setResendInviteFlash({ uid: user.id, ok: true });
-    } catch (err: any) {
-      logger.error('Resend invite failed:', err);
-      setResendInviteFlash({ uid: user.id, ok: false });
-    } finally {
-      setResendingInviteFor(null);
-      setTimeout(() => setResendInviteFlash(null), 4000);
     }
   };
 
@@ -498,29 +476,6 @@ export const UserManagementPage: React.FC = () => {
                           aria-label="Manage documents"
                         >
                           <FileText className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {user.email && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleResendInvite(user)}
-                          loading={resendingInviteFor === user.id}
-                          className={`!px-2 ${
-                            resendInviteFlash?.uid === user.id && resendInviteFlash.ok
-                              ? 'text-green-600 hover:text-green-700'
-                              : resendInviteFlash?.uid === user.id && !resendInviteFlash.ok
-                              ? 'text-red-600 hover:text-red-700'
-                              : ''
-                          }`}
-                          title="Send a fresh sign-in link"
-                          aria-label="Send sign-in link"
-                        >
-                          {resendInviteFlash?.uid === user.id && resendInviteFlash.ok ? (
-                            <CheckCircle2 className="h-4 w-4" />
-                          ) : (
-                            <Send className="h-4 w-4" />
-                          )}
                         </Button>
                       )}
                       {isSuperAdminEmail(userProfile?.email) && user.id !== userProfile?.id && (

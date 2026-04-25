@@ -45,7 +45,11 @@ export const subscriptionOperations = {
     try {
       const ref = doc(collections.subscriptionPlans, plan.id);
       const existing = await getDoc(ref);
-      const payload: any = {
+      type PlanPayload = Omit<SubscriptionPlan, 'id' | 'createdAt' | 'updatedAt'> & {
+        updatedAt: ReturnType<typeof serverTimestamp>;
+        createdAt?: ReturnType<typeof serverTimestamp>;
+      };
+      const payload: PlanPayload = {
         name: plan.name,
         description: plan.description || '',
         amount: plan.amount,

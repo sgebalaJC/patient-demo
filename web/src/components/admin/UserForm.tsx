@@ -129,7 +129,7 @@ export const UserForm: React.FC<UserFormProps> = ({
         try {
             if (editingUser) {
                 // Update existing user
-                const userData: Record<string, any> = {
+                const userData: Partial<User> = {
                     email: data.email,
                     firstName: data.firstName,
                     lastName: data.lastName,
@@ -184,7 +184,7 @@ export const UserForm: React.FC<UserFormProps> = ({
                             });
                             onSuccess();
                         }
-                    } catch (authError: any) {
+                    } catch (authError: unknown) {
                         logger.warn('Failed to update Firebase Auth, but Firestore updated:', authError);
                         setSuccessMessage({
                             message: 'User updated successfully (some auth updates may have failed)'
@@ -227,10 +227,10 @@ export const UserForm: React.FC<UserFormProps> = ({
                     try {
                         await sendInviteLink(data.email);
                         inviteSent = true;
-                    } catch (inviteErr: any) {
+                    } catch (inviteErr: unknown) {
                         logger.error('Failed to send invite link:', inviteErr);
                         inviteWarning =
-                            inviteErr?.message ||
+                            errorMessage(inviteErr) ||
                             'User was created, but the invite email could not be sent. Use "Resend invite" from the user list.';
                     }
                 }

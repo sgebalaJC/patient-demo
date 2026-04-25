@@ -89,7 +89,7 @@ export const DEFAULT_PLATFORM_CONFIG: PlatformConfig = {
   warningPct: 80,
 };
 
-function normalizeSubscription(data: any): PlatformSubscription {
+function normalizeSubscription(data: Partial<PlatformSubscription> | null | undefined): PlatformSubscription {
   return {
     plan: data?.plan ?? null,
     status: data?.status ?? 'none',
@@ -104,7 +104,7 @@ function normalizeSubscription(data: any): PlatformSubscription {
   };
 }
 
-function normalizeConfig(data: any): PlatformConfig {
+function normalizeConfig(data: Partial<PlatformConfig> | null | undefined): PlatformConfig {
   return {
     monthlyAllowanceTokens:
       typeof data?.monthlyAllowanceTokens === 'number'
@@ -125,7 +125,7 @@ function normalizeConfig(data: any): PlatformConfig {
   };
 }
 
-function normalizeBonus(data: any): PlatformBonus {
+function normalizeBonus(data: Partial<PlatformBonus> | null | undefined): PlatformBonus {
   return {
     tokensRemaining: typeof data?.tokensRemaining === 'number' ? data.tokensRemaining : 0,
     totalPurchased: typeof data?.totalPurchased === 'number' ? data.totalPurchased : 0,
@@ -133,7 +133,7 @@ function normalizeBonus(data: any): PlatformBonus {
   };
 }
 
-function normalizeUsage(data: any): PlatformUsage {
+function normalizeUsage(data: Partial<PlatformUsage> | null | undefined): PlatformUsage {
   return {
     inputTokens: typeof data?.inputTokens === 'number' ? data.inputTokens : 0,
     outputTokens: typeof data?.outputTokens === 'number' ? data.outputTokens : 0,

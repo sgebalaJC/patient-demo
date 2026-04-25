@@ -16,7 +16,8 @@ import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { XCircle } from 'lucide-react';
-import { formatDate as fmtDate, formatDateTime } from '../lib/date-helpers';
+import type { Timestamp } from 'firebase/firestore';
+import { formatDate as fmtDate, formatDateTime, formatCurrency } from '../lib/date-helpers';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { AccessDenied } from '../components/ui/AccessDenied';
@@ -52,9 +53,9 @@ function formatDate(epochSeconds?: number | null): string | null {
   return fmtDate(new Date(epochSeconds * 1000));
 }
 
-function formatTimestamp(ts: any): string | null {
-  if (!ts) return null;
-  const ms = typeof ts?.toMillis === 'function' ? ts.toMillis() : ts;
+function formatTimestamp(ts: Timestamp | number | null | undefined): string | null {
+  if (ts === null || ts === undefined) return null;
+  const ms = typeof ts === 'number' ? ts : ts.toMillis();
   if (!ms) return null;
   return formatDateTime(new Date(ms));
 }
@@ -488,7 +489,7 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
                       {formatTimestamp(t.createdAt) ?? '—'}
                     </td>
                     <td className="py-2 pr-4 text-secondary-900">
-                      ${((t.amountPaid ?? 0) / 100).toFixed(2)} {t.currency?.toUpperCase()}
+                      {formatCurrency(t.amountPaid ?? 0, t.currency || 'usd')}
                     </td>
                     <td className="py-2 pr-4 text-secondary-900">
                       {formatTokens(t.bonusTokensGranted)}

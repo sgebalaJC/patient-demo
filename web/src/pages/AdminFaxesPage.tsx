@@ -137,7 +137,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
 
       <FilterTabs
         activeKey={filter}
-        onChange={(v) => setFilter(v as any)}
+        onChange={(v) => setFilter(v as 'all' | FaxStatus)}
         tabs={[
           { key: 'all', label: 'All', count: counts.all },
           { key: 'needs_review', label: 'Needs Review', count: counts.needs_review },

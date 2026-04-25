@@ -1,4 +1,5 @@
 import { useEffect, useState, DependencyList } from 'react';
+import { errorMessage } from '../lib/errors';
 
 /**
  * Resolve a PDF source URL and hand back a same-origin blob URL suitable for
@@ -39,8 +40,8 @@ export function usePdfPreview(
         const blob = new Blob([buf], { type: 'application/pdf' });
         created = URL.createObjectURL(blob);
         setUrl(created);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Failed to load PDF');
+      } catch (e: unknown) {
+        if (!cancelled) setError(errorMessage(e) || 'Failed to load PDF');
       } finally {
         if (!cancelled) setLoading(false);
       }

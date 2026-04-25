@@ -6,6 +6,7 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../hooks/useAuth';
 import { userOperations } from '../lib/firestore';
+import type { User as UserType } from '../types';
 import { User, Mail, Phone, Edit2, Save, X, Trash2, AlertTriangle, Shield, CheckCircle, Download } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -73,7 +74,7 @@ export const ProfilePage: React.FC = () => {
     setError('');
 
     try {
-      const updateData: Record<string, any> = {
+      const updateData: Partial<Pick<UserType, 'firstName' | 'lastName' | 'phoneNumber'>> = {
         firstName: formData.firstName,
         lastName: formData.lastName,
       };

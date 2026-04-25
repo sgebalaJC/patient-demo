@@ -134,9 +134,15 @@ export function initClientErrorReporter(): void {
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    const r: any = (event as PromiseRejectionEvent).reason;
-    const message = `unhandledrejection: ${r?.message || String(r)}`;
-    const stack = r?.stack || '';
+    const r: unknown = (event as PromiseRejectionEvent).reason;
+    const reasonMessage =
+      r instanceof Error ? r.message :
+      typeof r === 'string' ? r :
+      r && typeof r === 'object' && 'message' in r ? String((r as { message?: unknown }).message ?? '') :
+      String(r);
+    const reasonStack = r instanceof Error ? r.stack ?? '' : '';
+    const message = `unhandledrejection: ${reasonMessage}`;
+    const stack = reasonStack;
     if (!shouldSend(`reject:${message}`, message, stack)) return;
     void dispatch({
       level: 'error',

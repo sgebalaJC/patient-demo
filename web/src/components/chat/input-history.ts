@@ -68,6 +68,20 @@ export class InputHistory {
   reset(): void {
     this.cursor = -1;
   }
+
+  /** Replace history with a chronological list of past messages (oldest first). */
+  replace(items: string[]): void {
+    const cleaned: string[] = [];
+    for (const it of items) {
+      const trimmed = it.trim();
+      if (!trimmed) continue;
+      if (cleaned[cleaned.length - 1] === trimmed) continue;
+      cleaned.push(trimmed);
+    }
+    this.items = cleaned.slice(-MAX);
+    this.cursor = -1;
+    this.save();
+  }
 }
 
 const cache = new Map<string, InputHistory>();

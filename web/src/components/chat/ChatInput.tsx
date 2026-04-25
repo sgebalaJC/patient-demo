@@ -51,32 +51,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleSend = () => {
-    // eslint-disable-next-line no-console
-    console.log('[ChatInput] handleSend ENTER', { historyKey, value: JSON.stringify(value), trimmed: value.trim() });
-    if (value.trim()) {
-      history.push(value);
-      // eslint-disable-next-line no-console
-      console.log('[ChatInput] push', JSON.stringify(value), 'historyKey=', historyKey, 'items now=', (history as unknown as { items: string[] }).items);
-    }
+    if (value.trim()) history.push(value);
     onSend();
     // Refocus after send so user can keep typing
     requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      // eslint-disable-next-line no-console
-      console.log('[ChatInput]', e.key, {
-        historyKey,
-        value: JSON.stringify(value),
-        valueEmpty: !value.trim(),
-        items: (history as unknown as { items: string[] }).items,
-        cursor: (history as unknown as { cursor: number }).cursor,
-      });
-    }
     if (e.key === 'Enter' && !e.shiftKey) {
-      // eslint-disable-next-line no-console
-      console.log('[ChatInput] Enter pressed', { sending, value: JSON.stringify(value) });
       e.preventDefault();
       if (!sending) handleSend();
       return;
@@ -84,8 +66,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!value.trim()) {
       if (e.key === 'ArrowUp') {
         const prev = history.up();
-        // eslint-disable-next-line no-console
-        console.log('[ChatInput] ArrowUp -> prev=', JSON.stringify(prev));
         if (prev !== null) {
           e.preventDefault();
           onChange(prev);
@@ -94,8 +74,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       if (e.key === 'ArrowDown') {
         const next = history.down();
-        // eslint-disable-next-line no-console
-        console.log('[ChatInput] ArrowDown -> next=', JSON.stringify(next));
         e.preventDefault();
         onChange(next ?? '');
       }
@@ -149,8 +127,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ref={inputRef}
           value={value}
           onChange={(e) => {
-            // eslint-disable-next-line no-console
-            console.log('[ChatInput] textarea onChange', JSON.stringify(e.target.value));
             history.reset();
             onChange(e.target.value);
           }}

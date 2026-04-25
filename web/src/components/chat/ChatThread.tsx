@@ -11,6 +11,8 @@ import { Loader } from 'lucide-react';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { ChatBubble } from './ChatBubble';
 import { ChatInput } from './ChatInput';
+import { getInputHistory } from './input-history';
+import { useAuth } from '../../hooks/useAuth';
 import type { ChatThreadController } from '../../hooks/useChatThread';
 
 interface ChatThreadProps {
@@ -50,6 +52,23 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
   const endRef = useRef<HTMLDivElement>(null);
   const hasScrolledInitial = useRef(false);
   const isLoadingOlder = useRef(false);
+  const { user } = useAuth();
+
+  // Seed input history with past user messages so up-arrow recalls them.
+  // Only current user's own messages — the admin agent chat is shared.
+  useEffect(() => {
+    if (!historyKey || loading || !user?.uid) return;
+    const userTexts = messages
+      .filter(
+        (m) =>
+          m.role === 'user' &&
+          m.senderId === user.uid &&
+          typeof m.content === 'string' &&
+          m.content.trim(),
+      )
+      .map((m) => m.content);
+    getInputHistory(historyKey).replace(userTexts);
+  }, [messages, historyKey, loading, user?.uid]);
 
   // Auto-scroll: instant on first paint with content, smooth on new
   // messages / queued sends, skip when prepending older history.

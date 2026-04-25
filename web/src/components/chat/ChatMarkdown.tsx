@@ -30,6 +30,25 @@ function isSafeImageUrl(url: string): boolean {
   return false;
 }
 
+/**
+ * URL allowlist for inline `[text](url)` links rendered from agent / user
+ * markdown. Without this guard a `[click](javascript:...)` from the LLM
+ * would render as a clickable executable. Permissive on purpose — accepts
+ * https/http/mailto/tel and same-origin paths; everything else (javascript:,
+ * data:, file:, vbscript:) becomes plain text via the strikethrough below.
+ */
+function isSafeLinkUrl(url: string): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('https://')) return true;
+  if (trimmed.startsWith('http://')) return true;
+  if (trimmed.startsWith('mailto:')) return true;
+  if (trimmed.startsWith('tel:')) return true;
+  // Same-origin: leading `/` (path) or `#` (fragment).
+  if (trimmed.startsWith('/') || trimmed.startsWith('#')) return true;
+  return false;
+}
+
 /** Parse inline markdown: ![alt](url) images, **bold**, *italic*, `code`, [links](url) */
 function parseInline(text: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
@@ -79,11 +98,18 @@ function parseInline(text: string): React.ReactNode[] {
         </code>,
       );
     } else if (match[7] && match[8]) {
-      nodes.push(
-        <a key={`inline-${match.index}`} href={match[8]} target="_blank" rel="noopener noreferrer" className="text-primary-400 underline">
-          {match[7]}
-        </a>,
-      );
+      // Block `[text](javascript:...)` etc. by falling back to plain text
+      // when the URL isn't allowlisted. Keeps the link text visible so the
+      // user sees what the agent meant; just refuses to make it clickable.
+      if (isSafeLinkUrl(match[8])) {
+        nodes.push(
+          <a key={`inline-${match.index}`} href={match[8]} target="_blank" rel="noopener noreferrer" className="text-primary-400 underline">
+            {match[7]}
+          </a>,
+        );
+      } else {
+        nodes.push(<span key={`inline-${match.index}`}>{match[7]}</span>);
+      }
     }
 
     lastIndex = match.index + match[0].length;

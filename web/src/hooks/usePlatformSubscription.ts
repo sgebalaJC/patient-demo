@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import type { Timestamp } from 'firebase/firestore';
 import {
   platformOperations,
   PlatformSubscription,
@@ -39,11 +40,10 @@ const EMPTY_BONUS: PlatformBonus = {
   totalPurchased: 0,
 };
 
-function lapsedAtMs(ts: any): number | null {
-  if (!ts) return null;
-  if (typeof ts?.toMillis === 'function') return ts.toMillis();
+function lapsedAtMs(ts: Timestamp | number | null | undefined): number | null {
+  if (ts === null || ts === undefined) return null;
   if (typeof ts === 'number') return ts;
-  return null;
+  return ts.toMillis();
 }
 
 function isLapsedStatus(status: string): boolean {

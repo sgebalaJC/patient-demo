@@ -76,6 +76,9 @@ export const intakeFormOperations = {
         }
       });
 
+      // Stamp completion via serverTimestamp() so we don't store client clocks.
+      cleanedData.completedAt = serverTimestamp();
+
       const updateData: Record<string, unknown> = {
         [sectionName]: cleanedData,
         completedSections: [],

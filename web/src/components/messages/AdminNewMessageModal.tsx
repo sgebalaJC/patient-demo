@@ -10,6 +10,7 @@ import { messageThreadOperations, userOperations } from '../../lib/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { User } from '../../types';
 import { newMessageBaseSchema } from '../../lib/validation';
+import { errorMessage } from '../../lib/errors';
 import logger from '../../lib/logger';
 import { Modal } from '../ui/Modal';
 import { formatPhoneDisplay } from '../../lib/phone';
@@ -141,9 +142,9 @@ export const AdminNewMessageModal: React.FC<AdminNewMessageModalProps> = ({
             } else {
                 throw new Error(messageResponse.error || 'Failed to send message');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error creating admin message:', error);
-            setError(error.message || 'Failed to send message');
+            setError(errorMessage(error) || 'Failed to send message');
         } finally {
             setLoading(false);
         }

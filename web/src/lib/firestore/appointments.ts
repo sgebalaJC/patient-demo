@@ -10,9 +10,16 @@ import {
     limit,
     serverTimestamp, Timestamp,
 } from 'firebase/firestore';
-import { collections } from './base';
+import { collections, mapDocStrict } from './base';
 import { Appointment, ApiResponse } from '../../types';
 import logger from "../logger";
+
+const APPOINTMENT_REQUIRED_KEYS: ReadonlyArray<keyof Appointment> = ['patientId', 'appointmentDate', 'status'];
+
+function toAppointment(snap: Parameters<typeof mapDocStrict>[0]): Appointment | null {
+  const mapped = mapDocStrict<Appointment>(snap, APPOINTMENT_REQUIRED_KEYS, 'appointments');
+  return mapped;
+}
 
 // Appointment operations
 export const appointmentOperations = {
@@ -55,7 +62,9 @@ export const appointmentOperations = {
             );
 
             const snapshot = await getDocs(appointmentsQuery);
-            const allAppointments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
+            const allAppointments = snapshot.docs
+                .map(toAppointment)
+                .filter((a): a is Appointment => a !== null);
 
             // Apply pagination
             const startIndex = (page - 1) * limitParam;
@@ -96,10 +105,9 @@ export const appointmentOperations = {
             );
 
             const snapshot = await getDocs(appointmentsQuery);
-            const allAppointments = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as Appointment));
+            const allAppointments = snapshot.docs
+                .map(toAppointment)
+                .filter((a): a is Appointment => a !== null);
 
             // Apply pagination
             const startIndex = (page - 1) * limitParam;
@@ -133,8 +141,11 @@ export const appointmentOperations = {
 
             await updateDoc(appointmentRef, updateData);
             const updatedAppointment = await getDoc(appointmentRef);
-
-            return { success: true, data: { id: appointmentId, ...updatedAppointment.data() } as Appointment };
+            const mapped = toAppointment(updatedAppointment);
+            if (!mapped) {
+                return { success: false, error: 'Appointment updated but could not be re-read' };
+            }
+            return { success: true, data: { ...mapped, id: appointmentId } };
         } catch (error: any) {
             logger.error('Error updating appointment:', error);
             return { success: false, error: error.message };
@@ -153,10 +164,9 @@ export const appointmentOperations = {
             );
 
             const snapshot = await getDocs(appointmentsQuery);
-            const appointments = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as Appointment));
+            const appointments = snapshot.docs
+                .map(toAppointment)
+                .filter((a): a is Appointment => a !== null);
 
             return { success: true, data: appointments };
         } catch (error: any) {

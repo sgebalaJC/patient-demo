@@ -102,6 +102,18 @@ export function useChatThread(opts: UseChatThreadOptions): ChatThreadController 
   const queueRef = useRef<(() => Promise<void>)[]>([]);
   const busyRef = useRef(false);
 
+  // Tracks whether the component is still mounted. The fire-and-forget
+  // persist chains below outlive a fast unmount (e.g. patient navigates away
+  // before Firestore acks the save), and React 18 logs a warning for any
+  // setState on an unmounted owner. Guard the late setState calls.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Initial history load. Re-runs if the repo identity changes (new patient).
   useEffect(() => {
     let cancelled = false;
@@ -194,7 +206,6 @@ export function useChatThread(opts: UseChatThreadOptions): ChatThreadController 
         senderId,
         senderName,
         ...(placeholderAttachments.length > 0 ? { attachments: placeholderAttachments } : {}),
-        createdAt: { toDate: () => new Date() } as any,
       },
     ]);
 
@@ -246,6 +257,7 @@ export function useChatThread(opts: UseChatThreadOptions): ChatThreadController 
         .then((realId) => {
           // Swap the temp id for the real Firestore id so the delete button
           // can target the correct doc.
+          if (!mountedRef.current) return;
           setMessages((prev) =>
             prev.map((m) => (m.id === tempId ? { ...m, id: realId } : m)),
           );
@@ -289,12 +301,12 @@ export function useChatThread(opts: UseChatThreadOptions): ChatThreadController 
           id: streamId,
           role: 'assistant',
           content: replyContent,
-          createdAt: { toDate: () => new Date() } as any,
         },
       ]);
       repo
         .save({ role: 'assistant', content: replyContent })
         .then((realId) => {
+          if (!mountedRef.current) return;
           setMessages((prev) =>
             prev.map((m) => (m.id === streamId ? { ...m, id: realId } : m)),
           );

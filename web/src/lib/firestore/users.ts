@@ -20,7 +20,7 @@ import {
   where,
   CollectionReference,
 } from 'firebase/firestore';
-import { collections } from './base';
+import { collections, mapDocStrict } from './base';
 import { db } from '../firebase';
 import { User, ApiResponse } from '../../types';
 import { isAdminRole } from '../roles';
@@ -99,8 +99,9 @@ export const userOperations = {
         ? doc(collection(db, 'simulation/native/users') as CollectionReference, uid)
         : doc(collections.users, uid);
       const userDoc = await getDoc(ref);
-      if (userDoc.exists()) {
-        return { success: true, data: { id: uid, ...userDoc.data() } as User };
+      const mapped = mapDocStrict<User>(userDoc, ['role'], 'users');
+      if (mapped) {
+        return { success: true, data: { ...mapped, id: uid } };
       }
       return { success: false, error: 'User not found' };
     } catch (error: any) {
@@ -120,8 +121,11 @@ export const userOperations = {
 
       await updateDoc(userRef, updateData);
       const updatedUser = await getDoc(userRef);
-
-      return { success: true, data: { id: uid, ...updatedUser.data() } as User };
+      const mapped = mapDocStrict<User>(updatedUser, ['role'], 'users');
+      if (!mapped) {
+        return { success: false, error: 'User updated but could not be re-read' };
+      }
+      return { success: true, data: { ...mapped, id: uid } };
     } catch (error: any) {
       logger.error('Error updating user:', error);
       return { success: false, error: error.message };
@@ -138,11 +142,8 @@ export const userOperations = {
     return onSnapshot(
       ref,
       (snap) => {
-        if (snap.exists()) {
-          callback({ id: uid, ...snap.data() } as User);
-        } else {
-          callback(null);
-        }
+        const mapped = mapDocStrict<User>(snap, ['role'], 'users');
+        callback(mapped ? { ...mapped, id: uid } : null);
       },
       // Without an error handler, a permission-denied snapshot leaves the
       // success callback unfired forever — the impersonation flow then sits

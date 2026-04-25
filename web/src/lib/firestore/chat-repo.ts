@@ -23,9 +23,11 @@ import {
   where,
   serverTimestamp,
   DocumentSnapshot,
+  QueryConstraint,
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { mapDocStrict } from './base';
 
 export interface ChatAttachment {
   name: string;
@@ -44,7 +46,12 @@ export interface ChatMessage {
   senderId?: string;
   senderName?: string;
   attachments?: ChatAttachment[];
-  createdAt: Timestamp;
+  /**
+   * Stamped server-side on persist. Omitted on optimistic messages — the chat
+   * UI doesn't render timestamps, so locally-rendered messages can skip it
+   * until the real id swap brings the persisted version in.
+   */
+  createdAt?: Timestamp;
 }
 
 type AgentChatMessage = ChatMessage;
@@ -77,9 +84,9 @@ function buildLoad(
   patientId?: string,
 ): (pageSize: number, cursor?: DocumentSnapshot) => Promise<ChatLoadResult> {
   const coll = collection(db, collName);
-  const baseConstraints = patientId ? [where('patientId', '==', patientId)] : [];
+  const baseConstraints: QueryConstraint[] = patientId ? [where('patientId', '==', patientId)] : [];
   return async (pageSize, cursor) => {
-    const constraints: any[] = [
+    const constraints: QueryConstraint[] = [
       ...baseConstraints,
       orderBy('createdAt', 'desc'),
       ...(cursor ? [startAfter(cursor)] : []),
@@ -88,9 +95,9 @@ function buildLoad(
     const snapshot = await getDocs(query(coll, ...constraints));
     const hasMore = snapshot.docs.length > pageSize;
     const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
-    const messages = docs.map(
-      (d) => ({ id: d.id, ...d.data() } as AgentChatMessage),
-    );
+    const messages = docs
+      .map((d) => mapDocStrict<AgentChatMessage>(d, ['role', 'content'], collName))
+      .filter((m): m is AgentChatMessage & { id: string } => m !== null);
     messages.reverse();
     return {
       messages,

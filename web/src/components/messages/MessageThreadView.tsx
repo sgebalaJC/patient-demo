@@ -22,7 +22,8 @@ import { ConfirmModal } from '../ui/ConfirmModal';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import logger from "../../lib/logger";
 import { formatDisplayName } from '../../lib/user-helpers';
-import { formatMessageStamp } from '../../lib/date-helpers';
+import { formatDate, formatMessageStamp } from '../../lib/date-helpers';
+import { errorMessage } from '../../lib/errors';
 
 interface MessageThreadViewProps {
     thread: MessageThread;
@@ -78,7 +79,10 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
         });
 
         return () => unsubscribe();
-    }, [thread.id]);
+        // `user.uid` and the role drive the mark-as-read branch; without them
+        // in deps, switching impersonated user keeps the stale closure and
+        // marks-as-read fires for the wrong identity.
+    }, [thread.id, user?.uid, userProfile?.role, thread.unreadForAdmin, thread.unreadForPatient, onThreadUpdate]);
 
     useEffect(() => {
         scrollToBottom();
@@ -174,9 +178,9 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
             } else {
                 throw new Error(response.error || 'Failed to send message');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error sending message:', error);
-            setActionError(`Error sending message: ${error.message}`);
+            setActionError(`Error sending message: ${errorMessage(error)}`);
         } finally {
             setSending(false);
             setUploading(false);
@@ -253,9 +257,9 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
             } else {
                 setActionError(`Failed to delete message: ${response.error}`);
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error deleting message:', error);
-            setActionError(`Error deleting message: ${error.message}`);
+            setActionError(`Error deleting message: ${errorMessage(error)}`);
         }
     };
 
@@ -290,7 +294,7 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
                 {thread.status.replace('_', ' ')}
               </span>
                             <span>Priority: {thread.priority}</span>
-                            <span>Created: {thread.createdAt?.toDate?.()?.toLocaleDateString()}</span>
+                            <span>Created: {thread.createdAt ? formatDate(thread.createdAt) : '—'}</span>
                         </div>
                     </div>
 
@@ -299,7 +303,8 @@ export const MessageThreadView: React.FC<MessageThreadViewProps> = ({
                             <select
                                 value={thread.status}
                                 onChange={async (e) => {
-                                    await messageThreadOperations.updateThreadStatus(thread.id, e.target.value as any);
+                                    const next = e.target.value as MessageThread['status'];
+                                    await messageThreadOperations.updateThreadStatus(thread.id, next);
                                     const threadResponse = await messageThreadOperations.getThreadById(thread.id);
                                     if (threadResponse.success && threadResponse.data) {
                                         onThreadUpdate(threadResponse.data);

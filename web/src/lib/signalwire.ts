@@ -8,8 +8,9 @@
  */
 
 import { httpsCallable } from 'firebase/functions';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { db, functions } from './firebase';
+import logger from './logger';
 
 export interface SignalwireIntegration {
   provider: 'signalwire';
@@ -31,6 +32,25 @@ export async function getSignalwireStatus(): Promise<SignalwireIntegration | nul
   const snap = await getDoc(ref);
   if (!snap.exists()) return null;
   return snap.data() as SignalwireIntegration;
+}
+
+/**
+ * Live-subscribe to the SignalWire integration doc. Used by the Faxes hub to
+ * show the current fax number on the page header without a full refresh after
+ * an admin saves new credentials.
+ */
+export function subscribeSignalwireStatus(
+  callback: (status: SignalwireIntegration | null) => void,
+): Unsubscribe {
+  const ref = doc(db, 'integrations', 'signalwire');
+  return onSnapshot(
+    ref,
+    (snap) => callback(snap.exists() ? (snap.data() as SignalwireIntegration) : null),
+    (err) => {
+      logger.error('signalwire integration snapshot error', err);
+      callback(null);
+    },
+  );
 }
 
 export interface SaveSignalwireInput {

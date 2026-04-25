@@ -12,6 +12,7 @@ import {
   documentId,
   startAfter,
   collection,
+  QueryConstraint,
 } from 'firebase/firestore';
 import { collections, logAuthContext } from './base';
 import { db } from '../firebase';
@@ -65,13 +66,15 @@ export const prescriptionRefillOperations = {
   },
 
   // Create prescription refill request
-  async createRefillRequest(refillData: Omit<PrescriptionRefillRequest, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<PrescriptionRefillRequest>> {
+  async createRefillRequest(refillData: Omit<PrescriptionRefillRequest, 'id' | 'createdAt' | 'updatedAt' | 'requestedDate'>): Promise<ApiResponse<PrescriptionRefillRequest>> {
     try {
       logAuthContext('createRefillRequest');
 
       const newRefill = {
         ...refillData,
         status: refillData.status || 'pending',
+        // Stamp request time server-side so we don't store client clocks.
+        requestedDate: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
@@ -113,17 +116,17 @@ export const prescriptionRefillOperations = {
       // acceptable at current volumes and kept here so the UI's tab counts
       // don't need a separate round-trip.
       const countSnapshot = await getDocs(query(collections.prescriptionRefills));
-      const statusCounts = {
+      const statusCounts: { all: number; pending: number; approved: number; denied: number; completed: number } = {
         all: countSnapshot.size,
         pending: 0,
         approved: 0,
         denied: 0,
         completed: 0,
-      } as { all: number; pending: number; approved: number; denied: number; completed: number };
+      };
       countSnapshot.docs.forEach((d) => {
         const status = (d.data() as PrescriptionRefillRequest).status;
-        if (status && status in statusCounts) {
-          (statusCounts as any)[status] += 1;
+        if (status === 'pending' || status === 'approved' || status === 'denied' || status === 'completed') {
+          statusCounts[status] += 1;
         }
       });
 
@@ -131,7 +134,7 @@ export const prescriptionRefillOperations = {
 
       // Cursor-paged fetch. One extra row is requested to detect hasMore
       // without a second count query.
-      const baseConstraints: any[] = [];
+      const baseConstraints: QueryConstraint[] = [];
       if (statusFilter !== 'all') baseConstraints.push(where('status', '==', statusFilter));
       baseConstraints.push(orderBy('createdAt', 'desc'));
 
@@ -149,7 +152,8 @@ export const prescriptionRefillOperations = {
 
       const snapshot = await getDocs(refillsQuery);
       const docs = snapshot.docs.map((d) => {
-        const { doctorId: _legacy, ...rest } = d.data() as any;
+        const data = d.data() as Partial<PrescriptionRefillRequest> & { doctorId?: unknown };
+        const { doctorId: _legacy, ...rest } = data;
         return { id: d.id, ...rest } as PrescriptionRefillRequest;
       });
       const hasMore = docs.length > limitParam;

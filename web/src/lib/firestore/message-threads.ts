@@ -11,8 +11,30 @@ import {
     serverTimestamp,
     onSnapshot,
 } from 'firebase/firestore';
-import { collections, logAuthContext } from './base';
+import { collections, logAuthContext, mapDocStrict } from './base';
 import { MessageThread, ThreadMessage, ApiResponse } from '../../types';
+
+const THREAD_REQUIRED: ReadonlyArray<keyof MessageThread> = [
+  'patientId',
+  'subject',
+  'status',
+  'priority',
+];
+
+const THREAD_MESSAGE_REQUIRED: ReadonlyArray<keyof ThreadMessage> = [
+  'threadId',
+  'senderId',
+  'senderRole',
+  'content',
+];
+
+function toThread(snap: Parameters<typeof mapDocStrict>[0]): MessageThread | null {
+  return mapDocStrict<MessageThread>(snap, THREAD_REQUIRED, 'message-threads');
+}
+
+function toThreadMessage(snap: Parameters<typeof mapDocStrict>[0]): ThreadMessage | null {
+  return mapDocStrict<ThreadMessage>(snap, THREAD_MESSAGE_REQUIRED, 'thread-messages');
+}
 import { deleteMessageAttachments } from '../storage';
 import logger from "../logger";
 import { audit } from "../audit";
@@ -35,7 +57,10 @@ export const messageThreadOperations = {
 
             const docRef = await addDoc(collections.messageThreads, newThread);
             const createdDoc = await getDoc(docRef);
-            const createdThread = { id: docRef.id, ...createdDoc.data() } as MessageThread;
+            const createdThread = toThread(createdDoc);
+            if (!createdThread) {
+                return { success: false, error: 'Thread created but could not be re-read' };
+            }
 
             audit({ action: 'thread.created', resourceType: 'message-thread', resourceId: docRef.id, metadata: { patientId: threadData.patientId, priority: threadData.priority } });
             return { success: true, data: createdThread };
@@ -49,10 +74,11 @@ export const messageThreadOperations = {
     async getThreadById(threadId: string): Promise<ApiResponse<MessageThread>> {
         try {
             const threadDoc = await getDoc(doc(collections.messageThreads, threadId));
-            if (!threadDoc.exists()) {
+            const mapped = toThread(threadDoc);
+            if (!mapped) {
                 return { success: false, error: 'Thread not found' };
             }
-            return { success: true, data: { id: threadDoc.id, ...threadDoc.data() } as MessageThread };
+            return { success: true, data: mapped };
         } catch (error: any) {
             logger.error('Error getting thread by ID:', error);
             return { success: false, error: error.message };
@@ -80,7 +106,9 @@ export const messageThreadOperations = {
             );
 
             const snapshot = await getDocs(threadsQuery);
-            let allThreads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MessageThread));
+            let allThreads = snapshot.docs
+                .map(toThread)
+                .filter((t): t is MessageThread => t !== null);
 
             let filteredThreads = allThreads;
             switch (filter) {
@@ -133,7 +161,9 @@ export const messageThreadOperations = {
             );
 
             const snapshot = await getDocs(threadsQuery);
-            let threads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MessageThread));
+            let threads = snapshot.docs
+                .map(toThread)
+                .filter((t): t is MessageThread => t !== null);
 
             let filteredThreads = threads;
             switch (filter) {
@@ -175,7 +205,11 @@ export const messageThreadOperations = {
             orderBy('updatedAt', 'desc')
         );
         return onSnapshot(q, (snapshot) => {
-            callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MessageThread)));
+            callback(
+                snapshot.docs
+                    .map(toThread)
+                    .filter((t): t is MessageThread => t !== null),
+            );
         }, (error) => {
             logger.error('Error listening to patient threads:', error);
         });
@@ -189,7 +223,11 @@ export const messageThreadOperations = {
             orderBy('updatedAt', 'desc')
         );
         return onSnapshot(q, (snapshot) => {
-            callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MessageThread)));
+            callback(
+                snapshot.docs
+                    .map(toThread)
+                    .filter((t): t is MessageThread => t !== null),
+            );
         }, (error) => {
             logger.error('Error listening to admin threads:', error);
         });
@@ -276,7 +314,10 @@ export const messageThreadOperations = {
                 return { success: false, error: 'Message not found' };
             }
 
-            const messageData = messageDoc.data() as ThreadMessage;
+            const messageData = toThreadMessage(messageDoc);
+            if (!messageData) {
+                return { success: false, error: 'Message not found' };
+            }
 
             if (messageData.attachments && messageData.attachments.length > 0) {
                 const deleteResult = await deleteMessageAttachments(messageData.attachments);
@@ -303,7 +344,10 @@ export const messageThreadOperations = {
                 return { success: false, error: 'Message not found' };
             }
 
-            const messageData = messageDoc.data() as ThreadMessage;
+            const messageData = toThreadMessage(messageDoc);
+            if (!messageData) {
+                return { success: false, error: 'Message not found' };
+            }
 
             // Delete attachments from storage if any
             if (messageData.attachments && messageData.attachments.length > 0) {
@@ -336,7 +380,9 @@ export const messageThreadOperations = {
             );
 
             const snapshot = await getDocs(messagesQuery);
-            const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ThreadMessage));
+            const messages = snapshot.docs
+                .map(toThreadMessage)
+                .filter((m): m is ThreadMessage => m !== null);
 
             return { success: true, data: messages };
         } catch (error: any) {
@@ -354,7 +400,9 @@ export const messageThreadOperations = {
         );
 
         return onSnapshot(messagesQuery, (snapshot) => {
-            const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ThreadMessage));
+            const messages = snapshot.docs
+                .map(toThreadMessage)
+                .filter((m): m is ThreadMessage => m !== null);
             callback(messages);
         }, (error) => {
             logger.error('Error listening to thread messages:', error);
@@ -370,7 +418,11 @@ export const messageThreadOperations = {
                 updatedAt: serverTimestamp(),
             });
             const updatedThread = await getDoc(threadRef);
-            return { success: true, data: { id: threadId, ...updatedThread.data() } as MessageThread };
+            const mapped = toThread(updatedThread);
+            if (!mapped) {
+                return { success: false, error: 'Thread updated but could not be re-read' };
+            }
+            return { success: true, data: mapped };
         } catch (error: any) {
             logger.error('Error updating thread status:', error);
             return { success: false, error: error.message };

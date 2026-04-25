@@ -23,6 +23,29 @@ export function mapDoc<T>(
   return { id: snap.id, ...(snap.data() as T) };
 }
 
+/**
+ * Strict variant — like `mapDoc`, but warns when one of `requiredKeys` is
+ * missing in the stored document. Catches schema drift early instead of
+ * silently flowing `undefined` into the UI. Returns `null` when the doc
+ * doesn't exist OR a required key is missing.
+ */
+export function mapDocStrict<T extends object>(
+  snap: DocumentSnapshot | QueryDocumentSnapshot,
+  requiredKeys: ReadonlyArray<keyof T>,
+  label = 'doc',
+): (T & { id: string }) | null {
+  if (!snap.exists()) return null;
+  const data = snap.data() as Partial<T>;
+  for (const key of requiredKeys) {
+    if (data[key] === undefined || data[key] === null) {
+      // eslint-disable-next-line no-console
+      console.warn(`[firestore] ${label} ${snap.id} missing required field "${String(key)}"`);
+      return null;
+    }
+  }
+  return { id: snap.id, ...(data as T) };
+}
+
 // Helper function to log authentication context
 export const logAuthContext = (_operation: string) => {
   // Auth context logging removed for production

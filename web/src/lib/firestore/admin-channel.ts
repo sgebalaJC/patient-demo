@@ -17,7 +17,7 @@ import {
   Timestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { collections } from './base';
+import { collections, mapDocStrict } from './base';
 
 export interface AdminChannelMessage {
   id: string;
@@ -44,10 +44,9 @@ export function subscribeAdminChannel(
   return onSnapshot(
     q,
     (snap) => {
-      const next: AdminChannelMessage[] = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<AdminChannelMessage, 'id'>),
-      }));
+      const next = snap.docs
+        .map((d) => mapDocStrict<AdminChannelMessage>(d, ['senderId', 'text'], 'admin-channel-messages'))
+        .filter((m): m is AdminChannelMessage => m !== null);
       next.reverse();
       onMessages(next);
     },

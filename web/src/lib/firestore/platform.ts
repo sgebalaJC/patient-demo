@@ -14,6 +14,7 @@ import {
   query,
   orderBy,
   limit,
+  Timestamp,
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -35,8 +36,8 @@ export interface PlatformSubscription {
   currentPeriodEnd?: number;
   cancelAtPeriodEnd: boolean;
   cancelAt?: number | null;
-  lapsedAt?: any; // Firestore Timestamp
-  updatedAt?: any;
+  lapsedAt?: Timestamp | null;
+  updatedAt?: Timestamp;
 }
 
 export interface PlatformConfig {
@@ -49,7 +50,7 @@ export interface PlatformConfig {
 export interface PlatformBonus {
   tokensRemaining: number;
   totalPurchased: number;
-  updatedAt?: any;
+  updatedAt?: Timestamp;
 }
 
 export interface PlatformUsage {
@@ -57,7 +58,7 @@ export interface PlatformUsage {
   outputTokens: number;
   estimatedCostUsd: number;
   requestCount: number;
-  updatedAt?: any;
+  updatedAt?: Timestamp;
 }
 
 export interface PlatformTopup {
@@ -67,7 +68,7 @@ export interface PlatformTopup {
   currency: string;
   bonusTokensGranted: number;
   initiatedByUid: string | null;
-  createdAt: any;
+  createdAt?: Timestamp;
 }
 
 const SUB_DOC = doc(db, 'platform', 'subscription');

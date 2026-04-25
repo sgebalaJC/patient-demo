@@ -4,6 +4,7 @@ import {
   setDoc,
   onSnapshot,
   serverTimestamp,
+  Timestamp,
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -44,7 +45,7 @@ export interface AppSettings {
    * off so the toggle never ships to end users.
    */
   simulationMode: boolean;
-  updatedAt?: any;
+  updatedAt?: Timestamp;
 }
 
 export const APP_SETTINGS_DEFAULTS: AppSettings = {

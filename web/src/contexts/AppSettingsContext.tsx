@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { appSettingsOperations, AppSettings, APP_SETTINGS_DEFAULTS } from '../lib/firestore/app-settings';
 import { setSimCollectionMode } from '../lib/firestore/base';
 
@@ -41,8 +41,10 @@ export const AppSettingsProvider: React.FC<AppSettingsProviderProps> = ({ childr
     return unsubscribe;
   }, []);
 
+  const value = useMemo<AppSettingsState>(() => ({ settings, loading }), [settings, loading]);
+
   return (
-    <AppSettingsContext.Provider value={{ settings, loading }}>
+    <AppSettingsContext.Provider value={value}>
       {children}
     </AppSettingsContext.Provider>
   );

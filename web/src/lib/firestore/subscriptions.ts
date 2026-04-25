@@ -11,7 +11,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { collections } from './base';
+import { collections, mapDocStrict } from './base';
 import type {
   ApiResponse,
   SubscriptionPlan,
@@ -79,10 +79,8 @@ export const subscriptionOperations = {
   async getPatientSubscription(uid: string): Promise<ApiResponse<PatientSubscription | null>> {
     try {
       const snap = await getDoc(doc(collections.patientSubscriptions, uid));
-      if (!snap.exists()) {
-        return { success: true, data: null };
-      }
-      return { success: true, data: { id: snap.id, ...snap.data() } as PatientSubscription };
+      const mapped = mapDocStrict<PatientSubscription>(snap, ['status'], 'patient-subscriptions');
+      return { success: true, data: mapped };
     } catch (error: any) {
       logger.error('Error getting patient subscription:', error);
       return { success: false, error: error.message };
@@ -94,13 +92,16 @@ export const subscriptionOperations = {
     uid: string,
     callback: (sub: PatientSubscription | null) => void,
   ): Unsubscribe {
-    return onSnapshot(doc(collections.patientSubscriptions, uid), (snap) => {
-      if (!snap.exists()) {
+    return onSnapshot(
+      doc(collections.patientSubscriptions, uid),
+      (snap) => {
+        callback(mapDocStrict<PatientSubscription>(snap, ['status'], 'patient-subscriptions'));
+      },
+      (err) => {
+        logger.error('patient subscription snapshot error', err);
         callback(null);
-      } else {
-        callback({ id: snap.id, ...snap.data() } as PatientSubscription);
-      }
-    });
+      },
+    );
   },
 };
 

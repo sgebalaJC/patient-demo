@@ -8,6 +8,7 @@ import {ErrorAlert} from '../ui/ErrorAlert';
 import {Input} from '../ui/Input';
 import {messageThreadOperations} from '../../lib/firestore';
 import { newMessageBaseSchema } from '../../lib/validation';
+import { errorMessage } from '../../lib/errors';
 import logger from "../../lib/logger";
 import { Modal } from '../ui/Modal';
 import { useAuth } from '../../hooks/useAuth';
@@ -93,9 +94,9 @@ export const NewMessageModal: React.FC<NewMessageModalProps> = ({
             } else {
                 throw new Error(messageResponse.error || 'Failed to send message');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error creating message:', error);
-            setError(error.message || 'Failed to send message');
+            setError(errorMessage(error) || 'Failed to send message');
         } finally {
             setLoading(false);
         }

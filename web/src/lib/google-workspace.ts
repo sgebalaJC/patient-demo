@@ -8,7 +8,7 @@
  */
 
 import { httpsCallable } from 'firebase/functions';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db, functions } from './firebase';
 
 export type GoogleAuthMode = 'service-account' | 'oauth';
@@ -25,8 +25,8 @@ export interface GoogleWorkspaceIntegration {
   // service-account:
   saClientEmail?: string;
   subject?: string;
-  connectedAt: any;
-  updatedAt: any;
+  connectedAt: Timestamp;
+  updatedAt: Timestamp;
   connectedBy: string;
 }
 

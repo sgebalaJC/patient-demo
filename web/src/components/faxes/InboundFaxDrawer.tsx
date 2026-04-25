@@ -1,21 +1,30 @@
 /**
- * Full-screen drawer for an inbound fax — extract & match (agent), DrChrono
- * attach/detach, email draft + send, internal notes, PDF preview, delete.
+ * Full-screen drawer for an inbound fax — extract & match (agent), provider
+ * attach/detach (currently DrChrono-only), patient-facing email draft (in
+ * <FaxEmailDraftPanel />), internal notes, PDF preview, delete.
  *
  * Lifted out of AdminFaxesPage so the page is just the list + filters; the
  * drawer carries its own state/effects/handlers and is mounted via createPortal.
+ *
+ * TODO(provider-selection): the chart-attach flow is hardcoded to DrChrono
+ * because we inherited that EHR adapter from showmd. Generalize to:
+ *   1. Resolve which provider to upload to from the matched patient
+ *      (`fax.matchedPatient.provider` or a per-fax dropdown).
+ *   2. Replace `attachFaxToDrChrono` / `detachFaxFromDrChrono` Cloud Function
+ *      names with provider-prefixed variants (or a single
+ *      `attachFaxToProvider({ provider, faxSid })`).
+ *   3. Replace the "Attach to DrChrono" / "Attached #N" / "DrChrono document"
+ *      copy with the resolved provider name (BRANDING.ehrProviders or similar).
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { httpsCallable } from 'firebase/functions';
 import { Timestamp } from 'firebase/firestore';
 import {
   CheckCircle2,
-  Copy,
   Paperclip,
-  Send,
   Sparkles,
   Trash,
   X,
@@ -35,6 +44,7 @@ import {
   type ChipState,
   type FaxRowStatus,
 } from './FaxStatusChip';
+import { FaxEmailDraftPanel } from './FaxEmailDraftPanel';
 
 const AGENT_NAME = BRANDING.adminAgent.name;
 
@@ -127,50 +137,14 @@ export const InboundFaxDrawer: React.FC<InboundFaxDrawerProps> = ({ fax, onClose
     },
     [fax.faxSid, fax.pdfPath],
   );
-  const [draft, setDraft] = useState({
-    to: fax.emailDraft?.to || '',
-    subject: fax.emailDraft?.subject || '',
-    body: fax.emailDraft?.body || '',
-  });
-  const [notes, setNotes] = useState(fax.notes || '');
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDetachConfirm, setShowDetachConfirm] = useState(false);
 
-  useEffect(() => {
-    setDraft({
-      to: fax.emailDraft?.to || '',
-      subject: fax.emailDraft?.subject || '',
-      body: fax.emailDraft?.body || '',
-    });
-    setNotes(fax.notes || '');
-  }, [fax.faxSid, fax.emailDraft, fax.notes]);
-
-  async function call(name: string, data: Record<string, unknown>, label: string): Promise<void> {
-    setBusy(label);
-    setMsg(null);
-    try {
-      const fn = httpsCallable(functions, name);
-      await fn(data);
-      setMsg({ kind: 'ok', text: `${label} succeeded` });
-    } catch (err: unknown) {
-      console.error(`${name} failed`, err);
-      setMsg({ kind: 'err', text: errorMessage(err) || `${label} failed` });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  const handleSaveDraft = () => call('updateFaxDraft', {
-    faxSid: fax.faxSid,
-    patch: { emailDraft: { to: draft.to, subject: draft.subject, body: draft.body }, notes },
-  }, 'Save');
-
-  const handleSend = () => call('sendFaxEmail', {
-    faxSid: fax.faxSid,
-    overrideDraft: { to: draft.to, subject: draft.subject, body: draft.body },
-  }, 'Send email');
+  // Save Draft + Send Email live in <FaxEmailDraftPanel /> below — that
+  // component owns its own draft/notes/saving/sending state and calls
+  // `updateFaxDraft` / `sendFaxEmail` directly.
 
   const handleProcessWithAgent = async () => {
     setBusy('Process');
@@ -264,10 +238,6 @@ Write results back via PATCH /admin-api/faxes/${fax.faxSid}. Include: \`extracte
     }
   };
 
-  const copy = (text: string) => navigator.clipboard.writeText(text).then(() =>
-    setMsg({ kind: 'ok', text: 'Copied to clipboard' })
-  );
-
   return createPortal(
     <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose}>
       <div
@@ -325,14 +295,6 @@ Write results back via PATCH /admin-api/faxes/${fax.faxSid}. Include: \`extracte
                   {busy === 'Attach' ? 'Attaching…' : 'Attach to DrChrono'}
                 </Button>
               )}
-              <Button
-                onClick={handleSend}
-                variant="secondary"
-                disabled={!!busy || !draft.to || !draft.subject || !draft.body}
-              >
-                <Send className="w-4 h-4 mr-1.5" />
-                {busy === 'Send email' ? 'Sending…' : 'Send Email'}
-              </Button>
               <button onClick={onClose} className="p-2 hover:bg-secondary-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
@@ -427,66 +389,19 @@ Write results back via PATCH /admin-api/faxes/${fax.faxSid}. Include: \`extracte
             </Card>
           )}
 
-          {/* Email draft */}
-          <Card className="p-4">
-            <h3 className="text-sm font-semibold text-secondary-800 mb-3">Email Draft</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-secondary-600">To (patient email)</label>
-                <input
-                  type="email"
-                  value={draft.to}
-                  onChange={(e) => setDraft({ ...draft, to: e.target.value })}
-                  className="input w-full mt-1 text-sm"
-                  placeholder="patient@example.com"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-secondary-600 flex items-center justify-between">
-                  <span>Subject</span>
-                  <button onClick={() => copy(draft.subject)} className="text-primary-600 hover:underline flex items-center gap-1">
-                    <Copy className="w-3 h-3" /> Copy
-                  </button>
-                </label>
-                <input
-                  type="text"
-                  value={draft.subject}
-                  onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
-                  className="input w-full mt-1 text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-secondary-600 flex items-center justify-between">
-                  <span>Body</span>
-                  <button onClick={() => copy(draft.body)} className="text-primary-600 hover:underline flex items-center gap-1">
-                    <Copy className="w-3 h-3" /> Copy
-                  </button>
-                </label>
-                <textarea
-                  value={draft.body}
-                  onChange={(e) => setDraft({ ...draft, body: e.target.value })}
-                  rows={16}
-                  className="input w-full mt-1 text-sm font-mono resize-y overflow-y-auto leading-relaxed"
-                  style={{ minHeight: '16rem', maxHeight: '32rem' }}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-secondary-600">Internal notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  className="input w-full mt-1 text-sm"
-                />
-              </div>
-            </div>
-          </Card>
+          <FaxEmailDraftPanel
+            faxSid={fax.faxSid}
+            initialDraft={{
+              to: fax.emailDraft?.to || '',
+              subject: fax.emailDraft?.subject || '',
+              body: fax.emailDraft?.body || '',
+            }}
+            initialNotes={fax.notes || ''}
+            onMessage={setMsg}
+          />
 
           {/* Secondary actions */}
           <div className="flex flex-wrap gap-2">
-            <Button onClick={handleSaveDraft} disabled={!!busy} variant="secondary">
-              {busy === 'Save' ? 'Saving…' : 'Save Draft'}
-            </Button>
             <Button
               onClick={() => setShowDeleteConfirm(true)}
               variant="secondary"

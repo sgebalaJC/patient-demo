@@ -54,13 +54,38 @@ function loadGatewayToken(): string | null {
   }
 }
 
+// Narrow projections of the Firestore documents we read here. Only the
+// fields the gap-check actually consumes — anything else is intentionally
+// omitted so a schema drift on unused fields doesn't matter, but a rename
+// of a field we DO use shows up as a type error instead of a silent
+// `undefined` reaching the prompt.
+interface PatientUserDoc {
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  allergies?: string[];
+  medicalHistory?: string[];
+}
+interface IntakeFormDoc {
+  responses?: Record<string, unknown>;
+}
+interface RefillDoc {
+  medicationName?: string;
+  status?: string;
+}
+interface ThreadMessageDoc {
+  senderRole?: string;
+  content?: string;
+}
+
 async function fetchPatientContext(patientId: string): Promise<string> {
   const db = getDb();
   const parts: string[] = [];
 
   const userSnap = await db.collection("users").doc(patientId).get();
   if (userSnap.exists) {
-    const u = userSnap.data() as any;
+    const u = (userSnap.data() ?? {}) as PatientUserDoc;
     parts.push(
       `PATIENT: ${u.firstName || ""} ${u.lastName || ""} | DOB ${u.dateOfBirth || "unknown"} | gender ${u.gender || "unknown"}`,
     );
@@ -79,9 +104,9 @@ async function fetchPatientContext(patientId: string): Promise<string> {
     .limit(1)
     .get();
   if (!formSnap.empty) {
-    const f = formSnap.docs[0].data() as any;
+    const f = (formSnap.docs[0].data() ?? {}) as IntakeFormDoc;
     if (f.responses) {
-      const entries = Object.entries(f.responses as Record<string, unknown>).slice(0, 40);
+      const entries = Object.entries(f.responses).slice(0, 40);
       parts.push("INTAKE FORM:");
       for (const [k, v] of entries) {
         if (v == null || v === "") continue;
@@ -99,7 +124,7 @@ async function fetchPatientContext(patientId: string): Promise<string> {
   if (!refillSnap.empty) {
     parts.push("RECENT REFILL REQUESTS:");
     refillSnap.docs.forEach((d) => {
-      const r = d.data() as any;
+      const r = (d.data() ?? {}) as RefillDoc;
       parts.push(`  - ${r.medicationName || "?"} (${r.status || "?"})`);
     });
   }
@@ -113,7 +138,7 @@ async function fetchPatientContext(patientId: string): Promise<string> {
   if (!msgSnap.empty) {
     parts.push("RECENT MESSAGES:");
     msgSnap.docs.forEach((d) => {
-      const m = d.data() as any;
+      const m = (d.data() ?? {}) as ThreadMessageDoc;
       parts.push(`  [${m.senderRole || "?"}] ${String(m.content || "").slice(0, 180)}`);
     });
   }
@@ -282,12 +307,15 @@ export async function runChartGapCheck(request: Request): Promise<Response> {
     });
   }
 
+  const errMsg = (err: unknown): string =>
+    err instanceof Error ? err.message : String(err);
+
   let chart: string;
   try {
     chart = await fetchPatientContext(body.patientId);
-  } catch (err: any) {
+  } catch (err) {
     return json({
-      results: fallbackResults(body, `Chart fetch failed: ${err?.message || err}`),
+      results: fallbackResults(body, `Chart fetch failed: ${errMsg(err)}`),
     });
   }
 
@@ -296,9 +324,9 @@ export async function runChartGapCheck(request: Request): Promise<Response> {
   let text: string;
   try {
     text = await callGateway(token, prompt, sessionId);
-  } catch (err: any) {
+  } catch (err) {
     return json({
-      results: fallbackResults(body, `Gateway call failed: ${err?.message || err}`),
+      results: fallbackResults(body, `Gateway call failed: ${errMsg(err)}`),
     });
   }
 

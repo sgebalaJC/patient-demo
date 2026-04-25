@@ -216,7 +216,7 @@ export const sendFaxEmail = onCall({
   secrets: [googleSaKey],
   timeoutSeconds: 60,
 }, async (request) => {
-  const uid = await requireFaxAdmin(request.auth as any);
+  const uid = await requireFaxAdmin(request.auth);
   const {faxSid, overrideDraft} = request.data as {
     faxSid: string;
     overrideDraft?: { to: string; cc?: string[]; subject: string; body: string };
@@ -301,7 +301,7 @@ export const sendFaxEmail = onCall({
 export const reprocessFax = onCall({
   timeoutSeconds: 60,
 }, async (request) => {
-  const uid = await requireFaxAdmin(request.auth as any);
+  const uid = await requireFaxAdmin(request.auth);
   const {faxSid, reason = "force_rerun"} = request.data as {
     faxSid: string; reason?: string;
   };
@@ -357,7 +357,7 @@ export const reprocessFax = onCall({
 // ---------------------------------------------------------------------------
 
 export const updateFaxDraft = onCall({timeoutSeconds: 30}, async (request) => {
-  const uid = await requireFaxAdmin(request.auth as any);
+  const uid = await requireFaxAdmin(request.auth);
   const {faxSid, patch} = request.data as {
     faxSid: string;
     patch: {
@@ -391,7 +391,7 @@ export const updateFaxDraft = onCall({timeoutSeconds: 30}, async (request) => {
 // ---------------------------------------------------------------------------
 
 export const markFaxJunk = onCall({timeoutSeconds: 30}, async (request) => {
-  const uid = await requireFaxAdmin(request.auth as any);
+  const uid = await requireFaxAdmin(request.auth);
   const {faxSid, notes = ""} = request.data as {faxSid: string; notes?: string};
   if (!faxSid) throw new HttpsError("invalid-argument", "faxSid required");
 
@@ -419,7 +419,7 @@ const SIDECAR_URL = process.env.SIDECAR_URL || "http://34.41.116.243:8081";
 const SIDECAR_API_KEY_ENV = "SIDECAR_API_KEY";
 
 export const attachFaxToDrChrono = onCall({timeoutSeconds: 60}, async (request) => {
-  const uid = await requireFaxAdmin(request.auth as any);
+  const uid = await requireFaxAdmin(request.auth);
   const {faxSid, description, metatags, filename} = request.data as {
     faxSid: string;
     description?: string;
@@ -541,7 +541,7 @@ export const attachFaxToDrChrono = onCall({timeoutSeconds: 60}, async (request) 
 // ---------------------------------------------------------------------------
 
 export const detachFaxFromDrChrono = onCall({timeoutSeconds: 60}, async (request) => {
-  const uid = await requireFaxAdmin(request.auth as any);
+  const uid = await requireFaxAdmin(request.auth);
   const {faxSid} = request.data as {faxSid: string};
   if (!faxSid) throw new HttpsError("invalid-argument", "faxSid required");
 
@@ -604,7 +604,7 @@ export const detachFaxFromDrChrono = onCall({timeoutSeconds: 60}, async (request
 // ---------------------------------------------------------------------------
 
 export const deleteFax = onCall({timeoutSeconds: 30}, async (request) => {
-  const uid = await requireFaxAdmin(request.auth as any);
+  const uid = await requireFaxAdmin(request.auth);
   const {faxSid} = request.data as {faxSid: string};
   if (!faxSid) throw new HttpsError("invalid-argument", "faxSid required");
 
@@ -644,7 +644,7 @@ export const deleteFax = onCall({timeoutSeconds: 30}, async (request) => {
 // ---------------------------------------------------------------------------
 
 export const getFaxPdfUrl = onCall({timeoutSeconds: 30}, async (request) => {
-  await requireFaxAdmin(request.auth as any);
+  await requireFaxAdmin(request.auth);
   const {faxSid} = request.data as {faxSid: string};
   if (!faxSid) throw new HttpsError("invalid-argument", "faxSid required");
 

@@ -68,8 +68,9 @@ export const logClientError = onCall({cors: true}, async (request) => {
       level,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-  } catch (err: any) {
-    logger.warn("[client-error] firestore write failed", {message: err?.message});
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("[client-error] firestore write failed", {message});
   }
 
   return {ok: true};

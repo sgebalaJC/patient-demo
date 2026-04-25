@@ -56,6 +56,7 @@ export interface Branding {
   address: BrandingAddress;
   hours: Array<{ day: string; time: string }>;
   defaultAppointmentDuration: number;
+  practiceType: 'concierge' | 'standard';
   logos: BrandingLogos;
   colors: BrandingColors;
   adminAgent: BrandingAgent;
@@ -78,6 +79,7 @@ export const BRANDING: Branding = {
   address: { ...FORK_CONFIG.address },
   hours: FORK_CONFIG.hours.map((h) => ({ ...h })),
   defaultAppointmentDuration: FORK_CONFIG.defaultAppointmentDuration,
+  practiceType: FORK_CONFIG.practiceType,
   logos: { ...FORK_CONFIG.logos },
   colors: { ...FORK_CONFIG.colors },
   adminAgent: { ...FORK_CONFIG.agents.admin },

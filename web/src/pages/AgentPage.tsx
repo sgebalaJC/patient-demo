@@ -14,6 +14,7 @@ import { sidecar } from '../lib/sidecar';
 import { readSlackStatus, type SlackChannelStatus } from '../lib/slack';
 import { useAuth } from '../hooks/useAuth';
 import { isSuperAdminEmail } from '../lib/roles';
+import { BRANDING } from '../config/branding';
 import {
   ArrowLeft,
   MessageSquare,
@@ -76,7 +77,7 @@ const IntegrationsPanel: React.FC = () => {
             <GoogleWorkspaceSetup />
             <SignalWireSetup />
             <SlackSetup
-              agentName="Aurelia"
+              agentName={BRANDING.adminAgent.name}
               initialConnected={slack.enabled}
               initialWorkspaceName={slack.workspace?.name}
               onStateChange={loadSlackStatus}

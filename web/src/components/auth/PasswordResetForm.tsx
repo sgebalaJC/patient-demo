@@ -9,6 +9,7 @@ import { Card } from '../ui/Card';
 import { CheckCircle2, Lock, Eye, EyeOff } from 'lucide-react';
 import { confirmPasswordReset } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
+import { errorCode } from '../../lib/errors';
 import logger from '../../lib/logger';
 
 const passwordResetSchema = z.object({
@@ -56,10 +57,10 @@ export const PasswordResetForm: React.FC<PasswordResetFormProps> = ({ oobCode })
       setTimeout(() => {
         navigate('/auth?message=Password reset successful. Please log in with your new password.');
       }, 2000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Password reset error:', error);
 
-      switch (error.code) {
+      switch (errorCode(error)) {
         case 'auth/expired-action-code':
           setError('Password reset link has expired. Please request a new one.');
           break;

@@ -9,6 +9,8 @@ import { Input } from '../ui/Input';
 import { OAuthButtons } from './OAuthButtons';
 import { signInWithEmail } from '../../lib/firebase';
 import { emailField } from '../../lib/validation';
+import { errorCode, errorMessage } from '../../lib/errors';
+import { BRANDING } from '../../config/branding';
 import logger from "../../lib/logger";
 
 const loginSchema = z.object({
@@ -53,12 +55,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     try {
       await signInWithEmail(data.email, data.password);
       onSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Login error:', error);
+      const code = errorCode(error);
       setAuthError(
-        error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password'
+        code === 'auth/user-not-found' || code === 'auth/wrong-password'
           ? 'Invalid email or password'
-          : error.message || 'Failed to sign in'
+          : errorMessage(error) || 'Failed to sign in'
       );
     } finally {
       setLoading(false);
@@ -70,7 +73,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       <div className="text-center">
         <h2 className="text-3xl font-bold text-secondary-900">Welcome back</h2>
         <p className="mt-2 text-secondary-600">
-          Sign in to your doctor-patient portal account
+          Sign in to your {BRANDING.appName} account
         </p>
       </div>
 

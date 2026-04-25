@@ -94,7 +94,7 @@ Emulator ports: Firestore 8080, Auth 9099, Storage 9199, Functions 5001, UI 4000
 - **Input validation:** Frontend (Zod) AND backend (Cloud Functions) must both validate against `FIELD_LIMITS`.
 - **Storage rules:** Only patient owner and admins can read documents. No public access.
 - **Firestore rules:** Admin role verified from user doc, not from the accessed data.
-- **Session storage:** Email for sign-in link in `sessionStorage` (cleared on tab close), not `localStorage`.
+- **Session storage:** Email for sign-in link in `sessionStorage` (cleared on tab close), not `localStorage`. Super-admin impersonation also stashes the impersonated user's `{ uid, email, firstName, lastName }` in `sessionStorage` so a tab reload keeps the impersonation active without re-prompting; cleared on tab close or "Stop impersonating".
 - **Stripe webhook:** Signature verified via `STRIPE_WEBHOOK_SECRET`. Clients cannot write to `patient-subscriptions` — rules force all writes through the webhook Cloud Function.
 
 ## Firestore Collections

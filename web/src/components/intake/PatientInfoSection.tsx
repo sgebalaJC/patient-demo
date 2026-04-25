@@ -7,6 +7,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { PatientInfoForm } from '../../types';
 import { FIELD_LIMITS, emailField, phoneField } from '../../lib/validation';
+import { normalizePhoneNumber } from '../../lib/phone';
 import { InsuranceDropdown } from './InsuranceDropdown';
 import { PharmacyDropdown } from '../refills/PharmacyDropdown';
 import { User } from 'lucide-react';
@@ -22,12 +23,12 @@ const patientInfoSchema = z.object({
   address: z.string().min(1, 'Address is required').max(FIELD_LIMITS.pharmacyAddress.max),
 
   emergencyContactName: z.string().min(1, 'Emergency contact name is required').max(FIELD_LIMITS.firstName.max + FIELD_LIMITS.lastName.max),
-  emergencyContactRelationship: z.string().min(1, 'Relationship is required').max(100),
+  emergencyContactRelationship: z.string().min(1, 'Relationship is required').max(FIELD_LIMITS.emergencyContactRelationship.max),
   emergencyContactPhone: phoneField({ required: true }),
 
-  insuranceProvider: z.string().max(200).optional().or(z.literal('')),
-  policyNumber: z.string().max(100).optional().or(z.literal('')),
-  groupNumber: z.string().max(100).optional().or(z.literal('')),
+  insuranceProvider: z.string().max(FIELD_LIMITS.insuranceProvider.max).optional().or(z.literal('')),
+  policyNumber: z.string().max(FIELD_LIMITS.policyNumber.max).optional().or(z.literal('')),
+  groupNumber: z.string().max(FIELD_LIMITS.groupNumber.max).optional().or(z.literal('')),
 
   pharmacyName: z.string().max(FIELD_LIMITS.pharmacyName.max).optional().or(z.literal('')),
   pharmacyPhone: z.string().max(FIELD_LIMITS.pharmacyPhone.max).optional().or(z.literal('')),
@@ -204,12 +205,16 @@ export const PatientInfoSection: React.FC<PatientInfoSectionProps> = ({
   const onSubmit = async (data: PatientInfoFormData) => {
     setLoading(true);
     try {
-      const formData: PatientInfoForm = {
+      // completedAt is stamped by intakeFormOperations.updateIntakeFormSection
+      // (serverTimestamp). Do not set it here.
+      const formData = {
         ...data,
+        phoneNumber: normalizePhoneNumber(data.phoneNumber),
+        emergencyContactPhone: normalizePhoneNumber(data.emergencyContactPhone),
+        pharmacyPhone: data.pharmacyPhone ? normalizePhoneNumber(data.pharmacyPhone) : data.pharmacyPhone,
         address: selectedPatientAddress || data.address,
         pharmacyAddress: selectedPharmacyAddress || data.pharmacyAddress,
-        completedAt: new Date() as any,
-      };
+      } as PatientInfoForm;
       onComplete(formData);
     } finally {
       setLoading(false);

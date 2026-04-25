@@ -23,7 +23,7 @@ import { ConfirmModal } from '../ui/ConfirmModal';
 import { useSimulationMode } from '../../hooks/useSimulationMode';
 import { usePdfPreview } from '../../hooks/usePdfPreview';
 import { downloadFile, formatFileSize } from '../../lib/storage';
-import { formatDateTime } from '../../lib/date-helpers';
+import { formatDateTime, toDate } from '../../lib/date-helpers';
 
 interface PatientDocumentManagementProps {
   isOpen: boolean;
@@ -65,19 +65,15 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
 
     setLoading(true);
     try {
-      logger.log('📄 [PatientDocumentManagement] Fetching documents for patient:', {
-        patientId: patient.id,
-        patientName: `${patient.firstName} ${patient.lastName}`,
-        patientEmail: patient.email
-      });
-      
+      // PII intentionally not logged — UID + role only per CLAUDE.md.
+      logger.log('[PatientDocumentManagement] Fetching documents', { patientId: patient.id });
+
       const response = await documentOperations.getPatientDocuments(patient.id, simulated);
-      
-      logger.log('📥 [PatientDocumentManagement] API Response:', {
+
+      logger.log('[PatientDocumentManagement] API response', {
         success: response.success,
         dataLength: response.data?.length || 0,
-        error: response.error,
-        rawData: response.data
+        hasError: !!response.error,
       });
       
       if (response.success && response.data) {
@@ -183,8 +179,8 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
     setImageRotation(prev => (prev + 90) % 360);
   };
 
-  const formatDate = (timestamp: any) =>
-    timestamp?.toDate ? formatDateTime(timestamp) : 'Unknown';
+  const formatDate = (timestamp: unknown): string =>
+    timestamp ? formatDateTime(toDate(timestamp as Parameters<typeof toDate>[0])) : 'Unknown';
 
   return (
     <>

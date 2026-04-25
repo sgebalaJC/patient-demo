@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { applyActionCode } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
+import { errorCode } from '../../lib/errors';
 import logger from '../../lib/logger';
 
 interface EmailVerificationHandlerProps {
@@ -27,10 +28,10 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
         setTimeout(() => {
           navigate('/dashboard');
         }, 3000);
-      } catch (error: any) {
+      } catch (error: unknown) {
         logger.error('Email verification error:', error);
 
-        switch (error.code) {
+        switch (errorCode(error)) {
           case 'auth/expired-action-code':
             setError('Email verification link has expired. Please request a new one.');
             break;

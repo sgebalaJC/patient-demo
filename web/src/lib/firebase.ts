@@ -24,6 +24,7 @@ import {UserRole, User as AppUser} from '../types';
 import logger from "./logger";
 import {normalizePhoneNumber} from "./phone";
 import { audit } from "./audit";
+import { errorCode, errorMessage } from "./errors";
 
 // Firebase config from environment variables
 const firebaseConfig = {
@@ -193,6 +194,10 @@ const createUserDocument = async (user: User, additionalData: Partial<AppUser> =
 
     const userRef = doc(db, 'users', user.uid);
 
+    // Pull phoneNumber out of additionalData so the spread below can't
+    // overwrite the normalized value with raw input.
+    const { phoneNumber: rawAdditionalPhone, ...additionalDataWithoutPhone } = additionalData;
+
     // Build user data object and filter out undefined values
     const baseUserData: any = {
         email: user.email || '',
@@ -208,12 +213,16 @@ const createUserDocument = async (user: User, additionalData: Partial<AppUser> =
         baseUserData.role = 'patient';
         baseUserData.isActive = false;
         baseUserData.createdAt = serverTimestamp();
-        baseUserData.phoneNumber = normalizePhoneNumber(user.phoneNumber || additionalData.phoneNumber || '');
+        baseUserData.phoneNumber = normalizePhoneNumber(user.phoneNumber || rawAdditionalPhone || '');
+    } else if (rawAdditionalPhone !== undefined) {
+        // Existing user: only update phoneNumber when caller explicitly provided one,
+        // and always normalize.
+        baseUserData.phoneNumber = normalizePhoneNumber(rawAdditionalPhone);
     }
-    
+
     // Add any additional data, filtering out undefined values
     const filteredAdditionalData = Object.fromEntries(
-        Object.entries(additionalData).filter(([_, value]) => value !== undefined)
+        Object.entries(additionalDataWithoutPhone).filter(([_, value]) => value !== undefined)
     );
 
     const userData = {...baseUserData, ...filteredAdditionalData};
@@ -290,8 +299,10 @@ export const sendEmailVerification = async (user?: User) => {
 
         await firebaseSendEmailVerification(currentUser);
         return {success: true, message: 'Email verification sent successfully'};
-    } catch (error: any) {
-        logger.error('Error sending email verification:', error);
+    } catch (error: unknown) {
+        // Avoid logging the raw error — Firebase auth errors include the
+        // user's email in `customData.email` and the message string.
+        logger.error('Error sending email verification:', { code: errorCode(error) });
         throw error;
     }
 };
@@ -306,9 +317,9 @@ export const checkEmailVerified = async () => {
         // Reload user to get latest email verification status
         await currentUser.reload();
         return {verified: currentUser.emailVerified};
-    } catch (error: any) {
-        logger.error('Error checking email verification:', error);
-        return {verified: false, error: error.message};
+    } catch (error: unknown) {
+        logger.error('Error checking email verification:', { code: errorCode(error) });
+        return {verified: false, error: errorMessage(error)};
     }
 };
 
@@ -336,9 +347,8 @@ export const signInWithEmail = async (email: string, password: string) => {
     try {
         const result = await signInWithEmailAndPassword(auth, email, password);
 
-        await createUserDocument(result.user, {
-            lastLoginAt: serverTimestamp() as any,
-        }, false);
+        // createUserDocument unconditionally stamps lastLoginAt with serverTimestamp().
+        await createUserDocument(result.user, {}, false);
 
         audit({ action: 'auth.login', metadata: { method: 'email' } });
         return result;

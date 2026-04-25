@@ -9,6 +9,8 @@ import { Input } from '../ui/Input';
 import { OAuthButtons } from './OAuthButtons';
 import { signUpWithEmail } from '../../lib/firebase';
 import { emailField, firstNameField, lastNameField, passwordField, phoneField } from '../../lib/validation';
+import { errorCode, errorMessage } from '../../lib/errors';
+import { BRANDING } from '../../config/branding';
 import logger from "../../lib/logger";
 
 const signupSchema = z.object({
@@ -54,7 +56,6 @@ export const SignupForm: React.FC<SignupFormProps> = ({
     register,
     handleSubmit,
     formState: { errors },
-    watch,
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     mode: 'onSubmit', // Only validate on submit
@@ -68,11 +69,6 @@ export const SignupForm: React.FC<SignupFormProps> = ({
       acceptTerms: false,
     },
   });
-
-  // Debug: watch all form values
-  const watchedValues = watch();
-  logger.debug('Current form values:', watchedValues);
-  logger.debug('Form errors:', errors);
 
   const onSubmit = async (data: SignupFormData) => {
     logger.debug('Form data:', data); // Debug log to see what data is being submitted
@@ -95,14 +91,14 @@ export const SignupForm: React.FC<SignupFormProps> = ({
         role: 'patient' // Default role, can be changed later
       });
       onSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Signup error:', error);
-      if (error.code === 'auth/email-already-in-use') {
+      if (errorCode(error) === 'auth/email-already-in-use') {
         setShowExistingAccountHint(true);
         setAuthError('An account with this email already exists. Please sign in instead — you can use Google sign-in, email link, or phone login.');
       } else {
         setShowExistingAccountHint(false);
-        setAuthError(error.message || 'Failed to create account');
+        setAuthError(errorMessage(error) || 'Failed to create account');
       }
     } finally {
       setLoading(false);
@@ -114,7 +110,7 @@ export const SignupForm: React.FC<SignupFormProps> = ({
       <div className="text-center">
         <h2 className="text-3xl font-bold text-secondary-900">Create your account</h2>
         <p className="mt-2 text-secondary-600">
-          Join our doctor-patient portal today
+          Join {BRANDING.appName} today
         </p>
       </div>
 

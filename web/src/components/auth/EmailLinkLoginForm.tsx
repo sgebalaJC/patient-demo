@@ -9,6 +9,7 @@ import { Input } from '../ui/Input';
 import { OAuthButtons } from './OAuthButtons';
 import { sendLoginLink } from '../../lib/firebase';
 import { emailField } from '../../lib/validation';
+import { errorCode, errorMessage } from '../../lib/errors';
 import { BRANDING } from '../../config/branding';
 import logger from '../../lib/logger';
 
@@ -54,12 +55,12 @@ export const EmailLinkLoginForm: React.FC<EmailLinkLoginFormProps> = ({
     try {
       await sendLoginLink(data.email);
       setEmailSent(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Send login link error:', error);
       setAuthError(
-        error.code === 'auth/invalid-email'
+        errorCode(error) === 'auth/invalid-email'
           ? 'Please enter a valid email address'
-          : error.message || 'Failed to send login link'
+          : errorMessage(error) || 'Failed to send login link'
       );
     } finally {
       setLoading(false);

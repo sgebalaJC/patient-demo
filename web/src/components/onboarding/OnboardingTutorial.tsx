@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { Timestamp } from 'firebase/firestore';
 import { userOperations } from '../../lib/firestore';
 import { BRANDING } from '../../config/branding';
+import logger from '../../lib/logger';
+import type { User } from '../../types';
 import {
   Heart,
   Calendar,
@@ -113,13 +116,15 @@ export const OnboardingTutorial: React.FC = () => {
     userProfile?.tutorialSkippedSections?.length,
   ]);
 
-  const persist = (updates: Record<string, unknown>) => {
+  const persist = (updates: Partial<User>) => {
     if (!user) return;
     // Skip the Firestore write while impersonating — writing to the real
     // patient's doc would pollute their tutorial state and the rules may
     // deny it outright, leaving the popup to reappear on every navigation.
     if (impersonating) return;
-    userOperations.updateUser(user.uid, updates as any).catch(() => {});
+    userOperations
+      .updateUser(user.uid, updates)
+      .catch((err) => logger.warn('Failed to persist tutorial state:', err));
   };
 
   const completeStep = () => {
@@ -149,7 +154,7 @@ export const OnboardingTutorial: React.FC = () => {
   const dismiss = () => {
     setVisible(false);
     sessionStorage.setItem(SESSION_DISMISS_KEY, '1');
-    persist({ tutorialDismissedAt: new Date() });
+    persist({ tutorialDismissedAt: Timestamp.fromDate(new Date()) });
   };
 
   const goToFeature = () => {

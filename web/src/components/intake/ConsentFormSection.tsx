@@ -6,6 +6,64 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { ConsentForm } from '../../types';
 import { FileCheck, AlertTriangle, Shield, Eye } from 'lucide-react';
+import { BRANDING } from '../../config/branding';
+
+const isConcierge = BRANDING.practiceType === 'concierge';
+const practiceLabel = isConcierge ? 'concierge medical practice' : 'medical practice';
+
+const treatmentConsentText = `I voluntarily consent to the medical care and treatment to be rendered to me by the physicians and staff of this ${practiceLabel}. I understand that no guarantee has been made to me as to the result of treatments or examinations.
+
+I understand that I have the right to be informed of the procedures to be performed, their risks, benefits, and alternatives. I acknowledge that I have been given the opportunity to ask questions about my treatment, and that all questions have been answered to my satisfaction.
+
+I understand that the practice of medicine is not an exact science and that diagnosis and treatment may involve risks of injury or even death. I acknowledge that no warranty or guarantee has been made to me as to result or cure.`;
+
+const financialResponsibilityText = `I acknowledge that I am financially responsible for all charges incurred for services provided to me or my dependents. I understand that payment is expected at the time services are provided unless other arrangements have been made.
+${isConcierge ? `\nFor concierge members: I understand that my membership fee covers the services outlined in my membership agreement, but additional services may incur separate charges.\n` : ''}
+I understand that I am responsible for any charges not covered by my insurance${isConcierge ? ' or membership plan' : ''}, including but not limited to:
+- Services not covered by insurance
+- Deductibles, co-payments, and co-insurance amounts
+${isConcierge ? '- Services provided outside of my membership benefits\n' : ''}- Cancelled appointments without 24-hour notice
+
+I authorize the practice to release any medical information necessary to process insurance claims and to assign benefits to the practice.`;
+
+const emergencyConsentText = isConcierge
+  ? `I understand that this concierge medical practice provides comprehensive primary care services but is not an emergency care facility. In case of a medical emergency, I should:
+
+1. Call 911 immediately
+2. Go to the nearest emergency department
+3. Contact my concierge physician as soon as possible after emergency care
+
+I understand that my concierge physician will coordinate with emergency care providers when possible and appropriate, but emergency care is outside the scope of the concierge membership.
+
+I consent to the practice coordinating my care with emergency care providers, hospitals, and specialists as medically necessary.
+
+I understand that emergency care costs are not included in my concierge membership fee and will be billed separately by the emergency care providers.`
+  : `I understand that this medical practice provides primary care services but is not an emergency care facility. In case of a medical emergency, I should:
+
+1. Call 911 immediately
+2. Go to the nearest emergency department
+3. Contact my physician as soon as possible after emergency care
+
+I understand that my physician will coordinate with emergency care providers when possible and appropriate.
+
+I consent to the practice coordinating my care with emergency care providers, hospitals, and specialists as medically necessary.
+
+I understand that emergency care costs will be billed separately by the emergency care providers.`;
+
+const marketingConsentText = `I consent to receive marketing communications from this practice, including:
+
+- Health and wellness newsletters
+- Information about new services and treatments
+- Invitations to health education events
+- Promotional materials about practice services
+${isConcierge ? '- Updates about concierge membership benefits\n' : ''}
+I understand that:
+- This consent is separate from medical communications
+- I can opt out of marketing communications at any time
+- Opting out will not affect my medical care${isConcierge ? ' or membership benefits' : ''}
+- My contact information will not be shared with third parties for marketing purposes
+
+I can manage my communication preferences through the patient portal or by contacting the practice directly.`;
 
 const consentFormSchema = z.object({
   treatmentConsent: z.boolean().refine(val => val === true, {
@@ -74,10 +132,8 @@ export const ConsentFormSection: React.FC<ConsentFormSectionProps> = ({
   const onSubmit = async (data: ConsentFormFormData) => {
     setLoading(true);
     try {
-      const formData: ConsentForm = {
-        ...data,
-        completedAt: new Date() as any,
-      };
+      // completedAt is stamped server-side by updateIntakeFormSection.
+      const formData = { ...data } as ConsentForm;
       onComplete(formData);
     } finally {
       setLoading(false);
@@ -186,11 +242,7 @@ export const ConsentFormSection: React.FC<ConsentFormSectionProps> = ({
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <ConsentSection
           title="Treatment Consent"
-          content={`I voluntarily consent to the medical care and treatment to be rendered to me by the physicians and staff of this concierge medical practice. I understand that no guarantee has been made to me as to the result of treatments or examinations.
-
-I understand that I have the right to be informed of the procedures to be performed, their risks, benefits, and alternatives. I acknowledge that I have been given the opportunity to ask questions about my treatment, and that all questions have been answered to my satisfaction.
-
-I understand that the practice of medicine is not an exact science and that diagnosis and treatment may involve risks of injury or even death. I acknowledge that no warranty or guarantee has been made to me as to result or cure.`}
+          content={treatmentConsentText}
           required
           fieldName="treatmentConsent"
           icon={Shield}
@@ -212,17 +264,7 @@ I understand that I may revoke this consent in writing at any time except to the
 
         <ConsentSection
           title="Financial Responsibility"
-          content={`I acknowledge that I am financially responsible for all charges incurred for services provided to me or my dependents. I understand that payment is expected at the time services are provided unless other arrangements have been made.
-
-For concierge members: I understand that my membership fee covers the services outlined in my membership agreement, but additional services may incur separate charges.
-
-I understand that I am responsible for any charges not covered by my insurance or membership plan, including but not limited to:
-- Services not covered by insurance
-- Deductibles, co-payments, and co-insurance amounts
-- Services provided outside of my membership benefits
-- Cancelled appointments without 24-hour notice
-
-I authorize the practice to release any medical information necessary to process insurance claims and to assign benefits to the practice.`}
+          content={financialResponsibilityText}
           required
           fieldName="financialResponsibility"
           icon={FileCheck}
@@ -273,17 +315,7 @@ I understand that I have the right to discontinue telemedicine services at any t
 
         <ConsentSection
           title="Emergency Care Consent"
-          content={`I understand that this concierge medical practice provides comprehensive primary care services but is not an emergency care facility. In case of a medical emergency, I should:
-
-1. Call 911 immediately
-2. Go to the nearest emergency department
-3. Contact my concierge physician as soon as possible after emergency care
-
-I understand that my concierge physician will coordinate with emergency care providers when possible and appropriate, but emergency care is outside the scope of the concierge membership.
-
-I consent to the practice coordinating my care with emergency care providers, hospitals, and specialists as medically necessary.
-
-I understand that emergency care costs are not included in my concierge membership fee and will be billed separately by the emergency care providers.`}
+          content={emergencyConsentText}
           required
           fieldName="emergencyConsent"
           icon={AlertTriangle}
@@ -331,21 +363,7 @@ If specific research studies require my participation, I will be contacted separ
 
         <ConsentSection
           title="Marketing Communications"
-          content={`I consent to receive marketing communications from this practice, including:
-
-- Health and wellness newsletters
-- Information about new services and treatments
-- Invitations to health education events
-- Promotional materials about practice services
-- Updates about concierge membership benefits
-
-I understand that:
-- This consent is separate from medical communications
-- I can opt out of marketing communications at any time
-- Opting out will not affect my medical care or membership benefits
-- My contact information will not be shared with third parties for marketing purposes
-
-I can manage my communication preferences through the patient portal or by contacting the practice directly.`}
+          content={marketingConsentText}
           required={false}
           fieldName="marketingCommunications"
           icon={Eye}

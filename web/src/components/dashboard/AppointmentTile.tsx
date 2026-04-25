@@ -5,8 +5,9 @@ import { Appointment } from '../../types';
 import { appointmentOperations } from '../../lib/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { Calendar, Clock, Plus, ArrowRight, User } from 'lucide-react';
-import { Timestamp } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import { BRANDING } from '../../config/branding';
+import { toDate } from '../../lib/date-helpers';
 import logger from '../../lib/logger';
 
 interface AppointmentTileProps {
@@ -34,17 +35,11 @@ export const AppointmentTile: React.FC<AppointmentTileProps> = ({ onScheduleClic
       if (response.success && response.data) {
         const now = new Date();
         const upcoming = response.data.appointments
-          .filter((apt: Appointment) => {
-            const aptDate = apt.appointmentDate instanceof Timestamp 
-              ? apt.appointmentDate.toDate() 
-              : new Date(apt.appointmentDate);
-            return aptDate > now && apt.status === 'scheduled';
-          })
-          .sort((a: Appointment, b: Appointment) => {
-            const dateA = a.appointmentDate instanceof Timestamp ? a.appointmentDate.toDate() : new Date(a.appointmentDate);
-            const dateB = b.appointmentDate instanceof Timestamp ? b.appointmentDate.toDate() : new Date(b.appointmentDate);
-            return dateA.getTime() - dateB.getTime();
-          });
+          .filter((apt: Appointment) => toDate(apt.appointmentDate) > now && apt.status === 'scheduled')
+          .sort(
+            (a: Appointment, b: Appointment) =>
+              toDate(a.appointmentDate).getTime() - toDate(b.appointmentDate).getTime(),
+          );
 
         setUpcomingCount(upcoming.length);
         setNextAppointment(upcoming[0] || null);
@@ -57,9 +52,7 @@ export const AppointmentTile: React.FC<AppointmentTileProps> = ({ onScheduleClic
   };
 
   const formatNextAppointment = (appointment: Appointment) => {
-    const date = appointment.appointmentDate instanceof Timestamp 
-      ? appointment.appointmentDate.toDate()
-      : new Date(appointment.appointmentDate);
+    const date = toDate(appointment.appointmentDate);
 
     const isToday = date.toDateString() === new Date().toDateString();
     const isTomorrow = date.toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString();
@@ -177,7 +170,7 @@ export const AppointmentTile: React.FC<AppointmentTileProps> = ({ onScheduleClic
             </div>
             <h4 className="text-lg font-medium text-secondary-900 mb-2">No Upcoming Appointments</h4>
             <p className="text-secondary-600 text-sm">
-              Schedule your first appointment with your concierge physician
+              Schedule your first appointment with your {BRANDING.practiceType === 'concierge' ? 'concierge physician' : 'physician'}
             </p>
           </div>
 

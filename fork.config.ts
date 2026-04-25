@@ -65,6 +65,13 @@ export interface ForkConfig {
   /** Default appointment duration in minutes. */
   readonly defaultAppointmentDuration: number;
 
+  /**
+   * Practice model. Drives copy in the consent forms, dashboard tiles, etc.
+   * `concierge` = membership-based primary care; `standard` = traditional
+   * insurance/visit-fee practice.
+   */
+  readonly practiceType: 'concierge' | 'standard';
+
   /** Logo asset paths served from web/public/branding/. */
   readonly logos: {
     readonly full: string;
@@ -154,6 +161,7 @@ export const FORK_CONFIG: ForkConfig = {
     { day: 'Saturday – Sunday', time: 'Closed' },
   ],
   defaultAppointmentDuration: 20,
+  practiceType: 'concierge',
   logos: {
     full: '/branding/aurelia-logo-silhouette.png',
     fullDark: '/branding/aurelia-logo-silhouette.png',

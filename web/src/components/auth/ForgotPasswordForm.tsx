@@ -8,6 +8,7 @@ import { ErrorAlert } from '../ui/ErrorAlert';
 import { Input } from '../ui/Input';
 import { resetPassword } from '../../lib/firebase';
 import { emailField } from '../../lib/validation';
+import { errorCode, errorMessage } from '../../lib/errors';
 import { BRANDING } from '../../config/branding';
 import logger from '../../lib/logger';
 
@@ -44,12 +45,12 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
     try {
       await resetPassword(data.email);
       setSuccess(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Password reset error:', error);
       setError(
-        error.code === 'auth/user-not-found'
+        errorCode(error) === 'auth/user-not-found'
           ? 'No account found with this email address'
-          : error.message || 'Failed to send reset email'
+          : errorMessage(error) || 'Failed to send reset email'
       );
     } finally {
       setLoading(false);

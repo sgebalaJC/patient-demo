@@ -15,7 +15,7 @@ export const OAuthButtons: React.FC<OAuthButtonsProps> = ({ onSuccess }) => {
     try {
       await signInWithGoogle();
       onSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Google sign in error:', error);
       // Handle error (you could show a toast or error message)
     } finally {

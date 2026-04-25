@@ -5,6 +5,7 @@ import { Button } from './ui/Button';
 import { ErrorAlert } from './ui/ErrorAlert';
 import { Mail, CheckCircle2, RefreshCw } from 'lucide-react';
 import logger from '../lib/logger';
+import { errorCode, errorMessage } from '../lib/errors';
 import { BRANDING } from '../config/branding';
 
 export const EmailVerificationBanner: React.FC = () => {
@@ -48,9 +49,9 @@ export const EmailVerificationBanner: React.FC = () => {
     try {
       await sendEmailVerification();
       setMessage('Verification email sent! Please check your inbox and spam folder.');
-    } catch (error: any) {
-      logger.error('Error resending verification:', error);
-      setError(error.message || 'Failed to send verification email');
+    } catch (error: unknown) {
+      logger.error('Error resending verification:', { code: errorCode(error) });
+      setError(errorMessage(error) || 'Failed to send verification email');
     } finally {
       setLoading(false);
     }
@@ -68,8 +69,8 @@ export const EmailVerificationBanner: React.FC = () => {
       } else {
         setMessage('Email is still not verified. Please check your inbox.');
       }
-    } catch (error: any) {
-      logger.error('Error checking verification:', error);
+    } catch (error: unknown) {
+      logger.error('Error checking verification:', { code: errorCode(error) });
       setError('Failed to check verification status');
     } finally {
       setLoading(false);

@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { intakeFormOperations } from '../../lib/firestore';
 import { userOperations } from '../../lib/firestore';
 import { FileText, ArrowRight, X } from 'lucide-react';
+import logger from '../../lib/logger';
 
 type BannerState = 'loading' | 'hidden' | 'needs_intake' | 'sent_back';
 
@@ -58,7 +59,9 @@ export const IntakeFormBanner: React.FC = () => {
   const handleSkip = () => {
     setState('hidden');
     if (user) {
-      userOperations.updateUser(user.uid, { intakeFormSkipped: true } as any).catch(() => {});
+      userOperations
+        .updateUser(user.uid, { intakeFormSkipped: true })
+        .catch((err) => logger.warn('Failed to persist intake-skip flag:', err));
     }
   };
 

@@ -20,7 +20,7 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "openai-codex/gpt-5.4"
+        "primary": "openai-codex/gpt-5.5"
       },
       "workspace": "/root/.openclaw/workspace",
       "compaction": {
@@ -46,7 +46,7 @@
         "name": "patient-support",
         "workspace": "/root/.openclaw/agents/patient-support/workspace",
         "agentDir": "/root/.openclaw/agents/patient-support/agent",
-        "model": "openai-codex/gpt-5.4",
+        "model": "openai-codex/gpt-5.5",
         "identity": {
           "name": "{{PATIENT_AGENT_NAME}}",
           "emoji": "🌻"

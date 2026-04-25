@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Send, Paperclip, X, FileText } from 'lucide-react';
+import { InputHistory } from './input-history';
 
 const ALLOWED_TYPES = [
   'image/png', 'image/jpeg', 'image/gif', 'image/webp',
@@ -33,6 +34,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const historyRef = useRef(new InputHistory());
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -46,6 +48,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleSend = () => {
+    if (value.trim()) historyRef.current.push(value);
     onSend();
     // Refocus after send so user can keep typing
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -55,6 +58,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!sending) handleSend();
+      return;
+    }
+    if (!value.trim()) {
+      if (e.key === 'ArrowUp') {
+        const prev = historyRef.current.up();
+        if (prev !== null) {
+          e.preventDefault();
+          onChange(prev);
+        }
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        const next = historyRef.current.down();
+        e.preventDefault();
+        onChange(next ?? '');
+      }
     }
   };
 
@@ -104,7 +123,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <textarea
           ref={inputRef}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            historyRef.current.reset();
+            onChange(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           rows={1}

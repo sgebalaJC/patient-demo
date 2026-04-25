@@ -8,15 +8,12 @@ import { isAdminRole, isSuperAdminEmail } from '../lib/roles';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
 import { useAppSettings } from '../contexts/AppSettingsContext';
-import { smsTemplateOperations, SmsTemplates } from '../lib/firestore/sms-templates';
+import { SmsTemplateEditor } from '../components/admin/settings/SmsTemplateEditor';
 import { appSettingsOperations } from '../lib/firestore/app-settings';
 import {
   Settings,
-  MessageSquare,
   Save,
-  RotateCcw,
   CheckCircle,
-  AlertTriangle,
   Sliders,
   UserPlus,
   Mail,
@@ -25,7 +22,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { BRANDING } from '../config/branding';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { PageHeader } from '../components/ui/PageHeader';
 
@@ -38,12 +34,6 @@ export const AdminSettingsPage: React.FC = () => {
     message: string;
     error: string;
   }>({ busy: null, message: '', error: '' });
-  const [templates, setTemplates] = useState<SmsTemplates | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [errors, setErrors] = useState<{ reminder24h?: string; reminderMorning?: string }>({});
-
   // App settings local edit state — initialized from live settings
   const [appSettingsDraft, setAppSettingsDraft] = useState<{
     registrationEnabled: boolean;
@@ -105,7 +95,7 @@ export const AdminSettingsPage: React.FC = () => {
         message: `${kind === 'seed' ? 'Seeded' : 'Cleared'} — ${summary}`,
         error: '',
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSeedState({ busy: null, message: '', error: err?.message || 'Failed' });
     }
   };
@@ -116,57 +106,8 @@ export const AdminSettingsPage: React.FC = () => {
     appSettingsDraft.supportEmail !== (liveAppSettings.supportEmail || '') ||
     appSettingsDraft.simulationMode !== liveAppSettings.simulationMode;
 
-  useEffect(() => {
-    if (isAdminRole(userProfile?.role)) loadTemplates();
-  }, [userProfile]);
+  // SMS templates editor lives in <SmsTemplateEditor /> — owns its own state.
 
-  const loadTemplates = async () => {
-    setLoading(true);
-    const res = await smsTemplateOperations.getTemplates();
-    if (res.success && res.data) {
-      setTemplates(res.data);
-    }
-    setLoading(false);
-  };
-
-  const validate = (t: SmsTemplates): boolean => {
-    const errs: typeof errors = {};
-    const err24 = smsTemplateOperations.validateTemplate(t.reminder24h);
-    const errMorn = smsTemplateOperations.validateTemplate(t.reminderMorning);
-    if (err24) errs.reminder24h = err24;
-    if (errMorn) errs.reminderMorning = errMorn;
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleSave = async () => {
-    if (!templates || !validate(templates)) return;
-    setSaving(true);
-    setSaved(false);
-    const res = await smsTemplateOperations.saveTemplates(templates);
-    if (res.success) {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    }
-    setSaving(false);
-  };
-
-  const handleReset = () => {
-    setTemplates(smsTemplateOperations.getDefaults());
-    setErrors({});
-  };
-
-  const updateTemplate = (field: keyof SmsTemplates, value: string) => {
-    if (!templates) return;
-    const updated = { ...templates, [field]: value };
-    setTemplates(updated);
-    // Clear error on edit
-    if (errors[field as keyof typeof errors]) {
-      setErrors(e => ({ ...e, [field]: undefined }));
-    }
-  };
-
-  if (loading) return <AdminGuard><LoadingSpinner /></AdminGuard>;
 
   return (
     <AdminGuard>
@@ -365,124 +306,7 @@ export const AdminSettingsPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* SMS Templates */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="bg-primary-100 p-2 rounded-lg">
-              <MessageSquare className="h-5 w-5 text-primary-600" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-secondary-900">SMS Reminder Templates</h2>
-              <p className="text-sm text-secondary-500">
-                Customize the SMS messages patients receive before appointments
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button variant="secondary" size="sm" onClick={handleReset}>
-              <RotateCcw className="h-3.5 w-3.5 mr-1" />
-              Reset
-            </Button>
-            <Button size="sm" onClick={handleSave} loading={saving}>
-              {saved ? (
-                <>
-                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                  Saved
-                </>
-              ) : (
-                <>
-                  <Save className="h-3.5 w-3.5 mr-1" />
-                  Save
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Placeholder info */}
-        <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
-          <p className="font-medium mb-1">Available placeholders:</p>
-          <ul className="space-y-1">
-            <li><code className="bg-green-100 px-1 rounded">{'{content}'}</code> — Appointment description (type, location, reason)</li>
-            <li><code className="bg-green-100 px-1 rounded">{'{time}'}</code> — Formatted appointment time (e.g., "Mar 25, 2:00 PM")</li>
-          </ul>
-          <p className="mt-2 text-green-700">Both placeholders are required in each template.</p>
-        </div>
-
-        {templates && (
-          <div className="space-y-6">
-            {/* 24-hour reminder */}
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-1">
-                24-Hour Advance Reminder
-              </label>
-              <p className="text-xs text-secondary-500 mb-2">
-                Sent 24 hours before the appointment
-              </p>
-              <textarea
-                value={templates.reminder24h}
-                onChange={(e) => updateTemplate('reminder24h', e.target.value)}
-                rows={6}
-                style={{ minHeight: '160px' }}
-                className={`input w-full font-mono text-sm ${errors.reminder24h ? 'border-red-300 focus:ring-red-500' : ''}`}
-              />
-              {errors.reminder24h && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-                  {errors.reminder24h}
-                </p>
-              )}
-            </div>
-
-            {/* Morning reminder */}
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-1">
-                Morning-Of Reminder (8 AM)
-              </label>
-              <p className="text-xs text-secondary-500 mb-2">
-                Sent at 8:00 AM on the day of the appointment
-              </p>
-              <textarea
-                value={templates.reminderMorning}
-                onChange={(e) => updateTemplate('reminderMorning', e.target.value)}
-                rows={6}
-                style={{ minHeight: '160px' }}
-                className={`input w-full font-mono text-sm ${errors.reminderMorning ? 'border-red-300 focus:ring-red-500' : ''}`}
-              />
-              {errors.reminderMorning && (
-                <p className="mt-1 text-sm text-red-600 flex items-center">
-                  <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-                  {errors.reminderMorning}
-                </p>
-              )}
-            </div>
-
-            {/* Preview */}
-            <div className="border-t border-secondary-200 pt-4">
-              <p className="text-sm font-medium text-secondary-700 mb-3">Preview</p>
-              <div className="space-y-3">
-                <div className="p-3 bg-secondary-50 rounded-lg">
-                  <p className="text-xs font-medium text-secondary-500 mb-1">24-Hour Reminder</p>
-                  <p className="text-sm text-secondary-800 whitespace-pre-wrap">
-                    {templates.reminder24h
-                      .replace('{content}', 'Consultation')
-                      .replace('{time}', 'Mar 25, 2:00 PM')}
-                  </p>
-                </div>
-                <div className="p-3 bg-secondary-50 rounded-lg">
-                  <p className="text-xs font-medium text-secondary-500 mb-1">Morning Reminder</p>
-                  <p className="text-sm text-secondary-800 whitespace-pre-wrap">
-                    {templates.reminderMorning
-                      .replace('{content}', 'Consultation')
-                      .replace('{time}', 'Mar 25, 2:00 PM')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </Card>
+      <SmsTemplateEditor />
     </div>
     </AdminGuard>
   );

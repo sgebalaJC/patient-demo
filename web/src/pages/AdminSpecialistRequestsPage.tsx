@@ -28,6 +28,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatsGrid } from '../components/ui/StatsGrid';
+import { FilterTabs } from '../components/ui/FilterTabs';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
@@ -169,7 +170,7 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
           }
         }, true);
 
-        el.addEventListener('gmp-select', async (event: any) => {
+        el.addEventListener('gmp-select', async (event) => {
           const place = event.place;
           if (!place.id) return;
           try {
@@ -294,31 +295,16 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
         { icon: XCircle, iconColor: 'bg-red-100 text-red-600', label: 'Cancelled', value: statusCounts.cancelled },
       ]} />
 
-      {/* Filters */}
-      <Card className="p-6">
-        <div className="space-y-4">
-          <div className="flex space-x-2">
-            {([
-              { key: 'all', label: 'All', count: statusCounts.all },
-              { key: 'pending', label: 'Pending', count: statusCounts.pending },
-              { key: 'confirmed', label: 'Confirmed', count: statusCounts.confirmed },
-              { key: 'cancelled', label: 'Cancelled', count: statusCounts.cancelled },
-            ] as const).map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setFilter(tab.key)}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium border transition-colors ${
-                  filter === tab.key
-                    ? 'border-primary-600 text-primary-700 bg-primary-50'
-                    : 'border-transparent bg-secondary-100 text-secondary-700 hover:bg-secondary-200'
-                }`}
-              >
-                {tab.label} ({tab.count})
-              </button>
-            ))}
-          </div>
-        </div>
-      </Card>
+      <FilterTabs
+        activeKey={filter}
+        onChange={(k) => setFilter(k as 'all' | 'pending' | 'confirmed' | 'cancelled')}
+        tabs={[
+          { key: 'all', label: 'All', count: statusCounts.all },
+          { key: 'pending', label: 'Pending', count: statusCounts.pending },
+          { key: 'confirmed', label: 'Confirmed', count: statusCounts.confirmed },
+          { key: 'cancelled', label: 'Cancelled', count: statusCounts.cancelled },
+        ]}
+      />
 
       <div className="flex justify-end">
         <Button onClick={refreshAll} loading={loading} variant="secondary" size="sm">

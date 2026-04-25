@@ -14,6 +14,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { FormDataViewer } from '../components/intake/IntakeFormDisplay';
+import { SendBackIntakeFormModal } from '../components/intake/SendBackIntakeFormModal';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -307,39 +308,13 @@ export const AdminIntakeFormsPage: React.FC = () => {
         onClose={() => setApproveConfirmId(null)}
       />
 
-      {/* Send back modal */}
-      {sendBackId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setSendBackId(null)} />
-          <div className="relative bg-surface-card rounded-xl shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-secondary-900 mb-2">Send Back for Corrections</h3>
-            <p className="text-sm text-secondary-600 mb-4">
-              The patient will be prompted to review and update their intake forms. Add a note about what needs to be corrected.
-            </p>
-            <textarea
-              value={sendBackNotes}
-              onChange={(e) => setSendBackNotes(e.target.value)}
-              placeholder="What needs to be updated? (optional)"
-              rows={3}
-              className="w-full border border-secondary-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
-            />
-            <div className="flex justify-end space-x-2 mt-4">
-              <button
-                onClick={() => { setSendBackId(null); setSendBackNotes(''); }}
-                className="px-4 py-2 text-sm text-secondary-600 hover:text-secondary-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleSendBack(sendBackId)}
-                className="px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors"
-              >
-                Send Back
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SendBackIntakeFormModal
+        formId={sendBackId}
+        notes={sendBackNotes}
+        onNotesChange={setSendBackNotes}
+        onConfirm={handleSendBack}
+        onClose={() => { setSendBackId(null); setSendBackNotes(''); }}
+      />
     </div>
     </AdminGuard>
   );

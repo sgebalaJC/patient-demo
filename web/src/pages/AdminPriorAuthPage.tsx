@@ -13,6 +13,7 @@ import { FilterTabs } from '../components/ui/FilterTabs';
 import { useAuth } from '../hooks/useAuth';
 import { isAdminRole } from '../lib/roles';
 import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
+import { formatDateTime } from '../lib/date-helpers';
 import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import { PaStatusBadge } from '../components/prior-auth/StatusBadge';
 import type { PriorAuth, PriorAuthStatus } from '../types/prior-auth';
@@ -160,7 +161,7 @@ export const AdminPriorAuthPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-xs text-secondary-500">
-                    {pa.updatedAt ? new Date(pa.updatedAt.toMillis()).toLocaleString() : ''}
+                    {pa.updatedAt ? formatDateTime(pa.updatedAt) : ''}
                   </div>
                 </div>
               </Link>

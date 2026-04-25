@@ -85,12 +85,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {/* Pending files preview — image thumbnails for image/*, chip for others */}
       {pendingFiles.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2">
-          {pendingFiles.map((file, i) =>
-            isImage(file.type) ? (
-              <PendingImageThumb key={i} file={file} onRemove={() => removeFile(i)} />
+          {pendingFiles.map((file, i) => {
+            // File identity = name + lastModified + size — stable across renders
+            // even when files in front of this one are removed.
+            const k = `${file.name}-${file.lastModified}-${file.size}`;
+            return isImage(file.type) ? (
+              <PendingImageThumb key={k} file={file} onRemove={() => removeFile(i)} />
             ) : (
               <div
-                key={i}
+                key={k}
                 className="flex items-center gap-1.5 bg-secondary-100 rounded-lg px-2 py-1 text-xs text-secondary-700"
               >
                 <FileText className="h-3 w-3 text-secondary-500" />
@@ -99,8 +102,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   <X className="h-3 w-3" />
                 </button>
               </div>
-            ),
-          )}
+            );
+          })}
         </div>
       )}
 

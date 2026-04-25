@@ -52,10 +52,13 @@ export function ChatBubble({ role, content, attachments, onDelete }: ChatBubbleP
           <ChatMarkdown content={content} variant={role} />
           {attachments && attachments.length > 0 && (
             <div className="mt-2 space-y-1.5">
-              {attachments.map((att, i) =>
-                isImg(att.mimeType) && att.url ? (
+              {attachments.map((att, i) => {
+                // Stable identity per attachment — url+name+size collapses to a unique
+                // string for both uploaded (has url) and pre-upload placeholders.
+                const k = `${att.url || ''}-${att.name}-${att.size ?? 0}-${i}`;
+                return isImg(att.mimeType) && att.url ? (
                   <a
-                    key={i}
+                    key={k}
                     href={att.url}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -70,7 +73,7 @@ export function ChatBubble({ role, content, attachments, onDelete }: ChatBubbleP
                   </a>
                 ) : (
                   <div
-                    key={i}
+                    key={k}
                     className={`flex items-center gap-1.5 text-xs ${
                       role === 'user' ? 'text-white/80' : 'text-secondary-500'
                     }`}
@@ -78,8 +81,8 @@ export function ChatBubble({ role, content, attachments, onDelete }: ChatBubbleP
                     {isImg(att.mimeType) ? <Image className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
                     <span className="truncate">{att.name}</span>
                   </div>
-                ),
-              )}
+                );
+              })}
             </div>
           )}
         </div>

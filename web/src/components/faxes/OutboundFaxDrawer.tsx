@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -45,7 +46,7 @@ export const OutboundFaxDrawer: React.FC<OutboundFaxDrawerProps> = ({ fax, onClo
     [fax.faxSid],
   );
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 bg-black/50 flex justify-end" onClick={onClose}>
       <div
         className="w-full max-w-3xl bg-surface-card overflow-y-auto shadow-xl"
@@ -107,6 +108,7 @@ export const OutboundFaxDrawer: React.FC<OutboundFaxDrawerProps> = ({ fax, onClo
           </Card>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

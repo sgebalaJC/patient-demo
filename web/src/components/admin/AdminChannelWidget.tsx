@@ -210,6 +210,9 @@ export const AdminChannelWidget: React.FC = () => {
     <div className="fixed bottom-1 right-1 z-50 flex flex-col items-end gap-2">
       {open && (
         <div
+          // Intentional `fixed inset-2` chrome — this is an in-page admin
+          // popout (not a confirmation dialog), so the Modal primitive's
+          // title/close-X header chrome would be wrong here.
           className={
             expanded
               ? 'fixed inset-2 z-50 bg-surface-card rounded-xl shadow-2xl border border-secondary-200 flex flex-col overflow-hidden'

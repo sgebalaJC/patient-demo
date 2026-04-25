@@ -167,7 +167,7 @@ export const UserManagementPage: React.FC = () => {
         sessionStorage.removeItem('impersonation');
         throw signInErr;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Impersonation failed:', err);
       void modalAlert({ tone: 'error', title: 'Impersonation failed', message: err?.message || 'Unknown error' });
     }

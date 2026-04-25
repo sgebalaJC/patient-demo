@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { ConsentForm } from '../../types';
-import { FileCheck, AlertTriangle, Shield, Eye } from 'lucide-react';
+import { FileCheck, AlertTriangle, Shield, Eye, type LucideIcon } from 'lucide-react';
 import { BRANDING } from '../../config/branding';
 
 const isConcierge = BRANDING.practiceType === 'concierge';
@@ -151,7 +151,7 @@ export const ConsentFormSection: React.FC<ConsentFormSectionProps> = ({
     content: string;
     required?: boolean;
     fieldName: keyof ConsentFormFormData;
-    icon: any;
+    icon: LucideIcon;
   }) => {
     const isExpanded = expandedSection === fieldName;
     const error = errors[fieldName]?.message;

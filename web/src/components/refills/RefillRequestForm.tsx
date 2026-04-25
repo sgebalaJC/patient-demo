@@ -146,7 +146,7 @@ export const RefillRequestForm: React.FC<RefillRequestFormProps> = ({
         }, true);
 
         // Handle place selection
-        basicAutocompleteElement.addEventListener('gmp-select', async (event: any) => {
+        basicAutocompleteElement.addEventListener('gmp-select', async (event) => {
           const place = event.place;
 
           if (!place.id) return;

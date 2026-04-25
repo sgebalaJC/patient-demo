@@ -9,6 +9,7 @@ import {
 import { storage } from './firebase';
 import { DocumentType } from '../types';
 import logger from "./logger";
+import { errorMessage } from "./errors";
 
 export interface UploadProgress {
   bytesTransferred: number;
@@ -65,7 +66,7 @@ export const uploadDocument = (
           logger.error('Upload error:', error);
           resolve({
             success: false,
-            error: error.message || 'Upload failed'
+            error: errorMessage(error) || 'Upload failed'
           });
         },
         async () => {
@@ -77,18 +78,18 @@ export const uploadDocument = (
               fileUrl,
               fileName
             });
-          } catch (error: any) {
+          } catch (error: unknown) {
             resolve({
               success: false,
-              error: error.message || 'Failed to get download URL'
+              error: errorMessage(error) || 'Failed to get download URL'
             });
           }
         }
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       resolve({
         success: false,
-        error: error.message || 'Upload initialization failed'
+        error: errorMessage(error) || 'Upload initialization failed'
       });
     }
   });
@@ -100,7 +101,7 @@ export const deleteMessageAttachment = async (fileUrl: string): Promise<boolean>
     const storageRef = ref(storage, fileUrl);
     await deleteObject(storageRef);
     return true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Delete message attachment error:', error);
     return false;
   }
@@ -116,7 +117,7 @@ export const deleteMessageAttachments = async (attachments: Array<{ url: string;
       if (!success) {
         errors.push(`Failed to delete ${attachment.name}`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       errors.push(`Error deleting ${attachment.name}: ${error.message}`);
     }
   }
@@ -189,7 +190,7 @@ export const uploadMessageAttachment = (
           logger.error('Upload error:', error);
           resolve({
             success: false,
-            error: error.message || 'Upload failed'
+            error: errorMessage(error) || 'Upload failed'
           });
         },
         async () => {
@@ -201,18 +202,18 @@ export const uploadMessageAttachment = (
               fileUrl,
               fileName: originalName
             });
-          } catch (error: any) {
+          } catch (error: unknown) {
             resolve({
               success: false,
-              error: error.message || 'Failed to get download URL'
+              error: errorMessage(error) || 'Failed to get download URL'
             });
           }
         }
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       resolve({
         success: false,
-        error: error.message || 'Upload initialization failed'
+        error: errorMessage(error) || 'Upload initialization failed'
       });
     }
   });

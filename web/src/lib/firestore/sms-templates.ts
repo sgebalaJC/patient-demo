@@ -8,6 +8,7 @@ import { db } from '../firebase';
 import { ApiResponse } from '../../types';
 import { BRANDING } from '../../config/branding';
 import logger from '../logger';
+import { errorMessage } from '../errors';
 
 export interface SmsTemplates {
   reminder24h: string;
@@ -40,9 +41,9 @@ export const smsTemplateOperations = {
         };
       }
       return { success: true, data: { ...DEFAULTS } };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting SMS templates:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -55,9 +56,9 @@ export const smsTemplateOperations = {
         updatedAt: serverTimestamp(),
       });
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error saving SMS templates:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 

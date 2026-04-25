@@ -106,7 +106,7 @@ function useGooglePlacesAutocomplete(
           if (e.composedPath().some((n) => (n as HTMLElement).tagName === 'A')) e.preventDefault();
         }, true);
 
-        el.addEventListener('gmp-select', async (event: any) => {
+        el.addEventListener('gmp-select', async (event) => {
           const place = event.place;
           if (!place.id) return;
           try {

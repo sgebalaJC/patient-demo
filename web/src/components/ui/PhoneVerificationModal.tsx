@@ -6,6 +6,7 @@ import { ModalOverlay } from './ModalOverlay';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
 import { formatPhoneDisplay } from '../../lib/phone';
+import { errorMessage } from '../../lib/errors';
 
 interface PhoneVerificationModalProps {
   isOpen: boolean;
@@ -40,8 +41,8 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
       } else {
         setError(result.data.error || 'Failed to send verification code');
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to send verification code');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Failed to send verification code');
     } finally {
       setLoading(false);
     }
@@ -62,8 +63,8 @@ export const PhoneVerificationModal: React.FC<PhoneVerificationModalProps> = ({
       } else {
         setError(result.data.error || 'Verification failed');
       }
-    } catch (err: any) {
-      setError(err.message || 'Verification failed');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Verification failed');
     } finally {
       setLoading(false);
     }

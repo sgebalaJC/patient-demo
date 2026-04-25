@@ -14,6 +14,7 @@ import { PhoneVerificationModal } from '../components/ui/PhoneVerificationModal'
 import { signOut } from '../lib/firebase';
 import { formatPhoneDisplay, normalizePhoneNumber, InvalidPhoneError } from '../lib/phone';
 import logger from '../lib/logger';
+import { errorMessage } from '../lib/errors';
 
 export const ProfilePage: React.FC = () => {
   const { user, userProfile } = useAuth();
@@ -99,9 +100,9 @@ export const ProfilePage: React.FC = () => {
       } else {
         setError(response.error || 'Failed to update profile');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error updating profile:', error);
-      setError(error.message || 'Failed to update profile');
+      setError(errorMessage(error) || 'Failed to update profile');
     } finally {
       setLoading(false);
     }
@@ -142,9 +143,9 @@ export const ProfilePage: React.FC = () => {
       } else {
         setDeleteError(result.data.error || 'Failed to delete account');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error deleting account:', error);
-      setDeleteError(error.message || 'Failed to delete account');
+      setDeleteError(errorMessage(error) || 'Failed to delete account');
     } finally {
       setDeleting(false);
     }
@@ -173,9 +174,9 @@ export const ProfilePage: React.FC = () => {
         setExportError(result.data.error || 'Export failed');
         setExportStatus('error');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error exporting data:', error);
-      setExportError(error.message || 'Export failed. Please try again later.');
+      setExportError(errorMessage(error) || 'Export failed. Please try again later.');
       setExportStatus('error');
     }
   };

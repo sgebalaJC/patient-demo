@@ -22,6 +22,7 @@ import { getAppointmentStatusColor } from '../../lib/status-helpers';
 import { formatDate, formatTime, toDate } from '../../lib/date-helpers';
 import { getSpecialistLabel } from '../../config/specialists';
 import logger from "../../lib/logger";
+import { errorMessage } from "../../lib/errors";
 
 interface AppointmentListProps {
   onEditAppointment: (appointment: Appointment) => void;
@@ -90,7 +91,7 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
       if (requestsResponse.success && requestsResponse.data) {
         setPendingRequests(requestsResponse.data.filter(r => r.status === 'pending'));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       setError('Error loading appointments');
       logger.error('Error fetching appointments:', error);
     } finally {
@@ -124,8 +125,8 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
       } else {
         setError('Failed to cancel appointment: ' + (response.error || 'Unknown error'));
       }
-    } catch (error: any) {
-      setError('Error cancelling appointment: ' + error.message);
+    } catch (error: unknown) {
+      setError('Error cancelling appointment: ' + errorMessage(error));
     } finally {
       setDeletingId(null);
     }
@@ -141,8 +142,8 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
       } else {
         setError('Failed to cancel request: ' + (response.error || 'Unknown error'));
       }
-    } catch (error: any) {
-      setError('Error cancelling request: ' + error.message);
+    } catch (error: unknown) {
+      setError('Error cancelling request: ' + errorMessage(error));
     } finally {
       setCancellingRequestId(null);
     }

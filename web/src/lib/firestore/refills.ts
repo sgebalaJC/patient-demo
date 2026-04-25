@@ -18,6 +18,7 @@ import { collections, logAuthContext } from './base';
 import { db } from '../firebase';
 import { PrescriptionRefillRequest, ApiResponse, User } from '../../types';
 import logger from "../logger";
+import { errorMessage } from '../errors';
 import { audit } from "../audit";
 
 // Prescription refill operations
@@ -59,9 +60,9 @@ export const prescriptionRefillOperations = {
       }
 
       return { success: true, data: patientNameMap };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error fetching patient names:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -83,9 +84,9 @@ export const prescriptionRefillOperations = {
 
       audit({ action: 'refill.requested', resourceType: 'prescription-refill', resourceId: docRef.id, metadata: { patientId: refillData.patientId, urgency: refillData.urgency } });
       return { success: true, data: { id: docRef.id, ...newRefill } as PrescriptionRefillRequest };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error creating refill request:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -170,9 +171,9 @@ export const prescriptionRefillOperations = {
           statusCounts,
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting all refills:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -184,9 +185,9 @@ export const prescriptionRefillOperations = {
         return { success: true, data: { id: refillId, ...refillDoc.data() } as PrescriptionRefillRequest };
       }
       return { success: false, error: 'Refill request not found' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting refill request:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -265,9 +266,9 @@ export const prescriptionRefillOperations = {
           hasMore
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting patient refills:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -343,9 +344,9 @@ export const prescriptionRefillOperations = {
           hasMore
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting pending refills:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -365,9 +366,9 @@ export const prescriptionRefillOperations = {
 
       audit({ action: 'refill.updated', resourceType: 'prescription-refill', resourceId: refillId, metadata: { newStatus: updates.status } });
       return { success: true, data: { id: refillId, ...updatedRefill.data() } as PrescriptionRefillRequest };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error updating refill request:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -378,9 +379,9 @@ export const prescriptionRefillOperations = {
         status: 'approved',
         doctorNotes: doctorNotes,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error approving refill:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -391,9 +392,9 @@ export const prescriptionRefillOperations = {
         status: 'denied',
         doctorNotes: doctorNotes,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error denying refill:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -403,9 +404,9 @@ export const prescriptionRefillOperations = {
       return await this.updateRefillRequest(refillId, {
         status: 'completed',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error completing refill:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -418,9 +419,9 @@ export const prescriptionRefillOperations = {
       };
 
       return await this.updateRefillRequest(refillId, updates);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error updating refill status:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -434,9 +435,9 @@ export const prescriptionRefillOperations = {
       });
 
       return { success: true, data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error deleting refill request:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 };

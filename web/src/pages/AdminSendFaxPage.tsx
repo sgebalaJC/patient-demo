@@ -97,7 +97,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
         setTo('');
         setCoverTo('');
         paged.refresh();
-      } catch (err: any) {
+      } catch (err: unknown) {
         setSubmitError(err?.message || 'Submit failed');
       } finally {
         setSubmitting(false);
@@ -132,7 +132,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
       setTo('');
       setCoverTo('');
       paged.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSubmitError(err?.message || 'Submit failed');
       // Best-effort cleanup of any uploaded source files so we don't leak
       // orphans when the SignalWire submit rejects. Run in parallel.
@@ -154,7 +154,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
       await fn({ faxSid: deleteTarget.faxSid });
       setDeleteTarget(null);
       paged.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       void modalAlert({ tone: 'error', title: 'Delete failed', message: err?.message || String(err) });
     } finally {
       setDeleting(false);

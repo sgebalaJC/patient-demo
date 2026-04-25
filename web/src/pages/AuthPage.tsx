@@ -18,6 +18,7 @@ import { PasswordResetForm } from '../components/auth/PasswordResetForm';
 import { EmailVerificationHandler } from '../components/auth/EmailVerificationHandler';
 import { BRANDING } from '../config/branding';
 import logger from "../lib/logger";
+import { errorMessage } from "../lib/errors";
 import { AlertCircle, Mail } from "lucide-react";
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 
@@ -78,19 +79,19 @@ export const AuthPage: React.FC = () => {
           // AuthContext picks up the auth state change and redirects.
           // Do NOT clear emailLinkLoading here; the redirect via
           // <Navigate> will unmount this component.
-        } catch (error: any) {
+        } catch (error: unknown) {
           setEmailLinkLoading(false);
-          if (error.message === 'EMAIL_REQUIRED') {
+          if (errorMessage(error) === 'EMAIL_REQUIRED') {
             // sessionStorage email lost (link opened in new tab) — ask user to confirm email
             setNeedsEmailForLink(true);
-          } else if (error.message === 'REGISTRATION_DISABLED') {
+          } else if (errorMessage(error) === 'REGISTRATION_DISABLED') {
             setEmailLinkError(
               'New patient registration is currently closed. Please contact the office to request an account.'
             );
           } else {
             logger.error('Email link sign-in error:', error);
             setEmailLinkError(
-              error.message || 'Failed to complete sign-in. Please try again.'
+              errorMessage(error) || 'Failed to complete sign-in. Please try again.'
             );
           }
         }
@@ -196,11 +197,11 @@ export const AuthPage: React.FC = () => {
       await completeEmailLinkSignIn(emailForLink.trim());
       setNeedsEmailForLink(false);
       // Keep loading spinner — AuthContext will redirect on state change
-    } catch (error: any) {
+    } catch (error: unknown) {
       setEmailLinkLoading(false);
       logger.error('Email link sign-in error:', error);
       setEmailLinkError(
-        error.message || 'Failed to complete sign-in. Please try again.'
+        errorMessage(error) || 'Failed to complete sign-in. Please try again.'
       );
     }
   };

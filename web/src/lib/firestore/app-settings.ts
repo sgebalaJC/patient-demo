@@ -10,6 +10,7 @@ import {
 import { db } from '../firebase';
 import { ApiResponse } from '../../types';
 import logger from '../logger';
+import { errorMessage } from '../errors';
 
 /**
  * App-wide settings stored in Firestore at `system/settings`.
@@ -97,9 +98,9 @@ export const appSettingsOperations = {
         success: true,
         data: normalize(snap.exists() ? (snap.data() as AppSettings) : undefined),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting app settings:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -157,9 +158,9 @@ export const appSettingsOperations = {
       }
       await setDoc(DOC_REF, payload, { merge: true });
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error saving app settings:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 

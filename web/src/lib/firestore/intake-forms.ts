@@ -14,6 +14,7 @@ import {
 import { collections, mapDoc } from './base';
 import { PatientIntakeForm, ApiResponse } from '../../types';
 import logger from "../logger";
+import { errorMessage } from '../errors';
 
 // Patient intake form operations
 export const intakeFormOperations = {
@@ -31,9 +32,9 @@ export const intakeFormOperations = {
       const mapped = snapshot.empty ? null : mapDoc<PatientIntakeForm>(snapshot.docs[0]);
       if (mapped) return { success: true, data: mapped };
       return { success: false, error: 'No intake form found' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting intake form:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -57,9 +58,9 @@ export const intakeFormOperations = {
       const mapped = mapDoc<PatientIntakeForm>(snap);
       if (!mapped) return { success: false, error: 'Failed to read back created form' };
       return { success: true, data: mapped };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error creating intake form:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -102,9 +103,9 @@ export const intakeFormOperations = {
       await updateDoc(formRef, updateData);
 
       return { success: true, data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error updating intake form section:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -118,9 +119,9 @@ export const intakeFormOperations = {
       });
 
       return { success: true, data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error updating current section:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -135,9 +136,9 @@ export const intakeFormOperations = {
       });
 
       return { success: true, data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error completing intake form:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -152,9 +153,9 @@ export const intakeFormOperations = {
       const snapshot = await getDocs(formsQuery);
       const forms = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PatientIntakeForm));
       return { success: true, data: forms };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting submitted forms:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -169,9 +170,9 @@ export const intakeFormOperations = {
         updatedAt: serverTimestamp(),
       });
       return { success: true, data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error approving intake form:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -200,9 +201,9 @@ export const intakeFormOperations = {
       }
 
       return { success: true, data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error sending back intake form:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 };

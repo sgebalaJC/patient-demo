@@ -14,6 +14,7 @@ import { ChatInput } from './ChatInput';
 import { getInputHistory } from './input-history';
 import { useAuth } from '../../hooks/useAuth';
 import type { ChatThreadController } from '../../hooks/useChatThread';
+import logger from '../../lib/logger';
 
 interface ChatThreadProps {
   controller: ChatThreadController;
@@ -93,11 +94,13 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
     if (el.scrollTop < 50 && hasMore && !loadingMore) {
       isLoadingOlder.current = true;
       const prevScrollHeight = el.scrollHeight;
-      loadOlder().then(() => {
-        requestAnimationFrame(() => {
-          if (el) el.scrollTop = el.scrollHeight - prevScrollHeight;
-        });
-      });
+      loadOlder()
+        .then(() => {
+          requestAnimationFrame(() => {
+            if (el) el.scrollTop = el.scrollHeight - prevScrollHeight;
+          });
+        })
+        .catch((err) => logger.error('[chat] loadOlder failed:', err));
     }
   }, [hasMore, loadingMore, loadOlder]);
 

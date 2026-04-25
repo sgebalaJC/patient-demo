@@ -17,6 +17,7 @@ import {
 } from '../lib/firestore/prior-auths';
 import { PolicyStatusBadge } from '../components/prior-auth/StatusBadge';
 import { FreshnessBadge } from '../components/prior-auth/FreshnessBadge';
+import { getPolicyAdapterStatusColor } from '../lib/status-helpers';
 import type { Payer, PayerPolicy } from '../types/prior-auth';
 
 export const AdminPolicyLibraryPage: React.FC = () => {
@@ -113,11 +114,7 @@ const PayerCard: React.FC<{ payer: Payer }> = ({ payer }) => {
     { initial: [], deps: [payer.id] },
   );
 
-  const statusColor = payer.adapterStatus === 'implemented'
-    ? 'bg-green-100 text-green-700'
-    : payer.adapterStatus === 'no_public_policy'
-    ? 'bg-secondary-100 text-secondary-600'
-    : 'bg-yellow-100 text-yellow-800';
+  const statusColor = getPolicyAdapterStatusColor(payer.adapterStatus);
 
   return (
     <Card className="p-4">

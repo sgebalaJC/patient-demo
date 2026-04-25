@@ -18,6 +18,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { mapDocStrict } from './base';
 import logger from '../logger';
 
 export type PlatformPlan = 'monthly' | 'annual' | null;
@@ -190,7 +191,9 @@ export const platformOperations = {
       q,
       (snap) =>
         cb(
-          snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) } as PlatformTopup)),
+          snap.docs
+            .map((d) => mapDocStrict<PlatformTopup>(d, ['stripeSessionId', 'amountPaid'], 'platform-topups'))
+            .filter((t): t is PlatformTopup => t !== null),
         ),
       (err) => {
         logger.error('platform topups snapshot error', err);

@@ -37,6 +37,7 @@ function toThreadMessage(snap: Parameters<typeof mapDocStrict>[0]): ThreadMessag
 }
 import { deleteMessageAttachments } from '../storage';
 import logger from "../logger";
+import { errorMessage } from '../errors';
 import { audit } from "../audit";
 
 export const messageThreadOperations = {
@@ -64,9 +65,9 @@ export const messageThreadOperations = {
 
             audit({ action: 'thread.created', resourceType: 'message-thread', resourceId: docRef.id, metadata: { patientId: threadData.patientId, priority: threadData.priority } });
             return { success: true, data: createdThread };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error creating thread:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 
@@ -79,9 +80,9 @@ export const messageThreadOperations = {
                 return { success: false, error: 'Thread not found' };
             }
             return { success: true, data: mapped };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error getting thread by ID:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 
@@ -135,9 +136,9 @@ export const messageThreadOperations = {
                     currentPage: page
                 }
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error getting patient threads:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 
@@ -190,9 +191,9 @@ export const messageThreadOperations = {
                     currentPage: page
                 }
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error getting admin threads:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 
@@ -266,9 +267,9 @@ export const messageThreadOperations = {
 
             audit({ action: 'message.sent', resourceType: 'thread-message', resourceId: docRef.id, metadata: { threadId: messageData.threadId, senderRole: messageData.senderRole, hasAttachments: !!(messageData.attachments && messageData.attachments.length > 0) } });
             return { success: true, data: { id: docRef.id, ...newMessage } as ThreadMessage };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error sending thread message:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 
@@ -281,9 +282,9 @@ export const messageThreadOperations = {
                 updatedAt: serverTimestamp(),
             });
             return { success: true, data: true };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error marking thread as read for patient:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 
@@ -298,9 +299,9 @@ export const messageThreadOperations = {
                 updatedAt: serverTimestamp(),
             });
             return { success: true, data: true };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error marking thread as read for admin:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 
@@ -329,9 +330,9 @@ export const messageThreadOperations = {
             await deleteDoc(doc(collections.threadMessages, messageId));
             audit({ action: 'message.deleted', resourceType: 'thread-message', resourceId: messageId, metadata: { threadId: messageData.threadId } });
             return { success: true, data: true };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error deleting message:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 
@@ -364,9 +365,9 @@ export const messageThreadOperations = {
 
             audit({ action: 'message.soft_deleted', resourceType: 'thread-message', resourceId: messageId, metadata: { threadId: messageData.threadId } });
             return { success: true, data: true };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error soft-deleting message:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 
@@ -385,9 +386,9 @@ export const messageThreadOperations = {
                 .filter((m): m is ThreadMessage => m !== null);
 
             return { success: true, data: messages };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error getting thread messages:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 
@@ -423,9 +424,9 @@ export const messageThreadOperations = {
                 return { success: false, error: 'Thread updated but could not be re-read' };
             }
             return { success: true, data: mapped };
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error updating thread status:', error);
-            return { success: false, error: error.message };
+            return { success: false, error: errorMessage(error) };
         }
     },
 };

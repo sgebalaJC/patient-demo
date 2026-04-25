@@ -18,6 +18,7 @@ import type {
   PatientSubscription,
 } from '../../types';
 import logger from '../logger';
+import { errorMessage } from '../errors';
 
 export const subscriptionOperations = {
   /** List all subscription plans (admin view includes inactive). */
@@ -30,9 +31,9 @@ export const subscriptionOperations = {
         plans = plans.filter((p) => p.active);
       }
       return { success: true, data: plans };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error listing subscription plans:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -59,9 +60,9 @@ export const subscriptionOperations = {
       }
       await setDoc(ref, payload, { merge: true });
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error upserting subscription plan:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -69,9 +70,9 @@ export const subscriptionOperations = {
     try {
       await deleteDoc(doc(collections.subscriptionPlans, priceId));
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error deleting subscription plan:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -81,9 +82,9 @@ export const subscriptionOperations = {
       const snap = await getDoc(doc(collections.patientSubscriptions, uid));
       const mapped = mapDocStrict<PatientSubscription>(snap, ['status'], 'patient-subscriptions');
       return { success: true, data: mapped };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting patient subscription:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 

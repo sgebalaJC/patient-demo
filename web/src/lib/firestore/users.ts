@@ -25,6 +25,7 @@ import { db } from '../firebase';
 import { User, ApiResponse } from '../../types';
 import { isAdminRole } from '../roles';
 import logger from "../logger";
+import { errorMessage } from '../errors';
 
 export type UserSortField = 'lastName' | 'createdAt';
 export type SortDirection = 'asc' | 'desc';
@@ -84,9 +85,9 @@ export const userOperations = {
 
       await setDoc(userRef, newUser, { merge: true });
       return { success: true, data: newUser };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error creating user:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -104,9 +105,9 @@ export const userOperations = {
         return { success: true, data: { ...mapped, id: uid } };
       }
       return { success: false, error: 'User not found' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting user:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -126,9 +127,9 @@ export const userOperations = {
         return { success: false, error: 'User updated but could not be re-read' };
       }
       return { success: true, data: { ...mapped, id: uid } };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error updating user:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -227,9 +228,9 @@ export const userOperations = {
           lastDoc: snapshot.docs[snapshot.docs.length - 1] || null,
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting users:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 

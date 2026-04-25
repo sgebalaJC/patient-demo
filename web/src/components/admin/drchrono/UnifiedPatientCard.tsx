@@ -105,7 +105,7 @@ export const UnifiedPatientCard: React.FC<Props> = ({
       const d = await sidecar.getDrChronoPatientDetails(patient.drchronoId);
       setCachedPatientDetails(patient.drchronoId, d);
       setDetails(d);
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Patient details fetch failed:', err);
       setDetailsError(err?.message || 'Failed to load clinical details');
     } finally {

@@ -167,7 +167,7 @@ export const BootstrapAdminForm: React.FC<BootstrapAdminFormProps> = ({ onSubmit
         logger.warn('Failed to delete bootstrap request doc:', delErr);
       });
       // AuthContext picks up the auth state change and routes to /admin
-    } catch (err: any) {
+    } catch (err: unknown) {
       cleanup();
       logger.error('Bootstrap error:', err);
       if (err?.code === 'permission-denied') {

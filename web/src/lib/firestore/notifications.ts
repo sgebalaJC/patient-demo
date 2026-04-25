@@ -17,6 +17,7 @@ import { isAdminRole } from '../roles';
 import { collections } from './base';
 import { Notification, NotificationType, ApiResponse, UserRole } from '../../types';
 import logger from '../logger';
+import { errorMessage } from '../errors';
 
 export const notificationOperations = {
   // Create a notification
@@ -39,9 +40,9 @@ export const notificationOperations = {
 
       const docRef = await addDoc(collections.notifications, newNotification);
       return { success: true, data: { id: docRef.id, ...newNotification } as Notification };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error creating notification:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -64,9 +65,9 @@ export const notificationOperations = {
       } as Notification));
 
       return { success: true, data: notifications };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting admin notifications:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -103,9 +104,9 @@ export const notificationOperations = {
         readAt: serverTimestamp(),
       });
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error marking notification as read:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -168,9 +169,9 @@ export const notificationOperations = {
 
       await batch.commit();
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error marking all notifications as read:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 };

@@ -66,11 +66,14 @@ export const AdminCreateAppointmentModal: React.FC<Props> = ({ isOpen, onClose, 
         setForm(EMPTY_FORM);
         if (patientsLoadedRef.current) return;
         patientsLoadedRef.current = true;
+        let cancelled = false;
         userOperations.getAllUsers(100, 1).then((res) => {
+            if (cancelled) return;
             if (res.success && res.data) {
                 setPatients(res.data.users.filter((u) => u.role === 'patient'));
             }
         }).catch((err) => logger.error('patient list load failed', err));
+        return () => { cancelled = true; };
     }, [isOpen]);
 
     const filteredPatients = patientSearch.length >= 1

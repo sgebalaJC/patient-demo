@@ -8,6 +8,7 @@ import {DocumentType, PatientDocument} from '../../types';
 import {uploadDocument, validateDocumentFile, UploadProgress} from '../../lib/storage';
 import {documentOperations} from '../../lib/firestore';
 import logger from "../../lib/logger";
+import { errorMessage } from "../../lib/errors";
 import { Modal } from '../ui/Modal';
 
 const documentTypes: { value: DocumentType; label: string }[] = [
@@ -114,9 +115,9 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
             } else {
                 throw new Error(createResult.error);
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Upload error:', error);
-            setError(error.message || 'Upload failed');
+            setError(errorMessage(error) || 'Upload failed');
         } finally {
             setUploading(false);
             setUploadProgress(null);

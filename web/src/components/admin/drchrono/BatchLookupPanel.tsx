@@ -91,7 +91,7 @@ export const BatchLookupPanel: React.FC = () => {
           result: byId.get(r.id)?.result ?? null,
         })),
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Batch lookup failed:', err);
       setError(err?.message || 'Batch lookup failed');
     } finally {

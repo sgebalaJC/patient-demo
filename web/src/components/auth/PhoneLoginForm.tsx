@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { Input } from '../ui/Input';
 import { sendPhoneLoginCode, verifyPhoneLogin } from '../../lib/firebase';
+import { errorMessage } from '../../lib/errors';
 import logger from '../../lib/logger';
 
 type Step = 'phone' | 'code' | 'name';
@@ -56,9 +57,9 @@ export const PhoneLoginForm: React.FC<PhoneLoginFormProps> = ({
       } else {
         setError(result.error || 'Failed to send code');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Error sending phone login code:', err);
-      setError(err.message || 'Failed to send verification code');
+      setError(errorMessage(err) || 'Failed to send verification code');
     } finally {
       setLoading(false);
     }
@@ -86,9 +87,9 @@ export const PhoneLoginForm: React.FC<PhoneLoginFormProps> = ({
       } else {
         setError(result.error || 'Verification failed');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Error verifying phone login:', err);
-      setError(err.message || 'Verification failed');
+      setError(errorMessage(err) || 'Verification failed');
     } finally {
       setLoading(false);
     }
@@ -115,8 +116,8 @@ export const PhoneLoginForm: React.FC<PhoneLoginFormProps> = ({
       setCode('');
       startCooldown();
       // Store names so they're sent with the next verification
-    } catch (err: any) {
-      setError(err.message || 'Failed to complete registration');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Failed to complete registration');
     } finally {
       setLoading(false);
     }
@@ -134,8 +135,8 @@ export const PhoneLoginForm: React.FC<PhoneLoginFormProps> = ({
       } else {
         setError(result.error || 'Failed to resend code');
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to resend code');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Failed to resend code');
     } finally {
       setLoading(false);
     }

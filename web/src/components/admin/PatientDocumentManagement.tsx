@@ -4,26 +4,21 @@ import { Button } from '../ui/Button';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { User, PatientDocument } from '../../types';
 import { documentOperations } from '../../lib/firestore';
-import { 
-  X, 
-  Download, 
-  Trash2, 
-  FileText, 
-  Image, 
+import {
+  Download,
+  Trash2,
+  FileText,
+  Image,
   File,
   Eye,
-  ZoomIn,
-  ZoomOut,
-  RotateCw,
-  ExternalLink
 } from 'lucide-react';
 import logger from '../../lib/logger';
 import { Modal } from '../ui/Modal';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { useSimulationMode } from '../../hooks/useSimulationMode';
-import { usePdfPreview } from '../../hooks/usePdfPreview';
 import { downloadFile, formatFileSize } from '../../lib/storage';
 import { formatDateTime, toDate } from '../../lib/date-helpers';
+import { DocumentPreviewModal } from '../documents/DocumentPreviewModal';
 
 interface PatientDocumentManagementProps {
   isOpen: boolean;
@@ -41,17 +36,8 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [previewDocument, setPreviewDocument] = useState<PatientDocument | null>(null);
-  const [imageZoom, setImageZoom] = useState(100);
-  const [imageRotation, setImageRotation] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const { enabled: simulated } = useSimulationMode();
-  const { url: pdfBlobUrl, loading: pdfBlobLoading, error: pdfBlobError } = usePdfPreview(
-    async () => {
-      if (!previewDocument || previewDocument.fileType !== 'application/pdf') return null;
-      return previewDocument.fileUrl;
-    },
-    [previewDocument?.id, previewDocument?.fileUrl, previewDocument?.fileType],
-  );
 
   useEffect(() => {
     if (isOpen && patient) {
@@ -93,25 +79,10 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
 
   const handleDownload = async (doc: PatientDocument) => {
     try {
-      logger.log('📥 [PatientDocumentManagement] Downloading document:', doc.id);
       await downloadFile(doc.fileUrl, doc.fileName || doc.originalFileName || 'document');
-      logger.log('✅ [PatientDocumentManagement] Download initiated');
     } catch (error) {
-      logger.error('❌ [PatientDocumentManagement] Error downloading document:', error);
+      logger.error('Error downloading document:', error);
       setActionError('Failed to download document. Please try again.');
-    }
-  };
-
-  const handleOpenInNewTab = async (doc: PatientDocument) => {
-    try {
-      const r = await fetch(doc.fileUrl);
-      const blob = await r.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      window.open(blobUrl, '_blank', 'noopener');
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-    } catch (error) {
-      logger.error('❌ [PatientDocumentManagement] Error opening document:', error);
-      setActionError('Failed to open document. Please try again.');
     }
   };
 
@@ -154,29 +125,8 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
     return fileType.startsWith('image/') || fileType === 'application/pdf';
   };
 
-  // Handle preview
   const handlePreview = (doc: PatientDocument) => {
     setPreviewDocument(doc);
-    setImageZoom(100);
-    setImageRotation(0);
-  };
-
-  const closePreview = () => {
-    setPreviewDocument(null);
-    setImageZoom(100);
-    setImageRotation(0);
-  };
-
-  const handleZoomIn = () => {
-    setImageZoom(prev => Math.min(prev + 25, 300));
-  };
-
-  const handleZoomOut = () => {
-    setImageZoom(prev => Math.max(prev - 25, 25));
-  };
-
-  const handleRotate = () => {
-    setImageRotation(prev => (prev + 90) % 360);
   };
 
   const formatDate = (timestamp: unknown): string =>
@@ -307,146 +257,12 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
           </Button>
         </div>
 
-      {/* Document Preview Modal */}
-      {previewDocument && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[60]">
-          {/* Header */}
-          <div className="absolute top-0 left-0 right-0 bg-black bg-opacity-50 backdrop-blur-sm p-4 flex items-center justify-between">
-            <div className="flex items-center space-x-3 text-white">
-              {getFileIcon(previewDocument.fileType)}
-              <div>
-                <h3 className="font-medium truncate max-w-md">
-                  {previewDocument.fileName || previewDocument.originalFileName || 'Document'}
-                </h3>
-                <p className="text-sm text-secondary-300">
-                  {formatFileSize(previewDocument.fileSize || 0)} • {previewDocument.documentType?.replace('_', ' ')}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              {/* Controls for images */}
-              {previewDocument.fileType.startsWith('image/') && (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleZoomOut}
-                    className="text-white hover:bg-white/20"
-                    title="Zoom Out"
-                  >
-                    <ZoomOut className="h-5 w-5" />
-                  </Button>
-                  <span className="text-white text-sm min-w-[60px] text-center">{imageZoom}%</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleZoomIn}
-                    className="text-white hover:bg-white/20"
-                    title="Zoom In"
-                  >
-                    <ZoomIn className="h-5 w-5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleRotate}
-                    className="text-white hover:bg-white/20"
-                    title="Rotate"
-                  >
-                    <RotateCw className="h-5 w-5" />
-                  </Button>
-                  <div className="w-px h-6 bg-white/30 mx-2" />
-                </>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleOpenInNewTab(previewDocument)}
-                className="text-white hover:bg-white/20"
-                title="Open in New Tab"
-              >
-                <ExternalLink className="h-5 w-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDownload(previewDocument)}
-                className="text-white hover:bg-white/20"
-                title="Download"
-              >
-                <Download className="h-5 w-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={closePreview}
-                className="text-white hover:bg-white/20"
-                title="Close"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Preview Content */}
-          <div className="w-full h-full pt-20 pb-4 px-4 flex items-center justify-center overflow-auto">
-            {previewDocument.fileType.startsWith('image/') ? (
-              <div className="flex items-center justify-center w-full h-full overflow-auto">
-                <img
-                  src={previewDocument.fileUrl}
-                  alt={previewDocument.fileName || 'Document preview'}
-                  className="max-w-none object-contain transition-transform duration-200"
-                  style={{
-                    transform: `scale(${imageZoom / 100}) rotate(${imageRotation}deg)`,
-                    maxHeight: imageZoom <= 100 ? '100%' : 'none',
-                    maxWidth: imageZoom <= 100 ? '100%' : 'none',
-                  }}
-                />
-              </div>
-            ) : previewDocument.fileType === 'application/pdf' ? (
-              pdfBlobLoading ? (
-                <div className="flex items-center justify-center w-full h-full text-white text-sm">
-                  Loading PDF…
-                </div>
-              ) : pdfBlobError ? (
-                <div className="flex flex-col items-center justify-center w-full h-full text-rose-200 text-sm gap-3">
-                  {pdfBlobError}
-                  <Button variant="secondary" onClick={() => handleDownload(previewDocument)}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download instead
-                  </Button>
-                </div>
-              ) : pdfBlobUrl ? (
-                <iframe
-                  src={`${pdfBlobUrl}#toolbar=1&navpanes=0`}
-                  className="w-full h-full bg-white rounded-lg"
-                  title={previewDocument.fileName || 'PDF Preview'}
-                />
-              ) : null
-            ) : (
-              <div className="text-center text-white">
-                <File className="h-24 w-24 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">Preview not available for this file type</p>
-                <Button
-                  variant="secondary"
-                  className="mt-4"
-                  onClick={() => handleDownload(previewDocument)}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download to View
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Click outside to close */}
-          <div 
-            className="absolute inset-0 -z-10" 
-            onClick={closePreview}
-          />
-        </div>
-      )}
     </Modal>
+
+    <DocumentPreviewModal
+      document={previewDocument}
+      onClose={() => setPreviewDocument(null)}
+    />
 
     <ConfirmModal
       isOpen={!!deleteConfirmId}

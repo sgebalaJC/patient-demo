@@ -13,6 +13,7 @@ import { db } from '../firebase';
 import { collections } from './base';
 import { PatientDocument, DocumentType, ApiResponse } from '../../types';
 import logger from '../logger';
+import { errorMessage } from '../errors';
 import { audit } from '../audit';
 
 // Document operations
@@ -36,9 +37,9 @@ export const documentOperations = {
       const docRef = await addDoc(collections.patientDocuments, newDocument);
       audit({ action: 'document.uploaded', resourceType: 'patient-document', resourceId: docRef.id, metadata: { patientId: documentData.patientId, documentType: documentData.documentType } });
       return { success: true, data: { id: docRef.id, ...newDocument } as PatientDocument };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error creating document:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -70,9 +71,9 @@ export const documentOperations = {
       });
 
       return { success: true, data: sortedDocuments };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting patient documents:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -87,9 +88,9 @@ export const documentOperations = {
 
       audit({ action: 'document.deleted', resourceType: 'patient-document', resourceId: documentId });
       return { success: true, data: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error deleting document:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -114,9 +115,9 @@ export const documentOperations = {
       });
 
       return { success: true, data: sortedDocuments };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting documents by type:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -141,9 +142,9 @@ export const documentOperations = {
       });
 
       return { success: true, data: sortedDocuments };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting documents by types:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -155,9 +156,9 @@ export const documentOperations = {
         return { success: true, data: result.data.length > 0 };
       }
       return { success: false, error: result.error };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error checking document type:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 
@@ -180,9 +181,9 @@ export const documentOperations = {
       }
 
       return { success: true, data: status };
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error getting required documents status:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: errorMessage(error) };
     }
   },
 };

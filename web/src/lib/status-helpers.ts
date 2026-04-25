@@ -112,6 +112,55 @@ export const getPriorityBadgeColor = (priority: ThreadPriority | 'medium'): stri
   }
 };
 
+// Patient subscription status — Stripe-mirrored shape on patient-subscriptions.
+type PatientSubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'unpaid' | 'paused';
+
+export const getPatientSubscriptionStatusBadge = (
+  status: PatientSubscriptionStatus,
+): { label: string; classes: string } => {
+  switch (status) {
+    case 'active': return { label: 'Active', classes: 'bg-green-100 text-green-700' };
+    case 'trialing': return { label: 'Trialing', classes: 'bg-blue-100 text-blue-700' };
+    case 'past_due': return { label: 'Past due', classes: 'bg-amber-100 text-amber-700' };
+    case 'canceled': return { label: 'Cancelled', classes: 'bg-secondary-100 text-secondary-600' };
+    case 'incomplete':
+    case 'incomplete_expired':
+      return { label: 'Incomplete', classes: 'bg-amber-100 text-amber-700' };
+    case 'unpaid': return { label: 'Unpaid', classes: 'bg-red-100 text-red-700' };
+    case 'paused': return { label: 'Paused', classes: 'bg-secondary-100 text-secondary-600' };
+    default: return assertNever(status);
+  }
+};
+
+// Platform subscription status — practice's payment to the platform vendor.
+type PlatformSubscriptionStatus = 'none' | 'active' | 'past_due' | 'cancelled';
+
+export const getPlatformSubscriptionStatusBadge = (
+  status: PlatformSubscriptionStatus,
+): { label: string; classes: string } => {
+  switch (status) {
+    case 'none': return { label: 'No subscription', classes: 'bg-secondary-100 text-secondary-700' };
+    case 'active': return { label: 'Active', classes: 'bg-green-100 text-green-700' };
+    case 'past_due': return { label: 'Past due', classes: 'bg-amber-100 text-amber-700' };
+    case 'cancelled': return { label: 'Cancelled', classes: 'bg-red-100 text-red-700' };
+    default: return assertNever(status);
+  }
+};
+
+// Prior-auth payer adapter status — drives the "implemented / no public policy /
+// login-gated / not implemented" chips on the policy library.
+type PolicyAdapterStatus = 'implemented' | 'no_public_policy' | 'login_gated' | 'not_implemented';
+
+export const getPolicyAdapterStatusColor = (status: PolicyAdapterStatus): string => {
+  switch (status) {
+    case 'implemented': return 'bg-green-100 text-green-700';
+    case 'no_public_policy': return 'bg-secondary-100 text-secondary-600';
+    case 'login_gated': return 'bg-yellow-100 text-yellow-800';
+    case 'not_implemented': return 'bg-yellow-100 text-yellow-800';
+    default: return assertNever(status);
+  }
+};
+
 // Priority (text-only color for dots/indicators)
 export const getPriorityTextColor = (priority: ThreadPriority): string => {
   switch (priority) {

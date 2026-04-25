@@ -11,6 +11,7 @@ import {useAuth} from '../../hooks/useAuth';
 import {Calendar, Clock, CheckCircle2, Loader} from 'lucide-react';
 import {Timestamp} from 'firebase/firestore';
 import {toDate} from '../../lib/date-helpers';
+import {errorMessage} from '../../lib/errors';
 import {httpsCallable} from 'firebase/functions';
 import {functions} from '../../lib/firebase';
 
@@ -211,8 +212,8 @@ export const AppointmentScheduler: React.FC<AppointmentSchedulerProps> = ({
             } else {
                 setError(response.error || 'Failed to schedule appointment');
             }
-        } catch (error: any) {
-            setError(error.message || 'An error occurred while scheduling the appointment');
+        } catch (error: unknown) {
+            setError(errorMessage(error) || 'An error occurred while scheduling the appointment');
         } finally {
             setLoading(false);
         }

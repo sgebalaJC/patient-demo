@@ -270,7 +270,7 @@ export const AdminSubscriptionPlansPage: React.FC = () => {
               <label className="block text-sm font-medium text-secondary-700 mb-1">Interval</label>
               <select
                 value={draft.interval}
-                onChange={(e) => setDraft({ ...draft, interval: e.target.value as any })}
+                onChange={(e) => setDraft({ ...draft, interval: e.target.value as SubscriptionPlan['interval'] })}
                 className="input w-full"
               >
                 <option value="month">Monthly</option>

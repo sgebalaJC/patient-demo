@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setImpersonating(false);
       audit({ action: 'auth.logout' });
       await firebaseSignOut();
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Error signing out:', err);
     }
   };
@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       sessionStorage.removeItem('impersonation');
       setImpersonating(false);
       await firebaseSignOut();
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Error exiting impersonation:', err);
     } finally {
       window.location.assign('/auth');
@@ -163,7 +163,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUserProfile(null);
           setLoading(false);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         logger.error('Error fetching user profile:', err);
         setUser(fbUser);
         setUserProfile(null);

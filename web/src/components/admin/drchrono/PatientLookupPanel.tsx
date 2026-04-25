@@ -103,7 +103,7 @@ export const PatientLookupPanel: React.FC = () => {
       const r = await drchrono.lookupPatient(q);
       if (cancelledRef.current) return;
       setResult(r);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (cancelledRef.current) return;
       logger.error('Patient lookup failed:', err);
       setError(err?.message || 'Lookup failed');

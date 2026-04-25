@@ -82,7 +82,7 @@ export const AdminSmsPage: React.FC = () => {
     setInjecting(true);
     try {
       await smsApi.injectInbound();
-    } catch (err: any) {
+    } catch (err: unknown) {
       void modalAlert({ tone: 'error', title: 'Inject failed', message: err?.message || String(err) });
     } finally {
       setInjecting(false);
@@ -109,7 +109,7 @@ export const AdminSmsPage: React.FC = () => {
       setComposeBody('');
       setTab('outbound');
       paged.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSendStatus({ kind: 'err', text: err?.message || 'Send failed' });
     } finally {
       setSending(false);

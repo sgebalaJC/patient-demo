@@ -6,6 +6,7 @@ import { Input } from '../ui/Input';
 import { Modal } from '../ui/Modal';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { functions } from '../../lib/firebase';
+import { audit } from '../../lib/audit';
 import { errorMessage } from '../../lib/errors';
 import { User } from '../../types';
 import logger from '../../lib/logger';
@@ -42,6 +43,7 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose,
         data: { success: boolean; error?: string };
       };
       if (result.data.success) {
+        audit({ action: 'user.deleted', resourceType: 'user', resourceId: user.id, metadata: { role: user.role } });
         reset();
         onDeleted();
       } else {

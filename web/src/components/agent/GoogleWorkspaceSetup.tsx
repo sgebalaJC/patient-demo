@@ -10,6 +10,8 @@ import {
   type GoogleAuthMode,
 } from '../../lib/google-workspace';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { safeExternalRedirect } from '../../lib/external-redirect';
+import { errorMessage } from '../../lib/errors';
 
 const SERVICE_IDS = ['gmail', 'calendar', 'drive'] as const;
 
@@ -105,9 +107,9 @@ export const GoogleWorkspaceSetup: React.FC<GoogleWorkspaceSetupProps> = ({ onSt
         throw new Error('Calendar must be enabled (reminders + sync require it)');
       }
       const url = await getGoogleWorkspaceAuthUrl(selectedServices, calendarId.trim());
-      window.location.href = url;
+      safeExternalRedirect(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start OAuth flow');
+      setError(err instanceof Error ? errorMessage(err) : 'Failed to start OAuth flow');
       setBusy(false);
     }
   }
@@ -133,7 +135,7 @@ export const GoogleWorkspaceSetup: React.FC<GoogleWorkspaceSetupProps> = ({ onSt
       setSaKeyJson('');
       await loadStatus();
       onStateChange?.();
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Callables wrap errors; surface the useful bit to the admin
       setError(err?.message || 'Failed to save service-account integration');
     } finally {
@@ -151,7 +153,7 @@ export const GoogleWorkspaceSetup: React.FC<GoogleWorkspaceSetupProps> = ({ onSt
       setSuccess('');
       onStateChange?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to disconnect');
+      setError(err instanceof Error ? errorMessage(err) : 'Failed to disconnect');
     } finally {
       setDisconnecting(false);
     }

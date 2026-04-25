@@ -14,16 +14,10 @@ import { subscriptionOperations } from '../lib/firestore/subscriptions';
 import type { SubscriptionPlan, PatientSubscription } from '../types';
 import { BRANDING } from '../config/branding';
 import { formatCurrency } from '../lib/date-helpers';
+import { safeExternalRedirect } from '../lib/external-redirect';
 import { useSupportEmail } from '../hooks/useSupportEmail';
 import { CreditCard, CheckCircle, XCircle } from 'lucide-react';
-
-const statusLabels: Record<string, { label: string; color: string }> = {
-  active: { label: 'Active', color: 'bg-green-100 text-green-700' },
-  trialing: { label: 'Trialing', color: 'bg-blue-100 text-blue-700' },
-  past_due: { label: 'Past due', color: 'bg-amber-100 text-amber-700' },
-  canceled: { label: 'Cancelled', color: 'bg-secondary-100 text-secondary-600' },
-  incomplete: { label: 'Incomplete', color: 'bg-amber-100 text-amber-700' },
-};
+import { getPatientSubscriptionStatusBadge } from '../lib/status-helpers';
 
 export const BillingPage: React.FC = () => {
   const { user, userProfile } = useAuth();
@@ -70,12 +64,12 @@ export const BillingPage: React.FC = () => {
         cancelUrl: `${origin}/billing?status=cancelled`,
       });
       if (res.data?.url) {
-        window.location.href = res.data.url;
+        safeExternalRedirect(res.data.url);
       } else {
         setError('Could not start checkout.');
       }
-    } catch (err: any) {
-      setError(err.message || 'Could not start checkout.');
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : null) || 'Could not start checkout.');
     } finally {
       setActionLoading(null);
     }
@@ -94,8 +88,8 @@ export const BillingPage: React.FC = () => {
     try {
       const cancelSubscription = httpsCallable(functions, 'cancelSubscription');
       await cancelSubscription({});
-    } catch (err: any) {
-      setError(err.message || 'Could not cancel subscription.');
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : null) || 'Could not cancel subscription.');
     } finally {
       setActionLoading(null);
     }
@@ -132,13 +126,14 @@ export const BillingPage: React.FC = () => {
                     {currentPlan.name} — {formatCurrency(currentPlan.amount, currentPlan.currency)} / {currentPlan.interval}
                   </p>
                 )}
-                <span
-                  className={`inline-block mt-2 text-xs px-2 py-1 rounded ${
-                    statusLabels[activeSub.status]?.color || 'bg-secondary-100 text-secondary-600'
-                  }`}
-                >
-                  {statusLabels[activeSub.status]?.label || activeSub.status}
-                </span>
+                {(() => {
+                  const badge = getPatientSubscriptionStatusBadge(activeSub.status);
+                  return (
+                    <span className={`inline-block mt-2 text-xs px-2 py-1 rounded ${badge.classes}`}>
+                      {badge.label}
+                    </span>
+                  );
+                })()}
                 {activeSub.cancelAtPeriodEnd && activeSub.cancelAt && (
                   <p className="text-sm text-amber-700 mt-2">
                     Will cancel on {new Date(activeSub.cancelAt * 1000).toLocaleDateString()}.

@@ -1,5 +1,5 @@
 import {initializeApp} from 'firebase/app';
-import {initializeAppCheck, ReCaptchaV3Provider} from 'firebase/app-check';
+import {initializeAppCheck, ReCaptchaV3Provider, type AppCheck} from 'firebase/app-check';
 import {
     getAuth,
     connectAuthEmulator,
@@ -17,9 +17,9 @@ import {
     updateProfile,
     User
 } from 'firebase/auth';
-import {getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, serverTimestamp} from 'firebase/firestore';
+import {getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, serverTimestamp, type FieldValue} from 'firebase/firestore';
 import {getStorage, connectStorageEmulator} from 'firebase/storage';
-import {getFunctions, connectFunctionsEmulator} from 'firebase/functions';
+import {getFunctions, connectFunctionsEmulator, type Functions} from 'firebase/functions';
 import {UserRole, User as AppUser} from '../types';
 import logger from "./logger";
 import {normalizePhoneNumber} from "./phone";
@@ -39,7 +39,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-let appCheck: any = null;
+let appCheck: AppCheck | null = null;
 
 const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
@@ -67,7 +67,7 @@ export const storage = getStorage(app);
 
 // Initialize Functions service. All functions are deployed to us-west1
 // (see `setGlobalOptions` in functions/src/index.ts).
-let functions: any = null;
+let functions: Functions | null = null;
 try {
     functions = getFunctions(app, 'us-west1');
 } catch (error) {
@@ -118,7 +118,7 @@ export const firebaseService = {
 
             const result = await createUser(userData);
             return result.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error creating user with auth:', error);
             throw error;
         }
@@ -137,7 +137,7 @@ export const firebaseService = {
 
             const result = await updateUser({uid, ...userData});
             return result.data;
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error updating user auth:', error);
             throw error;
         }
@@ -149,9 +149,9 @@ export const firebaseService = {
             const fn = httpsCallable(functions, 'setUserPassword');
             const result = await fn({uid, password});
             return result.data as { success: boolean; error?: string; message?: string };
-        } catch (error: any) {
+        } catch (error: unknown) {
             // Password intentionally not logged.
-            logger.error('Error setting user password:', { code: error.code, message: error.message });
+            logger.error('Error setting user password:', { code: errorCode(error), message: errorMessage(error) });
             throw error;
         }
     },
@@ -184,8 +184,8 @@ const createUserDocument = async (user: User, additionalData: Partial<AppUser> =
                 }
                 throw new Error('REGISTRATION_DISABLED');
             }
-        } catch (gateError: any) {
-            if (gateError.message === 'REGISTRATION_DISABLED') throw gateError;
+        } catch (gateError: unknown) {
+            if (errorMessage(gateError) === 'REGISTRATION_DISABLED') throw gateError;
             // If the settings doc read failed for any other reason, fall through —
             // we don't want a transient Firestore error to lock everyone out.
             logger.warn('Could not read app settings during registration check:', gateError);
@@ -198,8 +198,12 @@ const createUserDocument = async (user: User, additionalData: Partial<AppUser> =
     // overwrite the normalized value with raw input.
     const { phoneNumber: rawAdditionalPhone, ...additionalDataWithoutPhone } = additionalData;
 
-    // Build user data object and filter out undefined values
-    const baseUserData: any = {
+    // Build user data object and filter out undefined values. Typed loosely
+    // because writes mix concrete Firestore values with `serverTimestamp()`
+    // sentinels (FieldValue) — the User domain type only allows the resolved
+    // shape on read.
+    type UserWritePayload = Record<string, string | boolean | FieldValue | UserRole>;
+    const baseUserData: UserWritePayload = {
         email: user.email || '',
         firstName: additionalData.firstName || user.displayName?.split(' ')[0] || '',
         lastName: additionalData.lastName || user.displayName?.split(' ').slice(1).join(' ') || '',
@@ -337,7 +341,7 @@ export const resendEmailVerification = async () => {
         const {sendEmailVerification: firebaseSendEmailVerification} = await import('firebase/auth');
         await firebaseSendEmailVerification(currentUser);
         return {success: true, message: 'Email verification sent successfully'};
-    } catch (error: any) {
+    } catch (error: unknown) {
         logger.error('Error resending email verification:', error);
         throw error;
     }
@@ -362,7 +366,7 @@ export const resetPassword = async (email: string) => {
     try {
         await sendPasswordResetEmail(auth, email);
         return {success: true};
-    } catch (error: any) {
+    } catch (error: unknown) {
         logger.error('Password reset error:', error);
         throw error;
     }
@@ -416,7 +420,7 @@ export const sendLoginLink = async (email: string) => {
         window.sessionStorage.setItem('emailForSignIn', email);
 
         return {success: true};
-    } catch (error: any) {
+    } catch (error: unknown) {
         logger.error('Send login link error:', error);
         throw error;
     }
@@ -442,7 +446,7 @@ export const sendInviteLink = async (email: string) => {
         };
         await sendSignInLinkToEmail(auth, email, actionCodeSettings);
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
         logger.error('Send invite link error:', error);
         throw error;
     }
@@ -483,7 +487,7 @@ export const completeEmailLinkSignIn = async (email?: string, emailLink?: string
 
         audit({ action: isNewUser ? 'auth.signup' : 'auth.login', metadata: { method: 'email_link' } });
         return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
         logger.error('Complete email link sign-in error:', error);
         throw error;
     }

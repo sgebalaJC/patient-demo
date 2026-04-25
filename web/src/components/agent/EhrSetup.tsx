@@ -19,6 +19,7 @@ import {
 } from '../../lib/integrations/ehr-admin';
 import type { EhrProviderDef, FieldDef } from '../../lib/integrations/registry';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { safeExternalRedirect } from '../../lib/external-redirect';
 
 interface Props {
   provider: EhrProviderDef;
@@ -150,7 +151,7 @@ export const EhrSetup: React.FC<Props> = ({ provider, onStateChange }) => {
     setAuthorizing(true);
     try {
       const { url } = await getIntegrationAuthUrl(provider.id);
-      window.location.href = url;
+      safeExternalRedirect(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start OAuth flow');
       setAuthorizing(false);

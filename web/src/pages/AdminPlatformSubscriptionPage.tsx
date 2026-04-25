@@ -23,6 +23,9 @@ import { AccessDenied } from '../components/ui/AccessDenied';
 import { useAuth } from '../hooks/useAuth';
 import { isSuperAdminEmail } from '../lib/roles';
 import { usePlatformSubscription } from '../hooks/usePlatformSubscription';
+import { getPlatformSubscriptionStatusBadge } from '../lib/status-helpers';
+import { safeExternalRedirect } from '../lib/external-redirect';
+import { errorMessage } from '../lib/errors';
 import { platformStripe } from '../lib/platformStripe';
 import {
   platformOperations,
@@ -36,12 +39,7 @@ const PLAN_LABELS: Record<string, { label: string; price: string; cadence: strin
   annual: { label: 'Annual', price: '$2,999', cadence: 'per year (2 months free)' },
 };
 
-const STATUS_BADGE: Record<string, { label: string; classes: string }> = {
-  none: { label: 'No subscription', classes: 'bg-secondary-100 text-secondary-700' },
-  active: { label: 'Active', classes: 'bg-green-100 text-green-700' },
-  past_due: { label: 'Past due', classes: 'bg-amber-100 text-amber-700' },
-  cancelled: { label: 'Cancelled', classes: 'bg-red-100 text-red-700' },
-};
+// Status badge mapping moved to lib/status-helpers (centralized + exhaustive).
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -103,7 +101,7 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
     return () => unsub();
   }, []);
 
-  const statusBadge = STATUS_BADGE[subscription.status] ?? STATUS_BADGE.none;
+  const statusBadge = getPlatformSubscriptionStatusBadge(subscription.status);
   const planLabel = subscription.plan ? PLAN_LABELS[subscription.plan] : null;
 
   const handleSubscribe = async (plan: 'monthly' | 'annual') => {
@@ -111,9 +109,9 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
     setError(null);
     try {
       const url = await platformStripe.startSubscriptionCheckout(plan);
-      window.location.href = url;
-    } catch (err: any) {
-      setError(err.message || 'Could not start checkout.');
+      safeExternalRedirect(url);
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Could not start checkout.');
       setAction(null);
     }
   };
@@ -123,9 +121,9 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
     setError(null);
     try {
       const url = await platformStripe.startTopupCheckout();
-      window.location.href = url;
-    } catch (err: any) {
-      setError(err.message || 'Could not start top-up checkout.');
+      safeExternalRedirect(url);
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Could not start top-up checkout.');
       setAction(null);
     }
   };
@@ -135,9 +133,9 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
     setError(null);
     try {
       const url = await platformStripe.openBillingPortal();
-      window.location.href = url;
-    } catch (err: any) {
-      setError(err.message || 'Could not open billing portal.');
+      safeExternalRedirect(url);
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Could not open billing portal.');
       setAction(null);
     }
   };
@@ -153,7 +151,7 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
     setError(null);
     try {
       await platformStripe.cancelSubscription();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err.message || 'Could not cancel.');
     }
     setAction(null);
@@ -164,7 +162,7 @@ export const AdminPlatformSubscriptionPage: React.FC = () => {
     setError(null);
     try {
       await platformStripe.resumeSubscription();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err.message || 'Could not resume.');
     }
     setAction(null);

@@ -5,6 +5,7 @@ import { Input } from '../ui/Input';
 import { Modal } from '../ui/Modal';
 import { ErrorAlert } from '../ui/ErrorAlert';
 import { firebaseService } from '../../lib/firebase';
+import { audit } from '../../lib/audit';
 import { errorCode, errorMessage } from '../../lib/errors';
 import { FIELD_LIMITS } from '../../lib/validation';
 import { User } from '../../types';
@@ -54,6 +55,7 @@ export const SetPasswordModal: React.FC<SetPasswordModalProps> = ({ user, onClos
     try {
       const result = await firebaseService.setUserPassword(user.id, password);
       if (result?.success) {
+        audit({ action: 'user.password_set', resourceType: 'user', resourceId: user.id });
         setSaved(true);
         setPassword('');
         setConfirm('');

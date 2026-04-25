@@ -1,5 +1,6 @@
 import React, {useState, useEffect} from 'react';
 import logger from '../../lib/logger';
+import { errorMessage } from '../../lib/errors';
 import {useForm} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
 import {z} from 'zod';
@@ -8,6 +9,7 @@ import {ErrorAlert} from '../ui/ErrorAlert';
 import {User} from '../../types';
 import {Timestamp} from 'firebase/firestore';
 import {userOperations} from '../../lib/firestore';
+import {audit} from '../../lib/audit';
 import {Users, User as UserIcon, Mail, Shield, CheckCircle2, Phone, Calendar, Send, MessageSquare} from 'lucide-react';
 import { emailField, firstNameField, lastNameField, phoneField } from '../../lib/validation';
 import { Modal } from '../ui/Modal';
@@ -144,6 +146,20 @@ export const UserForm: React.FC<UserFormProps> = ({
                 const response = await userOperations.updateUser(editingUser.id, userData);
 
                 if (response.success) {
+                    // Capture role / isActive transitions for audit trail.
+                    const roleChanged = editingUser.role !== data.role;
+                    const activationChanged = editingUser.isActive !== data.isActive;
+                    if (roleChanged || activationChanged) {
+                        audit({
+                            action: 'user.privilege_changed',
+                            resourceType: 'user',
+                            resourceId: editingUser.id,
+                            metadata: {
+                                ...(roleChanged ? { fromRole: editingUser.role, toRole: data.role } : {}),
+                                ...(activationChanged ? { fromIsActive: editingUser.isActive, toIsActive: data.isActive } : {}),
+                            },
+                        });
+                    }
                     // Also update in Firebase Auth
                     try {
                         const {firebaseService} = await import('../../lib/firebase');
@@ -229,9 +245,9 @@ export const UserForm: React.FC<UserFormProps> = ({
                 onSuccess();
                 // Don't close immediately to show success message
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             logger.error('Error saving user:', error);
-            setError(error.message || 'An error occurred while saving the user');
+            setError(errorMessage(error) || 'An error occurred while saving the user');
         } finally {
             setLoading(false);
         }

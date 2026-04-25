@@ -19,12 +19,15 @@ interface ChatThreadProps {
   emptyState?: React.ReactNode;
   /** Input placeholder text. */
   inputPlaceholder?: string;
+  /** Persistent input-history key (localStorage) — scope history per chat. */
+  historyKey?: string;
 }
 
 export const ChatThread: React.FC<ChatThreadProps> = ({
   controller,
   emptyState,
   inputPlaceholder,
+  historyKey,
 }) => {
   const {
     messages,
@@ -149,6 +152,7 @@ export const ChatThread: React.FC<ChatThreadProps> = ({
         placeholder={inputPlaceholder}
         pendingFiles={pendingFiles}
         onFilesChange={setPendingFiles}
+        historyKey={historyKey}
       />
     </div>
   );

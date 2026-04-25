@@ -1,8 +1,39 @@
 const MAX = 50;
+const STORAGE_PREFIX = 'chat-input-history:';
 
 export class InputHistory {
   private items: string[] = [];
   private cursor = -1;
+  private storageKey: string | null;
+
+  constructor(storageKey?: string) {
+    this.storageKey = storageKey ? STORAGE_PREFIX + storageKey : null;
+    this.load();
+  }
+
+  private load(): void {
+    if (!this.storageKey || typeof localStorage === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(this.storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          this.items = parsed.filter((x): x is string => typeof x === 'string').slice(-MAX);
+        }
+      }
+    } catch {
+      // ignore corrupt storage
+    }
+  }
+
+  private save(): void {
+    if (!this.storageKey || typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify(this.items));
+    } catch {
+      // ignore quota errors
+    }
+  }
 
   push(text: string): void {
     const trimmed = text.trim();
@@ -11,6 +42,7 @@ export class InputHistory {
     this.items.push(trimmed);
     if (this.items.length > MAX) this.items.shift();
     this.cursor = -1;
+    this.save();
   }
 
   up(): string | null {
@@ -36,4 +68,15 @@ export class InputHistory {
   reset(): void {
     this.cursor = -1;
   }
+}
+
+const cache = new Map<string, InputHistory>();
+
+export function getInputHistory(key: string): InputHistory {
+  let h = cache.get(key);
+  if (!h) {
+    h = new InputHistory(key);
+    cache.set(key, h);
+  }
+  return h;
 }

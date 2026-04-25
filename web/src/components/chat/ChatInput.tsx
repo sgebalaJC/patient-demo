@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Send, Paperclip, X, FileText } from 'lucide-react';
-import { InputHistory } from './input-history';
+import { getInputHistory } from './input-history';
 
 const ALLOWED_TYPES = [
   'image/png', 'image/jpeg', 'image/gif', 'image/webp',
@@ -16,6 +16,8 @@ interface ChatInputProps {
   placeholder?: string;
   pendingFiles: File[];
   onFilesChange: (files: File[]) => void;
+  /** Persistent input-history key (localStorage). Defaults to 'default'. */
+  historyKey?: string;
 }
 
 const isImage = (mimeType: string) => mimeType.startsWith('image/');
@@ -31,10 +33,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   placeholder = 'Type a message...',
   pendingFiles,
   onFilesChange,
+  historyKey = 'default',
 }) => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const historyRef = useRef(new InputHistory());
+  const history = getInputHistory(historyKey);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -48,7 +51,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleSend = () => {
-    if (value.trim()) historyRef.current.push(value);
+    if (value.trim()) history.push(value);
     onSend();
     // Refocus after send so user can keep typing
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -62,7 +65,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     if (!value.trim()) {
       if (e.key === 'ArrowUp') {
-        const prev = historyRef.current.up();
+        const prev = history.up();
         if (prev !== null) {
           e.preventDefault();
           onChange(prev);
@@ -70,7 +73,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         return;
       }
       if (e.key === 'ArrowDown') {
-        const next = historyRef.current.down();
+        const next = history.down();
         e.preventDefault();
         onChange(next ?? '');
       }
@@ -124,7 +127,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ref={inputRef}
           value={value}
           onChange={(e) => {
-            historyRef.current.reset();
+            history.reset();
             onChange(e.target.value);
           }}
           onKeyDown={handleKeyDown}

@@ -83,6 +83,7 @@ export const SupportChatPage: React.FC = () => {
 
       <ChatThread
         controller={controller}
+        historyKey="support-patient"
         inputPlaceholder="Ask a question..."
         emptyState={
           <div className="flex flex-col items-center justify-center text-center px-4">

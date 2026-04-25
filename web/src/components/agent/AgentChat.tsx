@@ -30,6 +30,7 @@ export const AgentChat: React.FC = () => {
       </div>
       <ChatThread
         controller={controller}
+        historyKey="agent-admin"
         emptyState={
           <p className="text-secondary-400 text-sm">
             Send a message to start chatting with the agent.

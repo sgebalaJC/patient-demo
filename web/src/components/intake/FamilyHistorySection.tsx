@@ -82,10 +82,8 @@ export const FamilyHistorySection: React.FC<FamilyHistorySectionProps> = ({
   const onSubmit = async (data: FamilyHistoryFormData) => {
     setLoading(true);
     try {
-      const formData: FamilyHistoryForm = {
-        ...data,
-        completedAt: new Date() as any,
-      };
+      // completedAt is stamped server-side by updateIntakeFormSection.
+      const formData = { ...data } as FamilyHistoryForm;
       onComplete(formData);
     } finally {
       setLoading(false);

@@ -1,22 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Phone, Check } from 'lucide-react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { PageHeader } from '../components/ui/PageHeader';
 import { FilterTabs } from '../components/ui/FilterTabs';
 import { AdminFaxesPage } from './AdminFaxesPage';
 import { AdminSendFaxPage } from './AdminSendFaxPage';
 import { useSimulationMode } from '../hooks/useSimulationMode';
 import { faxes as faxesApi } from '../lib/integrations';
+import { subscribeSignalwireStatus } from '../lib/signalwire';
+import { formatPhoneDisplay } from '../lib/phone';
 
 function formatFaxDisplay(e164: string | undefined): string {
   if (!e164) return '—';
-  const digits = e164.replace(/\D/g, '');
-  if (digits.length === 11 && digits.startsWith('1')) {
-    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
-  }
-  return e164;
+  return formatPhoneDisplay(e164) || e164;
 }
 
 type Tab = 'inbox' | 'send';
@@ -43,12 +39,9 @@ export const AdminFaxesHubPage: React.FC<{ defaultTab?: Tab }> = ({ defaultTab =
         .catch(() => { /* keep previous */ });
       return () => { alive = false; };
     }
-    const ref = doc(db, 'integrations', 'signalwire');
-    const unsub = onSnapshot(ref, (snap) => {
-      const data = snap.data() as { faxNumber?: string } | undefined;
-      setFaxNumberE164(data?.faxNumber);
+    return subscribeSignalwireStatus((status) => {
+      setFaxNumberE164(status?.faxNumber ?? undefined);
     });
-    return unsub;
   }, [simulated]);
 
   function switchTab(next: string) {

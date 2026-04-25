@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { deleteDoc, doc, Timestamp } from 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
 import { AlertTriangle, Bug, ChevronDown, ChevronRight, Trash2, RefreshCw } from 'lucide-react';
-import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { isSuperAdminEmail } from '../lib/roles';
+import { clientErrorsOperations } from '../lib/firestore/client-errors';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -74,12 +74,8 @@ export const AdminClientErrorsPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'client-errors', id));
-      refreshAll();
-    } catch {
-      /* noop — reality of offline admin is fine */
-    }
+    await clientErrorsOperations.deleteError(id);
+    refreshAll();
   };
 
   return (

@@ -6,6 +6,7 @@ import { isAdminRole } from '../../lib/roles';
 import { formatDateTime } from '../../lib/date-helpers';
 import { formatDisplayName } from '../../lib/user-helpers';
 import { BRANDING } from '../../config/branding';
+import { FIELD_LIMITS } from '../../lib/validation';
 import {
   subscribeAdminChannel,
   sendAdminChannelMessage,
@@ -18,9 +19,15 @@ const NOTIFY_KEY = 'admin-channel-notify-asked';
 const MAX_MESSAGES = 100;
 const ORIGINAL_TITLE = typeof document !== 'undefined' ? document.title : BRANDING.shortName;
 
+type AudioCtor = typeof AudioContext;
+interface WindowWithAudio extends Window {
+  webkitAudioContext?: AudioCtor;
+}
+
 function playChime(): void {
   try {
-    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const w = window as WindowWithAudio;
+    const Ctx: AudioCtor | undefined = w.AudioContext || w.webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
     const beep = (freq: number, startOffset: number, duration: number, peak = 0.45) => {
@@ -287,7 +294,7 @@ export const AdminChannelWidget: React.FC = () => {
               }}
               placeholder="Message the admin channel — Enter to send, Shift+Enter for newline"
               rows={2}
-              maxLength={2000}
+              maxLength={FIELD_LIMITS.notes.max}
               className="flex-1 resize-none rounded-md border border-secondary-300 bg-surface-card text-secondary-900 px-3 py-2 text-sm focus:outline-none focus:border-primary-500"
             />
             <button

@@ -51,7 +51,7 @@ function parseInline(text: string): React.ReactNode[] {
       const url = match[3];
       if (isSafeImageUrl(url)) {
         nodes.push(
-          <a key={match.index} href={url} target="_blank" rel="noopener noreferrer" className="block my-1">
+          <a key={`inline-${match.index}`} href={url} target="_blank" rel="noopener noreferrer" className="block my-1">
             <img
               src={url}
               alt={alt}
@@ -63,24 +63,24 @@ function parseInline(text: string): React.ReactNode[] {
       } else {
         // Unsafe URL → fall back to a labelled link.
         nodes.push(
-          <a key={match.index} href={url} target="_blank" rel="noopener noreferrer" className="text-primary-400 underline">
+          <a key={`inline-${match.index}`} href={url} target="_blank" rel="noopener noreferrer" className="text-primary-400 underline">
             {alt || 'image'}
           </a>,
         );
       }
     } else if (match[4]) {
-      nodes.push(<strong key={match.index} className="font-semibold">{match[4]}</strong>);
+      nodes.push(<strong key={`inline-${match.index}`} className="font-semibold">{match[4]}</strong>);
     } else if (match[5]) {
-      nodes.push(<em key={match.index}>{match[5]}</em>);
+      nodes.push(<em key={`inline-${match.index}`}>{match[5]}</em>);
     } else if (match[6]) {
       nodes.push(
-        <code key={match.index} className="bg-secondary-200/60 rounded px-1 py-0.5 text-xs font-mono">
+        <code key={`inline-${match.index}`} className="bg-secondary-200/60 rounded px-1 py-0.5 text-xs font-mono">
           {match[6]}
         </code>,
       );
     } else if (match[7] && match[8]) {
       nodes.push(
-        <a key={match.index} href={match[8]} target="_blank" rel="noopener noreferrer" className="text-primary-400 underline">
+        <a key={`inline-${match.index}`} href={match[8]} target="_blank" rel="noopener noreferrer" className="text-primary-400 underline">
           {match[7]}
         </a>,
       );
@@ -110,7 +110,7 @@ function parseBlocks(content: string): React.ReactNode[] {
     if (headingMatch) {
       const level = headingMatch[1].length;
       const cls = level === 1 ? 'text-base font-semibold' : level === 2 ? 'text-sm font-semibold' : 'text-sm font-medium';
-      blocks.push(<div key={i} className={cls}>{parseInline(headingMatch[2])}</div>);
+      blocks.push(<div key={`h-${i}`} className={cls}>{parseInline(headingMatch[2])}</div>);
       i++;
       continue;
     }
@@ -120,7 +120,7 @@ function parseBlocks(content: string): React.ReactNode[] {
       const items: React.ReactNode[] = [];
       while (i < lines.length && /^\s*[-*+]\s/.test(lines[i])) {
         const text = lines[i].replace(/^\s*[-*+]\s+/, '');
-        items.push(<li key={i}>{parseInline(text)}</li>);
+        items.push(<li key={`uli-${i}`}>{parseInline(text)}</li>);
         i++;
       }
       blocks.push(<ul key={`ul-${i}`} className="list-disc pl-4 space-y-0.5">{items}</ul>);
@@ -132,7 +132,7 @@ function parseBlocks(content: string): React.ReactNode[] {
       const items: React.ReactNode[] = [];
       while (i < lines.length && /^\s*\d+[.)]\s/.test(lines[i])) {
         const text = lines[i].replace(/^\s*\d+[.)]\s+/, '');
-        items.push(<li key={i}>{parseInline(text)}</li>);
+        items.push(<li key={`oli-${i}`}>{parseInline(text)}</li>);
         i++;
       }
       blocks.push(<ol key={`ol-${i}`} className="list-decimal pl-4 space-y-0.5">{items}</ol>);
@@ -146,7 +146,7 @@ function parseBlocks(content: string): React.ReactNode[] {
     }
 
     // Regular paragraph
-    blocks.push(<p key={i} className="mb-0">{parseInline(line)}</p>);
+    blocks.push(<p key={`p-${i}`} className="mb-0">{parseInline(line)}</p>);
     i++;
   }
 

@@ -10,6 +10,7 @@ import {appointmentOperations, notificationOperations} from '../../lib/firestore
 import {useAuth} from '../../hooks/useAuth';
 import {Calendar, Clock, CheckCircle2, Loader} from 'lucide-react';
 import {Timestamp} from 'firebase/firestore';
+import {toDate} from '../../lib/date-helpers';
 import {httpsCallable} from 'firebase/functions';
 import {functions} from '../../lib/firebase';
 
@@ -113,9 +114,7 @@ export const AppointmentScheduler: React.FC<AppointmentSchedulerProps> = ({
     const populateFormForEditing = () => {
         if (!editingAppointment) return;
 
-        const appointmentDate = editingAppointment.appointmentDate instanceof Timestamp
-            ? editingAppointment.appointmentDate.toDate()
-            : new Date(editingAppointment.appointmentDate);
+        const appointmentDate = toDate(editingAppointment.appointmentDate);
 
         const dateString = appointmentDate.toISOString().split('T')[0];
         const timeString = appointmentDate.toTimeString().slice(0, 5);

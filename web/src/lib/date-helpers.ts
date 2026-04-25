@@ -12,6 +12,18 @@ export const toDate = (value: DateLike): Date => {
   return new Date(value as string | number);
 };
 
+/**
+ * Format a price stored in the smallest currency unit (cents) as a localized
+ * currency string, e.g. `formatCurrency(1500, 'usd')` → `"$15.00"`.
+ * Stripe stores everything in cents — pass the raw `amount` unchanged.
+ */
+export const formatCurrency = (cents: number, currency: string): string => {
+  return (cents / 100).toLocaleString(undefined, {
+    style: 'currency',
+    currency,
+  });
+};
+
 /** "Mar 15, 2026, 2:30 PM" */
 export const formatDateTime = (value: DateLike): string => {
   return toDate(value).toLocaleString('en-US', {

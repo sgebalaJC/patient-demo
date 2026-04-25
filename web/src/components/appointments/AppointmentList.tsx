@@ -17,9 +17,9 @@ import {
 import { PaginationBar } from '../ui/PaginationBar';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { LoadingState } from '../ui/LoadingState';
-import { Timestamp } from 'firebase/firestore';
+import type { Timestamp } from 'firebase/firestore';
 import { getAppointmentStatusColor } from '../../lib/status-helpers';
-import { formatDate, formatTime } from '../../lib/date-helpers';
+import { formatDate, formatTime, toDate } from '../../lib/date-helpers';
 import { getSpecialistLabel } from '../../config/specialists';
 import logger from "../../lib/logger";
 
@@ -117,7 +117,7 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
             title: 'Appointment Cancelled',
             message: `Patient cancelled their appointment${dateStr ? ` on ${dateStr}` : ''}`,
             meta: { patientId: user.uid, appointmentId },
-          }).catch(() => {});
+          }).catch((err) => logger.warn('Failed to notify admin of cancellation:', err));
         }
         // Refresh the appointments list
         fetchAppointments();
@@ -156,10 +156,7 @@ export const AppointmentList: React.FC<AppointmentListProps> = ({
 
 
   const isUpcoming = (appointmentDate: Timestamp | Date | string) => {
-    const date = appointmentDate instanceof Timestamp
-      ? appointmentDate.toDate()
-      : new Date(appointmentDate);
-    return date > new Date();
+    return toDate(appointmentDate) > new Date();
   };
 
   if (loading) {

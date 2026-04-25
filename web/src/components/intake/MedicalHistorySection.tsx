@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Card } from '../ui/Card';
@@ -42,8 +42,7 @@ export const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
   const {
     register,
     handleSubmit,
-    watch,
-    setValue,
+    control,
     formState: { errors },
   } = useForm<MedicalHistoryFormData>({
     resolver: zodResolver(medicalHistorySchema),
@@ -74,25 +73,20 @@ export const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
     },
   });
 
-  const watchedValues = watch();
+  // useFieldArray gives each allergy a stable RHF id, so insert/remove
+  // mid-list doesn't shift keys and corrupt the row state.
+  const { fields: allergyFields, append: appendAllergy, remove: removeAllergy } = useFieldArray({
+    control,
+    name: 'allergies',
+  });
 
-  const addAllergy = () => {
-    const current = watchedValues.allergies || [];
-    setValue('allergies', [...current, { allergen: '', reaction: '' }]);
-  };
-
-  const removeAllergy = (index: number) => {
-    const current = watchedValues.allergies || [];
-    setValue('allergies', current.filter((_, i) => i !== index));
-  };
+  const addAllergy = () => appendAllergy({ allergen: '', reaction: '' });
 
   const onSubmit = async (data: MedicalHistoryFormData) => {
     setLoading(true);
     try {
-      const formData: MedicalHistoryForm = {
-        ...data,
-        completedAt: new Date() as any,
-      };
+      // completedAt is stamped server-side by updateIntakeFormSection.
+      const formData = { ...data } as MedicalHistoryForm;
       onComplete(formData);
     } finally {
       setLoading(false);
@@ -178,8 +172,8 @@ export const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
               Add Allergy
             </Button>
           </div>
-          {watchedValues.allergies?.map((_, index) => (
-            <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 border border-secondary-200 rounded-lg">
+          {allergyFields.map((field, index) => (
+            <div key={field.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 border border-secondary-200 rounded-lg">
               <Input
                 {...register(`allergies.${index}.allergen`)}
                 label="Allergen"
@@ -207,7 +201,7 @@ export const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
               </div>
             </div>
           ))}
-          {(!watchedValues.allergies || watchedValues.allergies.length === 0) && (
+          {allergyFields.length === 0 && (
             <p className="text-secondary-500 italic">No allergies added yet</p>
           )}
         </div>

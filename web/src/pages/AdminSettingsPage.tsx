@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { Toggle } from '../components/ui/Toggle';
 import { useAuth } from '../hooks/useAuth';
 import { isAdminRole, isSuperAdminEmail } from '../lib/roles';
 import { httpsCallable } from 'firebase/functions';
@@ -233,17 +234,11 @@ export const AdminSettingsPage: React.FC = () => {
                 </p>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={appSettingsDraft.registrationEnabled}
-                onChange={(e) =>
-                  setAppSettingsDraft((d) => ({ ...d, registrationEnabled: e.target.checked }))
-                }
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-secondary-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600" />
-            </label>
+            <Toggle
+              checked={appSettingsDraft.registrationEnabled}
+              onChange={(v) => setAppSettingsDraft((d) => ({ ...d, registrationEnabled: v }))}
+              ariaLabel="Public registration"
+            />
           </div>
 
           {/* Pagination size */}
@@ -320,17 +315,11 @@ export const AdminSettingsPage: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                  <input
-                    type="checkbox"
-                    checked={appSettingsDraft.simulationMode}
-                    onChange={(e) =>
-                      setAppSettingsDraft((d) => ({ ...d, simulationMode: e.target.checked }))
-                    }
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-secondary-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600" />
-                </label>
+                <Toggle
+                  checked={appSettingsDraft.simulationMode}
+                  onChange={(v) => setAppSettingsDraft((d) => ({ ...d, simulationMode: v }))}
+                  ariaLabel="Simulation mode"
+                />
               </div>
 
               <div className="mt-3 pt-3 border-t border-secondary-200">

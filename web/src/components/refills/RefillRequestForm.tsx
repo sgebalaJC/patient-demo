@@ -10,6 +10,7 @@ import { PrescriptionRefillRequest } from '../../types';
 import { prescriptionRefillOperations, notificationOperations } from '../../lib/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { FIELD_LIMITS } from '../../lib/validation';
+import { errorMessage } from '../../lib/errors';
 import logger from "../../lib/logger";
 import { Loader } from "@googlemaps/js-api-loader";
 import { PharmacyDropdown } from './PharmacyDropdown';
@@ -227,12 +228,12 @@ export const RefillRequestForm: React.FC<RefillRequestFormProps> = ({
     setError('');
 
     try {
+      // requestedDate is stamped server-side by createRefillRequest.
       const refillData = {
         ...data,
         // Use selectedAddress if available, otherwise use form data
         pharmacyAddress: selectedAddress || data.pharmacyAddress,
         patientId,
-        requestedDate: new Date() as any,
         status: 'pending' as const,
       };
 
@@ -265,9 +266,9 @@ export const RefillRequestForm: React.FC<RefillRequestFormProps> = ({
       } else {
         setError(response.error || 'Failed to save refill request');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error saving refill request:', error);
-      setError(error.message || 'Failed to save refill request');
+      setError(errorMessage(error) || 'Failed to save refill request');
     } finally {
       setLoading(false);
     }

@@ -70,6 +70,16 @@ export function formatPhoneDisplay(phoneNumber: string | null | undefined): stri
 }
 
 /**
+ * Strip non-digit characters from a phone string. Use for partial / progressive
+ * input where `normalizePhoneNumber` would throw (e.g. typing-in-progress
+ * search boxes, raw form values that haven't been validated yet).
+ */
+export function getPhoneDigits(phone: string | null | undefined): string {
+  if (!phone) return '';
+  return String(phone).replace(/\D/g, '');
+}
+
+/**
  * Convert a canonical 10-digit phone to E.164 (`+1XXXXXXXXXX`) for
  * external APIs (SignalWire, Firebase Auth). Throws on invalid input.
  */

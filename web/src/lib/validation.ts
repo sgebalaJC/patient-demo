@@ -53,6 +53,15 @@ export const FIELD_LIMITS = {
   // Specialist requests
   specialistReason: { min: 10, max: 500 },
 
+  // Insurance
+  insuranceProvider: { max: 200 },
+  policyNumber: { max: 100 },
+  groupNumber: { max: 100 },
+  emergencyContactRelationship: { max: 100 },
+
+  // Faxes
+  coverName: { max: 120 },
+
   // General
   notes: { max: 2000 },
   description: { max: 500 },

@@ -7,6 +7,7 @@ import { Button } from '../../ui/Button';
 import { type DrChronoLookupQuery, type DrChronoLookupResult } from '../../../lib/sidecar';
 import { drchrono } from '../../../lib/integrations';
 import { UnifiedPatientCard } from './UnifiedPatientCard';
+import { getPhoneDigits } from '../../../lib/phone';
 import logger from '../../../lib/logger';
 
 /**
@@ -30,7 +31,7 @@ export function parseSearchInput(raw: string): DrChronoLookupQuery | null {
 
   if (v.includes('@')) return { email: v };
 
-  const digits = v.replace(/\D/g, '');
+  const digits = getPhoneDigits(v);
   const isPhoneLike = digits.length >= 7 && /^[\d\s\-()+]+$/.test(v);
   if (isPhoneLike) return { phone: digits };
 
@@ -74,21 +75,24 @@ export const PatientLookupPanel: React.FC = () => {
   useEffect(() => () => { cancelledRef.current = true; }, []);
 
   // Auto-run on initial load when URL carries patient params (from User Management button).
+  // Depend on the actual values, not the params object — `useSearchParams`
+  // returns a fresh URLSearchParams every render, so depending on the object
+  // would re-fire the effect on every render and re-run the lookup.
+  const urlDrchronoId = params.get('drchronoId') || '';
+  const urlFirstName = params.get('firstName') || '';
+  const urlLastName = params.get('lastName') || '';
   useEffect(() => {
-    const drchronoId = params.get('drchronoId') || '';
-    const firstName = params.get('firstName') || '';
-    const lastName = params.get('lastName') || '';
-    if (!drchronoId && !firstName && !lastName) return;
+    if (!urlDrchronoId && !urlFirstName && !urlLastName) return;
 
     const q: DrChronoLookupQuery = {};
-    if (drchronoId) q.drchronoId = drchronoId;
-    if (firstName) q.firstName = firstName;
-    if (lastName) q.lastName = lastName;
+    if (urlDrchronoId) q.drchronoId = urlDrchronoId;
+    if (urlFirstName) q.firstName = urlFirstName;
+    if (urlLastName) q.lastName = urlLastName;
 
-    setInput(drchronoId ? `#${drchronoId}` : `${firstName} ${lastName}`.trim());
+    setInput(urlDrchronoId ? `#${urlDrchronoId}` : `${urlFirstName} ${urlLastName}`.trim());
     void runLookup(q);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params]);
+  }, [urlDrchronoId, urlFirstName, urlLastName]);
 
   async function runLookup(q: DrChronoLookupQuery) {
     setQuery(q);

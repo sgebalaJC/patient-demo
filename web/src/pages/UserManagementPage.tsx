@@ -19,11 +19,9 @@ import {
     X,
     FileText,
     Trash2,
-    AlertTriangle,
     ArrowUpDown,
     ChevronUp,
     ChevronDown,
-    CheckCircle2,
     KeyRound,
     Eye,
     RefreshCw,
@@ -34,6 +32,8 @@ import { functions, auth } from '../lib/firebase';
 import { isSuperAdminEmail } from '../lib/roles';
 import { UserForm } from '../components/admin/UserForm';
 import { PatientDocumentManagement } from '../components/admin/PatientDocumentManagement';
+import { DeleteUserModal } from '../components/admin/DeleteUserModal';
+import { SetPasswordModal } from '../components/admin/SetPasswordModal';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -41,8 +41,6 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { formatPhoneDisplay } from '../lib/phone';
 import { StatusBadge } from '../components/ui/StatusBadge';
-import { Modal } from '../components/ui/Modal';
-import { ErrorAlert } from '../components/ui/ErrorAlert';
 import { formatDate } from '../lib/date-helpers';
 import { usePagedCollection } from '../hooks/usePagedCollection';
 import { useCollectionCounts } from '../hooks/useCollectionCounts';
@@ -72,21 +70,9 @@ export const UserManagementPage: React.FC = () => {
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
-  // Delete user state
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  // Modal targets — null means closed
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  // Set-password state
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordTarget, setPasswordTarget] = useState<User | null>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
-  const [passwordSaving, setPasswordSaving] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSaved, setPasswordSaved] = useState(false);
 
   const paged = usePagedCollection<User>({
     enabled: isAdminUser && !searchQuery,
@@ -223,89 +209,6 @@ export const UserManagementPage: React.FC = () => {
   const handleSearchKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSearch();
-    }
-  };
-
-  const handleDeleteUser = async () => {
-    if (!userToDelete || deleteConfirmText !== 'DELETE') return;
-
-    setDeleting(true);
-    setDeleteError(null);
-
-    try {
-      const { httpsCallable } = await import('firebase/functions');
-      const { functions } = await import('../lib/firebase');
-      const deleteAccountFn = httpsCallable(functions, 'deleteAccount');
-      const result = await deleteAccountFn({ targetUserId: userToDelete.id }) as { data: { success: boolean; error?: string } };
-
-      if (result.data.success) {
-        setShowDeleteModal(false);
-        setUserToDelete(null);
-        setDeleteConfirmText('');
-        refreshAll();
-
-      } else {
-        setDeleteError(result.data.error || 'Failed to delete user');
-      }
-    } catch (error: any) {
-      logger.error('Error deleting user:', error);
-      setDeleteError(error.message || 'Failed to delete user');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const openSetPassword = (user: User) => {
-    setPasswordTarget(user);
-    setNewPassword('');
-    setNewPasswordConfirm('');
-    setPasswordError(null);
-    setPasswordSaved(false);
-    setShowPasswordModal(true);
-  };
-
-  const closeSetPassword = () => {
-    if (passwordSaving) return;
-    setShowPasswordModal(false);
-    setPasswordTarget(null);
-    setNewPassword('');
-    setNewPasswordConfirm('');
-    setPasswordError(null);
-    setPasswordSaved(false);
-  };
-
-  const handleSetPassword = async () => {
-    if (!passwordTarget) return;
-    if (newPassword.length < 8) {
-      setPasswordError('Password must be at least 8 characters');
-      return;
-    }
-    if (newPassword.length > 128) {
-      setPasswordError('Password must be less than 128 characters');
-      return;
-    }
-    if (newPassword !== newPasswordConfirm) {
-      setPasswordError('Passwords do not match');
-      return;
-    }
-    setPasswordSaving(true);
-    setPasswordError(null);
-    try {
-      const { firebaseService } = await import('../lib/firebase');
-      const result = await firebaseService.setUserPassword(passwordTarget.id, newPassword);
-      if (result?.success) {
-        setPasswordSaved(true);
-        setNewPassword('');
-        setNewPasswordConfirm('');
-      } else {
-        setPasswordError(result?.error || 'Failed to set password');
-      }
-    } catch (err: any) {
-      // Password intentionally not logged.
-      logger.error('Set password failed:', { code: err.code, message: err.message });
-      setPasswordError(err.message || 'Failed to set password');
-    } finally {
-      setPasswordSaving(false);
     }
   };
 
@@ -503,7 +406,7 @@ export const UserManagementPage: React.FC = () => {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => openSetPassword(user)}
+                        onClick={() => setPasswordTarget(user)}
                         className="!px-2"
                         title="Set password"
                         aria-label="Set password"
@@ -513,12 +416,7 @@ export const UserManagementPage: React.FC = () => {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => {
-                          setUserToDelete(user);
-                          setShowDeleteModal(true);
-                          setDeleteConfirmText('');
-                          setDeleteError(null);
-                        }}
+                        onClick={() => setUserToDelete(user)}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50 !px-2"
                         title="Delete user"
                         aria-label="Delete user"
@@ -579,160 +477,19 @@ export const UserManagementPage: React.FC = () => {
         patient={selectedPatient}
       />
 
-      {/* Delete User Confirmation Modal */}
-      <Modal
-        isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false);
+      <DeleteUserModal
+        user={userToDelete}
+        onClose={() => setUserToDelete(null)}
+        onDeleted={() => {
           setUserToDelete(null);
-          setDeleteConfirmText('');
-          setDeleteError(null);
+          refreshAll();
         }}
-        title={`Delete User — ${userToDelete ? `${userToDelete.firstName} ${userToDelete.lastName}`.trim() : ''}`}
-        icon={<div className="bg-red-100 p-2 rounded-lg"><AlertTriangle className="h-6 w-6 text-red-600" /></div>}
-        maxWidth="max-w-md"
-      >
-        <div className="p-6 space-y-4">
-          <ErrorAlert message={deleteError} />
+      />
 
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-800 font-medium">This will permanently delete:</p>
-            <ul className="text-sm text-red-700 mt-2 space-y-1 list-disc list-inside">
-              <li>User account and profile</li>
-              <li>All messages and conversations</li>
-              <li>All uploaded documents</li>
-              <li>Appointment history</li>
-              <li>Prescription refill requests</li>
-              <li>Intake forms and medical history</li>
-            </ul>
-          </div>
-
-          {userToDelete && (
-            <div className="bg-secondary-50 rounded-lg p-3 text-sm text-secondary-700">
-              <p><strong>User:</strong> {userToDelete.firstName} {userToDelete.lastName}</p>
-              <p><strong>{userToDelete.email ? 'Email' : 'Phone'}:</strong> {userToDelete.email || userToDelete.phoneNumber}</p>
-              <p><strong>Role:</strong> {userToDelete.role}</p>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-2">
-              Type <span className="font-bold">DELETE</span> to confirm
-            </label>
-            <Input
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder="Type DELETE"
-            />
-          </div>
-
-          <div className="flex items-center justify-end space-x-3 pt-2">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => {
-                setShowDeleteModal(false);
-                setUserToDelete(null);
-                setDeleteConfirmText('');
-                setDeleteError(null);
-              }}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="md"
-              onClick={handleDeleteUser}
-              disabled={deleteConfirmText !== 'DELETE' || deleting}
-              loading={deleting}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete User
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Set Password Modal */}
-      <Modal
-        isOpen={showPasswordModal}
-        onClose={closeSetPassword}
-        title={`Set Password — ${passwordTarget ? `${passwordTarget.firstName} ${passwordTarget.lastName}`.trim() : ''}`}
-        icon={<div className="bg-primary-100 p-2 rounded-lg"><KeyRound className="h-6 w-6 text-primary-600" /></div>}
-        maxWidth="max-w-md"
-      >
-        <div className="p-6 space-y-4">
-          <ErrorAlert message={passwordError} />
-
-          {passwordSaved ? (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800 flex items-start space-x-2">
-              <CheckCircle2 className="h-5 w-5 mt-0.5 flex-shrink-0" />
-              <span>
-                Password updated. The user can now sign in with their email and the new password.
-                Share the password through a secure channel — it isn't stored or shown again.
-              </span>
-            </div>
-          ) : (
-            <>
-              <p className="text-sm text-secondary-600">
-                Set a password so this user can sign in with email + password in addition
-                to email-link / Google / phone OTP. Minimum 8 characters.
-              </p>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-2">
-                  New password
-                </label>
-                <Input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="At least 8 characters"
-                  autoComplete="new-password"
-                  disabled={passwordSaving}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary-700 mb-2">
-                  Confirm password
-                </label>
-                <Input
-                  type="password"
-                  value={newPasswordConfirm}
-                  onChange={(e) => setNewPasswordConfirm(e.target.value)}
-                  placeholder="Re-enter password"
-                  autoComplete="new-password"
-                  disabled={passwordSaving}
-                />
-              </div>
-            </>
-          )}
-
-          <div className="flex items-center justify-end space-x-3 pt-2">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={closeSetPassword}
-              disabled={passwordSaving}
-            >
-              {passwordSaved ? 'Close' : 'Cancel'}
-            </Button>
-            {!passwordSaved && (
-              <Button
-                size="md"
-                onClick={handleSetPassword}
-                loading={passwordSaving}
-                disabled={passwordSaving || newPassword.length < 8 || newPassword !== newPasswordConfirm}
-              >
-                <KeyRound className="h-4 w-4 mr-2" />
-                Set Password
-              </Button>
-            )}
-          </div>
-        </div>
-      </Modal>
+      <SetPasswordModal
+        user={passwordTarget}
+        onClose={() => setPasswordTarget(null)}
+      />
     </div>
     </AdminGuard>
   );

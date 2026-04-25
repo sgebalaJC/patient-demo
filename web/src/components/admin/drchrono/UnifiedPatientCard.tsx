@@ -23,6 +23,7 @@ import {
   getCachedPatientDetails,
   setCachedPatientDetails,
 } from '../../../lib/drchronoSessionCache';
+import { formatPhoneDisplay } from '../../../lib/phone';
 import logger from '../../../lib/logger';
 
 interface Props {
@@ -71,10 +72,7 @@ function fmtDateTime(iso: string | null): string {
 
 function fmtPhone(raw: string | null): string | null {
   if (!raw) return null;
-  const d = raw.replace(/\D/g, '');
-  if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
-  if (d.length === 11 && d.startsWith('1')) return `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`;
-  return raw;
+  return formatPhoneDisplay(raw) || raw;
 }
 
 function statusLabel(s: string | null): { label: string; tone: 'green' | 'amber' | 'red' | 'gray' } {

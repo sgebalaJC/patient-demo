@@ -5,14 +5,14 @@ import { Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, deleteObject } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import {
-  Send, Upload, X, FileText, CheckCircle2, Clock, AlertTriangle, Trash2,
+  Send, Upload, X, FileText, Trash2,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { PageHeader } from '../components/ui/PageHeader';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { EmptyState } from '../components/ui/EmptyState';
+import { FIELD_LIMITS } from '../lib/validation';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { formatDateTime } from '../lib/date-helpers';
@@ -20,44 +20,14 @@ import { normalizePhoneNumber, formatPhoneDisplay } from '../lib/phone';
 import { isAdminRole } from '../lib/roles';
 import { useSimulationMode } from '../hooks/useSimulationMode';
 import { usePagedCollection } from '../hooks/usePagedCollection';
-import { usePdfPreview } from '../hooks/usePdfPreview';
 import { faxes as faxesApi } from '../lib/integrations';
+import {
+  outboundFaxTone,
+  OUTBOUND_FAX_TONE_CLASS,
+  OUTBOUND_FAX_TONE_ICON,
+} from '../components/faxes/FaxStatusChip';
+import { OutboundFaxDrawer, type OutboundFax } from '../components/faxes/OutboundFaxDrawer';
 import { alert as modalAlert } from '../lib/modals';
-
-interface OutboundFax {
-  faxSid: string;
-  to: string;
-  from: string;
-  subject?: string | null;
-  pageCount?: number | null;
-  fileCount?: number;
-  status: string;
-  errorCode?: string | null;
-  errorMessage?: string | null;
-  submittedBy: string;
-  submittedAt?: Timestamp | null;
-  completedAt?: Timestamp | null;
-}
-
-const TERMINAL_OK = new Set(['delivered']);
-const TERMINAL_BAD = new Set(['failed', 'no-answer', 'busy', 'canceled']);
-
-function statusTone(status: string): 'pending' | 'success' | 'error' {
-  if (TERMINAL_OK.has(status)) return 'success';
-  if (TERMINAL_BAD.has(status)) return 'error';
-  return 'pending';
-}
-
-const TONE_CLASS: Record<'pending' | 'success' | 'error', string> = {
-  pending: 'bg-secondary-100 text-secondary-700 border-secondary-200',
-  success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  error: 'bg-rose-50 text-rose-700 border-rose-200',
-};
-const TONE_ICON: Record<'pending' | 'success' | 'error', React.ComponentType<{ className?: string }>> = {
-  pending: Clock,
-  success: CheckCircle2,
-  error: AlertTriangle,
-};
 
 export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { userProfile } = useAuth();
@@ -137,16 +107,18 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
 
     const batchId = crypto.randomUUID().replace(/-/g, '').slice(0, 24);
     const prefix = `admin/outbound-faxes/${batchId}/`;
-    const paths: string[] = [];
+    const paths: string[] = files.map((f, i) => {
+      const safeName = f.name.replace(/[^\w.\-]+/g, '_').slice(0, 120) || 'file.pdf';
+      return `${prefix}${String(i).padStart(2, '0')}_${safeName}`;
+    });
 
     try {
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        const safeName = f.name.replace(/[^\w.\-]+/g, '_').slice(0, 120) || 'file.pdf';
-        const path = `${prefix}${String(i).padStart(2, '0')}_${safeName}`;
-        await uploadBytes(ref(storage, path), f, { contentType: 'application/pdf' });
-        paths.push(path);
-      }
+      // Upload all attachments in parallel — one-by-one was visibly slow at 5+ files.
+      await Promise.all(
+        files.map((f, i) =>
+          uploadBytes(ref(storage, paths[i]), f, { contentType: 'application/pdf' }),
+        ),
+      );
 
       const fn = httpsCallable(functions, 'sendOutboundFax');
       const res = await fn({
@@ -163,10 +135,12 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
     } catch (err: any) {
       setSubmitError(err?.message || 'Submit failed');
       // Best-effort cleanup of any uploaded source files so we don't leak
-      // orphans when the SignalWire submit rejects.
-      for (const p of paths) {
-        try { await deleteObject(ref(storage, p)); } catch { /* ignore */ }
-      }
+      // orphans when the SignalWire submit rejects. Run in parallel.
+      await Promise.all(
+        paths.map((p) =>
+          deleteObject(ref(storage, p)).catch(() => { /* ignore */ }),
+        ),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -227,7 +201,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
             type="text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            maxLength={200}
+            maxLength={FIELD_LIMITS.messageSubject.max}
             placeholder="e.g. MRI Results for pt appointment Monday 4/20/26"
             className="input"
           />
@@ -257,7 +231,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
                 type="text"
                 value={coverTo}
                 onChange={(e) => setCoverTo(e.target.value)}
-                maxLength={120}
+                maxLength={FIELD_LIMITS.coverName.max}
                 placeholder="Brian Belnap, DO"
                 className="input"
               />
@@ -379,8 +353,8 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
               </thead>
               <tbody>
                 {recent.map((fax) => {
-                  const tone = statusTone(fax.status);
-                  const Icon = TONE_ICON[tone];
+                  const tone = outboundFaxTone(fax.status);
+                  const Icon = OUTBOUND_FAX_TONE_ICON[tone];
                   return (
                     <tr
                       key={fax.faxSid}
@@ -388,7 +362,7 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
                       className="border-b border-secondary-100 last:border-0 cursor-pointer hover:bg-secondary-50"
                     >
                       <td className="py-3 pr-4">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${TONE_CLASS[tone]}`}>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${OUTBOUND_FAX_TONE_CLASS[tone]}`}>
                           <Icon className="h-3 w-3" />
                           {fax.status}
                         </span>
@@ -457,87 +431,6 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
       {previewFax && (
         <OutboundFaxDrawer fax={previewFax} onClose={() => setPreviewFax(null)} />
       )}
-    </div>
-  );
-};
-
-// =============================================================================
-// Outbound preview drawer — fetches a signed URL for the merged PDF and
-// renders it inline alongside the submission metadata.
-// =============================================================================
-
-const OutboundFaxDrawer: React.FC<{ fax: OutboundFax; onClose: () => void }> = ({ fax, onClose }) => {
-  const { url: pdfUrl, loading, error: loadError } = usePdfPreview(
-    async () => {
-      const fn = httpsCallable(functions, 'getFaxPdfUrl');
-      const res = (await fn({ faxSid: fax.faxSid })).data as { url: string };
-      return res.url;
-    },
-    [fax.faxSid],
-  );
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex justify-end" onClick={onClose}>
-      <div
-        className="w-full max-w-3xl bg-surface-card overflow-y-auto shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sticky top-0 bg-secondary-50/95 backdrop-blur border-b border-secondary-200 px-6 py-4 z-10 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-secondary-900 truncate">
-              Fax {fax.faxSid.slice(0, 16)}…
-            </h2>
-            <p className="text-xs text-secondary-500 mt-0.5">
-              To {formatPhoneDisplay(fax.to)} • {fax.pageCount ?? '?'} pages • Status: {fax.status}
-            </p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-secondary-100 rounded-lg" aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <Card className="p-4">
-            <h3 className="text-sm font-semibold text-secondary-900 mb-2">Submission</h3>
-            <dl className="grid grid-cols-[140px_1fr] gap-y-1.5 text-sm">
-              <dt className="text-secondary-500">Subject</dt>
-              <dd className="text-secondary-900">{fax.subject || <span className="text-secondary-400">—</span>}</dd>
-              <dt className="text-secondary-500">Submitted</dt>
-              <dd className="text-secondary-900">{fax.submittedAt ? formatDateTime(fax.submittedAt.toDate()) : '—'}</dd>
-              <dt className="text-secondary-500">Completed</dt>
-              <dd className="text-secondary-900">{fax.completedAt ? formatDateTime(fax.completedAt.toDate()) : '—'}</dd>
-              <dt className="text-secondary-500">From</dt>
-              <dd className="text-secondary-900 font-mono text-xs">{fax.from || '—'}</dd>
-              <dt className="text-secondary-500">Files</dt>
-              <dd className="text-secondary-900">{fax.fileCount ?? '—'}</dd>
-              {(fax.errorCode || fax.errorMessage) && (
-                <>
-                  <dt className="text-secondary-500">Error</dt>
-                  <dd className="text-rose-600">{fax.errorMessage || `Code ${fax.errorCode}`}</dd>
-                </>
-              )}
-            </dl>
-          </Card>
-
-          <Card className="p-4">
-            <h3 className="text-sm font-semibold text-secondary-900 mb-2">Merged PDF</h3>
-            {loading && (
-              <div className="flex items-center justify-center h-[700px] text-secondary-500 text-sm gap-2 border border-secondary-200 rounded">
-                <LoadingSpinner size="md" />
-                Loading PDF…
-              </div>
-            )}
-            {!loading && loadError && (
-              <div className="flex items-center justify-center h-[700px] text-rose-600 text-sm border border-rose-200 rounded">
-                {loadError}
-              </div>
-            )}
-            {!loading && !loadError && pdfUrl && (
-              <iframe src={pdfUrl} title="Outbound fax PDF" className="w-full h-[700px] rounded border border-secondary-200" />
-            )}
-          </Card>
-        </div>
-      </div>
     </div>
   );
 };

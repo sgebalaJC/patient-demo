@@ -6,6 +6,8 @@ import { SPECIALIST_TYPES } from '../../config/specialists';
 import { specialistRequestOperations, notificationOperations } from '../../lib/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { FIELD_LIMITS } from '../../lib/validation';
+import { errorMessage } from '../../lib/errors';
+import logger from '../../lib/logger';
 
 interface SpecialistRequestModalProps {
   isOpen: boolean;
@@ -57,15 +59,15 @@ export const SpecialistRequestModal: React.FC<SpecialistRequestModalProps> = ({
             requestId: response.data?.id || '',
             specialistType,
           },
-        }).catch(() => {}); // non-blocking
+        }).catch((err) => logger.warn('Failed to notify admin of specialist request:', err));
 
         onSuccess();
         handleClose();
       } else {
         setError(response.error || 'Failed to submit request');
       }
-    } catch (err: any) {
-      setError(err.message || 'An error occurred');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'An error occurred');
     } finally {
       setLoading(false);
     }

@@ -13,6 +13,7 @@ import { isAdminRole, isSuperAdminEmail } from '../lib/roles';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { BRANDING } from '../config/branding';
 import { subscriptionOperations } from '../lib/firestore/subscriptions';
+import { formatCurrency } from '../lib/date-helpers';
 import type { SubscriptionPlan } from '../types';
 import { CreditCard, Plus, Trash2, Save } from 'lucide-react';
 import logger from '../lib/logger';
@@ -192,11 +193,7 @@ export const AdminSubscriptionPlansPage: React.FC = () => {
                     )}
                   </div>
                   <p className="text-sm text-secondary-500 mt-1">
-                    {(plan.amount / 100).toLocaleString(undefined, {
-                      style: 'currency',
-                      currency: plan.currency,
-                    })}{' '}
-                    / {plan.interval}
+                    {formatCurrency(plan.amount, plan.currency)} / {plan.interval}
                     {plan.description ? ` — ${plan.description}` : ''}
                   </p>
                   <p className="text-xs text-secondary-400 mt-1 font-mono">{plan.id}</p>

@@ -26,8 +26,14 @@ import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import { usePdfPreview } from '../hooks/usePdfPreview';
 import { faxes as faxesApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
+import {
+  FaxStatusChip,
+  FAX_STATUS_BADGE,
+  type ChipState,
+  type FaxRowStatus,
+} from '../components/faxes/FaxStatusChip';
 
-type FaxStatus = 'pending' | 'processing' | 'needs_review' | 'completed' | 'failed';
+type FaxStatus = FaxRowStatus;
 
 interface InboundFax {
   faxSid: string;
@@ -74,12 +80,6 @@ interface InboundFax {
   notes?: string;
 }
 
-type ChipState =
-  | { tone: 'pending'; label: string; detail?: string }
-  | { tone: 'success'; label: string; detail?: string }
-  | { tone: 'warning'; label: string; detail?: string }
-  | { tone: 'error';   label: string; detail?: string };
-
 function patientMatchState(fax: InboundFax): ChipState {
   if (!fax.matchedPatient) return { tone: 'pending', label: 'Not yet matched' };
   const c = fax.matchedPatient.confidence;
@@ -107,41 +107,6 @@ function drchronoUploadState(fax: InboundFax): ChipState {
   }
   return { tone: 'pending', label: 'Not yet uploaded' };
 }
-
-const CHIP_TONE: Record<ChipState['tone'], string> = {
-  pending: 'bg-secondary-500/10 text-secondary-600 dark:text-secondary-400 border-secondary-500/30',
-  success: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
-  warning: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
-  error:   'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30',
-};
-const CHIP_ICON: Record<ChipState['tone'], any> = {
-  pending: Clock,
-  success: CheckCircle2,
-  warning: AlertTriangle,
-  error: X,
-};
-
-const StatusChip: React.FC<{ label: string; state: ChipState }> = ({ label, state }) => {
-  const Icon = CHIP_ICON[state.tone];
-  return (
-    <div className={`rounded-lg border px-3 py-2 ${CHIP_TONE[state.tone]}`}>
-      <div className="text-[11px] uppercase tracking-wide opacity-70">{label}</div>
-      <div className="flex items-center gap-2 mt-1">
-        <Icon className="w-4 h-4 flex-shrink-0" />
-        <div className="font-medium text-sm">{state.label}</div>
-      </div>
-      {state.detail && <div className="text-xs opacity-80 mt-0.5 ml-6">{state.detail}</div>}
-    </div>
-  );
-};
-
-const STATUS_BADGE: Record<FaxStatus, { label: string; className: string; icon: any }> = {
-  pending: { label: 'Pending', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30', icon: Clock },
-  processing: { label: 'Processing', className: 'bg-primary-500/15 text-primary-700 dark:text-primary-300 border-primary-500/30', icon: Loader2 },
-  needs_review: { label: 'Needs Review', className: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30', icon: AlertTriangle },
-  completed: { label: 'Completed', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30', icon: CheckCircle2 },
-  failed: { label: 'Failed', className: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30', icon: X },
-};
 
 export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user, userProfile, loading: authLoading } = useAuth();
@@ -291,7 +256,7 @@ export const AdminFaxesPage: React.FC<{ embedded?: boolean }> = ({ embedded = fa
               </thead>
               <tbody className="divide-y divide-secondary-200/60">
                 {faxes.map((f) => {
-                  const badge = STATUS_BADGE[f.status];
+                  const badge = FAX_STATUS_BADGE[f.status];
                   const Icon = badge.icon;
                   return (
                     <tr
@@ -536,7 +501,7 @@ Write results back via PATCH /admin-api/faxes/${fax.faxSid}. Include: \`extracte
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-secondary-900 truncate">Fax {fax.faxSid.slice(0, 16)}…</h2>
               <p className="text-xs text-secondary-500 mt-0.5">
-                From {fax.from || '—'} • {fax.pageCount || '?'} pages • Status: {STATUS_BADGE[fax.status].label}
+                From {fax.from || '—'} • {fax.pageCount || '?'} pages • Status: {FAX_STATUS_BADGE[fax.status].label}
               </p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
@@ -634,11 +599,11 @@ Write results back via PATCH /admin-api/faxes/${fax.faxSid}. Include: \`extracte
           <Card className="p-4">
             <h3 className="text-sm font-semibold text-secondary-800 mb-3">Processing Status</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <StatusChip
+              <FaxStatusChip
                 label="Patient match"
                 state={patientMatchState(fax)}
               />
-              <StatusChip
+              <FaxStatusChip
                 label="DrChrono document"
                 state={drchronoUploadState(fax)}
               />

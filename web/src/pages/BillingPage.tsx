@@ -13,6 +13,7 @@ import { useAuth } from '../hooks/useAuth';
 import { subscriptionOperations } from '../lib/firestore/subscriptions';
 import type { SubscriptionPlan, PatientSubscription } from '../types';
 import { BRANDING } from '../config/branding';
+import { formatCurrency } from '../lib/date-helpers';
 import { useSupportEmail } from '../hooks/useSupportEmail';
 import { CreditCard, CheckCircle, XCircle } from 'lucide-react';
 
@@ -128,12 +129,7 @@ export const BillingPage: React.FC = () => {
                 <h3 className="text-lg font-semibold text-secondary-900">Current membership</h3>
                 {currentPlan && (
                   <p className="text-sm text-secondary-500 mt-1">
-                    {currentPlan.name} —{' '}
-                    {(currentPlan.amount / 100).toLocaleString(undefined, {
-                      style: 'currency',
-                      currency: currentPlan.currency,
-                    })}{' '}
-                    / {currentPlan.interval}
+                    {currentPlan.name} — {formatCurrency(currentPlan.amount, currentPlan.currency)} / {currentPlan.interval}
                   </p>
                 )}
                 <span
@@ -199,10 +195,7 @@ export const BillingPage: React.FC = () => {
                     )}
                     <div className="my-4">
                       <span className="text-3xl font-bold text-secondary-900">
-                        {(plan.amount / 100).toLocaleString(undefined, {
-                          style: 'currency',
-                          currency: plan.currency,
-                        })}
+                        {formatCurrency(plan.amount, plan.currency)}
                       </span>
                       <span className="text-secondary-500 text-sm"> / {plan.interval}</span>
                     </div>

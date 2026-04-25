@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/Card';
 import { PatientInfoSection } from '../components/intake/PatientInfoSection';
@@ -58,6 +58,18 @@ export const IntakePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [savingSection, setSavingSection] = useState(false);
 
+  // Track unmount + outstanding setTimeouts so the post-save delay handler
+  // doesn't fire setState/Firestore writes after the user navigates away.
+  const mountedRef = useRef(true);
+  const sectionAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (sectionAdvanceTimer.current) clearTimeout(sectionAdvanceTimer.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (user && (userProfile?.role === 'patient' || isAdminRole(userProfile?.role))) {
       fetchOrCreateIntakeForm();
@@ -110,9 +122,14 @@ export const IntakePage: React.FC = () => {
       // Update the form with the completed section
       await intakeFormOperations.updateIntakeFormSection(intakeForm.id, fieldName, sectionData as Record<string, unknown>);
 
-      // Wait a moment for Firestore to update, then refresh
-      setTimeout(async () => {
+      // Wait a moment for Firestore to update, then refresh. Track the
+      // timer so the unmount cleanup can clear it; bail inside the callback
+      // if the page unmounted during the 500ms wait.
+      sectionAdvanceTimer.current = setTimeout(async () => {
+        sectionAdvanceTimer.current = null;
+        if (!mountedRef.current) return;
         await fetchOrCreateIntakeForm();
+        if (!mountedRef.current) return;
 
         // Move to next section after data is refreshed
         const currentIndex = formSections.findIndex(s => s.id === sectionId);

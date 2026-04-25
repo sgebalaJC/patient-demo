@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { collections, mapDocStrict } from './base';
+import { audit } from '../audit';
 
 // In simulation mode, prior-auth seed data lives at simulation/native/prior-auths.
 // Resolve the right collection ref so the detail page subscribes to the same
@@ -63,6 +64,7 @@ export async function appendNote(
     }),
     updatedAt: serverTimestamp(),
   });
+  audit({ action: 'prior_auth.note_added', resourceType: 'prior-auth', resourceId: paId, metadata: { authorId } });
 }
 
 export async function updateChecklist(
@@ -74,6 +76,7 @@ export async function updateChecklist(
     criteriaChecklist: checklist,
     updatedAt: serverTimestamp(),
   });
+  audit({ action: 'prior_auth.checklist_updated', resourceType: 'prior-auth', resourceId: paId });
 }
 
 // Policies library — list + per-policy snapshots -----------------------------

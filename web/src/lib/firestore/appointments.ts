@@ -14,6 +14,7 @@ import { collections, mapDocStrict } from './base';
 import { Appointment, ApiResponse } from '../../types';
 import logger from "../logger";
 import { errorMessage } from '../errors';
+import { audit } from '../audit';
 
 const APPOINTMENT_REQUIRED_KEYS: ReadonlyArray<keyof Appointment> = ['patientId', 'appointmentDate', 'status'];
 
@@ -35,6 +36,16 @@ export const appointmentOperations = {
             };
 
             const docRef = await addDoc(collections.appointments, newAppointment);
+            audit({
+                action: 'appointment.created',
+                resourceType: 'appointment',
+                resourceId: docRef.id,
+                metadata: {
+                    patientId: appointmentData.patientId,
+                    appointmentType: appointmentData.appointmentType,
+                    isSpecialistReferral: !!appointmentData.isSpecialistReferral,
+                },
+            });
             return { success: true, data: { id: docRef.id, ...newAppointment } as Appointment };
         } catch (error: unknown) {
             logger.error('Error creating appointment:', error);
@@ -146,6 +157,12 @@ export const appointmentOperations = {
             if (!mapped) {
                 return { success: false, error: 'Appointment updated but could not be re-read' };
             }
+            audit({
+                action: 'appointment.updated',
+                resourceType: 'appointment',
+                resourceId: appointmentId,
+                metadata: { changedFields: Object.keys(updates) },
+            });
             return { success: true, data: { ...mapped, id: appointmentId } };
         } catch (error: unknown) {
             logger.error('Error updating appointment:', error);

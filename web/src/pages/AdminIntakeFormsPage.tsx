@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useSimulationMode } from '../hooks/useSimulationMode';
+import { useFeatures } from '../hooks/useFeatures';
 import { isAdminRole } from '../lib/roles';
 import { intakeFormOperations, prescriptionRefillOperations } from '../lib/firestore';
 import { PatientIntakeForm } from '../types';
@@ -42,6 +43,7 @@ const SECTION_LABELS: Record<string, string> = {
 export const AdminIntakeFormsPage: React.FC = () => {
   const { user, userProfile } = useAuth();
   const { enabled: simulated } = useSimulationMode();
+  const { features } = useFeatures();
   const isAdminUser = !!user && isAdminRole(userProfile?.role);
   const [patientNames, setPatientNames] = useState<Record<string, { firstName: string; lastName: string }>>({});
   const [filter, setFilter] = useState<'all' | 'completed' | 'in_progress' | 'approved'>('all');
@@ -144,6 +146,23 @@ export const AdminIntakeFormsPage: React.FC = () => {
       default: return status;
     }
   };
+
+  // Honor the same feature flag the sidebar uses — without this, an admin
+  // could deeplink to /admin/intake-forms even when the practice has the
+  // feature off in fork.config.ts / branding.
+  if (!features.patientIntake) {
+    return (
+      <AdminGuard>
+        <div className="space-y-6">
+          <EmptyState
+            icon={FileText}
+            title="Intake forms are disabled"
+            description="Enable the patientIntake feature to use this page."
+          />
+        </div>
+      </AdminGuard>
+    );
+  }
 
   return (
     <AdminGuard>

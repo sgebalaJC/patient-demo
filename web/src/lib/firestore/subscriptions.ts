@@ -19,6 +19,7 @@ import type {
 } from '../../types';
 import logger from '../logger';
 import { errorMessage } from '../errors';
+import { audit } from '../audit';
 
 export const subscriptionOperations = {
   /** List all subscription plans (admin view includes inactive). */
@@ -63,6 +64,12 @@ export const subscriptionOperations = {
         payload.createdAt = serverTimestamp();
       }
       await setDoc(ref, payload, { merge: true });
+      audit({
+        action: existing.exists() ? 'subscription_plan.updated' : 'subscription_plan.created',
+        resourceType: 'subscription-plan',
+        resourceId: plan.id,
+        metadata: { active: plan.active, amount: plan.amount, interval: plan.interval },
+      });
       return { success: true };
     } catch (error: unknown) {
       logger.error('Error upserting subscription plan:', error);
@@ -73,6 +80,7 @@ export const subscriptionOperations = {
   async deletePlan(priceId: string): Promise<ApiResponse<void>> {
     try {
       await deleteDoc(doc(collections.subscriptionPlans, priceId));
+      audit({ action: 'subscription_plan.deleted', resourceType: 'subscription-plan', resourceId: priceId });
       return { success: true };
     } catch (error: unknown) {
       logger.error('Error deleting subscription plan:', error);

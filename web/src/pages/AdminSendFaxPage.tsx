@@ -30,7 +30,7 @@ import { OutboundFaxDrawer, type OutboundFax } from '../components/faxes/Outboun
 import { alert as modalAlert } from '../lib/modals';
 
 export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
   const isAdmin = isAdminRole(userProfile?.role);
   const { enabled: simulated } = useSimulationMode();
 
@@ -106,7 +106,11 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
     }
 
     const batchId = crypto.randomUUID().replace(/-/g, '').slice(0, 24);
-    const prefix = `admin/outbound-faxes/${batchId}/`;
+    // Per-admin path so one admin can't read/overwrite another admin's
+    // batch by guessing the (random UUID) batchId. Storage rules can then
+    // gate on `request.auth.uid == path.adminId`.
+    const adminId = user?.uid || 'unknown';
+    const prefix = `admin/${adminId}/outbound-faxes/${batchId}/`;
     const paths: string[] = files.map((f, i) => {
       const safeName = f.name.replace(/[^\w.\-]+/g, '_').slice(0, 120) || 'file.pdf';
       return `${prefix}${String(i).padStart(2, '0')}_${safeName}`;

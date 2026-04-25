@@ -3,6 +3,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
 import { useSimulationMode } from '../hooks/useSimulationMode';
+import { useFeatures } from '../hooks/useFeatures';
 import { isAdminRole } from '../lib/roles';
 import {
     appointmentOperations,
@@ -18,6 +19,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { StatsGrid } from '../components/ui/StatsGrid';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
+import { EmptyState } from '../components/ui/EmptyState';
 import {
     AdminAppointmentRow,
     type AdminAppointmentRowData,
@@ -30,6 +32,7 @@ import logger from '../lib/logger';
 export const AdminAppointmentsPage: React.FC = () => {
     const { user, userProfile } = useAuth();
     const { enabled: simulated } = useSimulationMode();
+    const { features } = useFeatures();
     const isAdminUser = !!user && isAdminRole(userProfile?.role);
     const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'today'>('upcoming');
     const [patientNames, setPatientNames] = useState<Record<string, { firstName: string; lastName: string }>>({});
@@ -211,6 +214,22 @@ export const AdminAppointmentsPage: React.FC = () => {
 
     if (loading && paged.rows.length === 0 && paged.page === 1) {
         return <AdminGuard><LoadingSpinner /></AdminGuard>;
+    }
+
+    // Honor the same feature flag the sidebar uses — without this, a deeplink
+    // to /admin/appointments would bypass the flag.
+    if (!features.appointments) {
+        return (
+            <AdminGuard>
+                <div className="space-y-6">
+                    <EmptyState
+                        icon={Calendar}
+                        title="Appointments are disabled"
+                        description="Enable the appointments feature to use this page."
+                    />
+                </div>
+            </AdminGuard>
+        );
     }
 
     return (

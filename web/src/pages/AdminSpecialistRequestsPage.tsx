@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
@@ -6,22 +6,15 @@ import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
 import {
   specialistRequestOperations,
-  appointmentOperations,
-  notificationOperations,
   prescriptionRefillOperations,
 } from '../lib/firestore';
 import { SpecialistRequest } from '../types';
-import { Timestamp } from 'firebase/firestore';
-import { Modal } from '../components/ui/Modal';
 import {
   Stethoscope,
   Clock,
   User,
   CheckCircle,
   XCircle,
-  MapPin,
-  Calendar,
-  FileText,
   RefreshCw,
 } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -33,15 +26,14 @@ import { PaginationBar } from '../components/ui/PaginationBar';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { getSpecialistLabel } from '../config/specialists';
-import { BUSINESS } from '../config/branding';
-import { FIELD_LIMITS } from '../lib/validation';
 import { formatDate } from '../lib/date-helpers';
 import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
 import { useCollectionCounts } from '../hooks/useCollectionCounts';
 import logger from '../lib/logger';
-import { Loader as MapsLoader } from '@googlemaps/js-api-loader';
-
-type RequestWithPatient = SpecialistRequest & { patientName: string };
+import {
+  ConfirmSpecialistAppointmentModal,
+  type RequestWithPatient,
+} from '../components/appointments/ConfirmSpecialistAppointmentModal';
 
 export const AdminSpecialistRequestsPage: React.FC = () => {
   const { user, userProfile } = useAuth();
@@ -50,22 +42,11 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('pending');
   const [patientNames, setPatientNames] = useState<Record<string, { firstName: string; lastName: string }>>({});
 
-  // Confirm modal
+  // Confirm modal target — null means closed. Form state, Google Places
+  // wiring, and the create-appointment Firestore writes live inside the
+  // modal component.
   const [confirmingRequest, setConfirmingRequest] = useState<RequestWithPatient | null>(null);
-  const [confirmForm, setConfirmForm] = useState({
-    appointmentDate: '',
-    appointmentTime: '',
-    duration: 30,
-    notes: '',
-    address: '',
-  });
-  const [confirming, setConfirming] = useState(false);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
-
-  // Google Places autocomplete
-  const addressInputRef = useRef<HTMLInputElement | null>(null);
-  const autocompleteRef = useRef<google.maps.places.BasicPlaceAutocompleteElement | null>(null);
-  const [useBusinessAddress, setUseBusinessAddress] = useState(false);
 
   const whereClauses = useMemo<WhereClause[] | undefined>(
     () => (filter === 'all' ? undefined : [['status', '==', filter]]),
@@ -115,153 +96,6 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
 
   const refreshAll = () => { paged.refresh(); refreshCounts(); };
 
-  // Initialize Google Places when confirm modal opens
-  useEffect(() => {
-    if (!confirmingRequest || !addressInputRef.current || useBusinessAddress) return;
-
-    const loader = new MapsLoader({
-      apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-      libraries: ['places'],
-      version: 'weekly',
-    });
-
-    let mounted = true;
-
-    const init = async () => {
-      try {
-        await loader.load();
-        const { BasicPlaceAutocompleteElement } = await google.maps.importLibrary('places') as google.maps.PlacesLibrary;
-        if (!mounted || !addressInputRef.current) return;
-
-        const el = new BasicPlaceAutocompleteElement();
-        el.includedPrimaryTypes = ['street_address', 'route', 'premise', 'establishment'];
-        el.requestedLanguage = 'en';
-
-        const originalInput = addressInputRef.current;
-        const computed = window.getComputedStyle(originalInput);
-
-        const style = document.createElement('style');
-        style.textContent = `
-          gmp-basic-place-autocomplete {
-            width: 100% !important;
-            color-scheme: light !important;
-            height: ${computed.height} !important;
-            padding: 0px !important;
-            border: ${computed.border} !important;
-            border-radius: ${computed.borderRadius} !important;
-            font-size: ${computed.fontSize} !important;
-            background-color: ${computed.backgroundColor} !important;
-            box-sizing: ${computed.boxSizing} !important;
-            outline: none !important;
-          }
-        `;
-        document.head.appendChild(style);
-
-        // Hide the React input instead of replacing it (replaceChild crashes React)
-        originalInput.style.display = 'none';
-        originalInput.parentNode?.insertBefore(el, originalInput.nextSibling);
-        autocompleteRef.current = el;
-
-        // Prevent suggestions from navigating (they render as <a> tags inside shadow DOM)
-        el.addEventListener('click', (e: Event) => {
-          const path = e.composedPath();
-          if (path.some((node) => (node as HTMLElement).tagName === 'A')) {
-            e.preventDefault();
-          }
-        }, true);
-
-        el.addEventListener('gmp-select', async (event) => {
-          const place = event.place;
-          if (!place.id) return;
-          try {
-            const { Place } = await google.maps.importLibrary('places') as google.maps.PlacesLibrary;
-            const p = new Place({ id: place.id, requestedLanguage: 'en' });
-            await p.fetchFields({ fields: ['formattedAddress'] });
-            if (p.formattedAddress) {
-              setConfirmForm(f => ({ ...f, address: p.formattedAddress! }));
-            }
-          } catch (err) {
-            logger.error('Error fetching place details:', err);
-          }
-        });
-      } catch (err) {
-        logger.error('Error initializing Google Places:', err);
-      }
-    };
-
-    init();
-
-    return () => {
-      mounted = false;
-      if (autocompleteRef.current) {
-        autocompleteRef.current.remove();
-        autocompleteRef.current = null;
-      }
-      // Restore the hidden React input
-      if (addressInputRef.current) {
-        addressInputRef.current.style.display = '';
-      }
-    };
-  }, [confirmingRequest, useBusinessAddress]);
-
-  const openConfirmModal = (request: RequestWithPatient) => {
-    setConfirmingRequest(request);
-    setConfirmForm({ appointmentDate: '', appointmentTime: '', duration: 30, notes: '', address: '' });
-    setUseBusinessAddress(false);
-  };
-
-  const handleConfirm = async () => {
-    if (!confirmingRequest || !confirmForm.appointmentDate || !confirmForm.appointmentTime || !user) return;
-    setConfirming(true);
-    try {
-      const dateTime = new Date(`${confirmForm.appointmentDate}T${confirmForm.appointmentTime}`);
-
-      // Create the appointment (confirmed, bypasses availability check)
-      const appointmentRes = await appointmentOperations.createAppointment({
-        patientId: confirmingRequest.patientId,
-        appointmentDate: Timestamp.fromDate(dateTime),
-        duration: confirmForm.duration,
-        status: 'confirmed',
-        specialistType: confirmingRequest.specialistType,
-        isSpecialistReferral: true,
-        specialistRequestId: confirmingRequest.id,
-        reminderSent: false,
-        ...(confirmForm.notes ? { notes: confirmForm.notes } : {}),
-        ...(confirmForm.address ? { address: confirmForm.address } : {}),
-      });
-
-      if (appointmentRes.success && appointmentRes.data) {
-        // Update the specialist request
-        await specialistRequestOperations.updateRequest(confirmingRequest.id, {
-          status: 'confirmed',
-          appointmentId: appointmentRes.data.id,
-          confirmedBy: user.uid,
-          confirmedAt: Timestamp.now(),
-        });
-
-        // Notify the patient
-        const label = getSpecialistLabel(confirmingRequest.specialistType);
-        const fmtDate = dateTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-        const fmtTime = dateTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-        notificationOperations.createNotification({
-          recipientRole: 'patient',
-          recipientId: confirmingRequest.patientId,
-          type: 'appointment_confirmed',
-          title: `${label} Appointment Confirmed`,
-          message: `Your ${label} appointment is scheduled for ${fmtDate} at ${fmtTime}${confirmForm.address ? ` at ${confirmForm.address}` : ''}.`,
-          meta: { appointmentId: appointmentRes.data.id },
-        }).catch(() => {});
-
-        setConfirmingRequest(null);
-        refreshAll();
-      }
-    } catch (error) {
-      logger.error('Error confirming specialist request:', error);
-    } finally {
-      setConfirming(false);
-    }
-  };
 
   const handleCancel = async (requestId: string, _reason?: string) => {
     try {
@@ -385,7 +219,7 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
                           <div className="flex flex-col space-y-1">
                             <Button
                               size="sm"
-                              onClick={() => openConfirmModal(request)}
+                              onClick={() => setConfirmingRequest(request)}
                               className="text-xs bg-green-600 hover:bg-green-700 text-white"
                             >
                               <CheckCircle className="h-3 w-3 mr-1" />
@@ -422,160 +256,12 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Confirm Specialist Appointment Modal */}
-      <Modal
-        isOpen={!!confirmingRequest}
+
+      <ConfirmSpecialistAppointmentModal
+        request={confirmingRequest}
         onClose={() => setConfirmingRequest(null)}
-        title="Confirm Specialist Appointment"
-        icon={<div className="bg-green-100 p-2 rounded-lg"><Stethoscope className="h-6 w-6 text-green-600" /></div>}
-        maxWidth="max-w-lg"
-      >
-        {confirmingRequest && (
-          <div className="p-6 space-y-5">
-            {/* Request info */}
-            <div className="p-3 bg-primary-50 rounded-lg border border-primary-200">
-              <p className="text-sm font-medium text-primary-700">
-                {confirmingRequest.patientName} — {getSpecialistLabel(confirmingRequest.specialistType)}
-              </p>
-              {confirmingRequest.reason && (
-                <p className="text-sm text-primary-700 mt-1"><span className="font-medium">Reason:</span> {confirmingRequest.reason}</p>
-              )}
-              {confirmingRequest.notes && (
-                <p className="text-sm text-primary-700 mt-1">{confirmingRequest.notes}</p>
-              )}
-            </div>
-
-            {/* Date */}
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-1">
-                <Calendar className="inline h-4 w-4 mr-1" />
-                Date *
-              </label>
-              <input
-                type="date"
-                value={confirmForm.appointmentDate}
-                onChange={(e) => setConfirmForm(f => ({ ...f, appointmentDate: e.target.value }))}
-                className="input w-full"
-              />
-            </div>
-
-            {/* Time */}
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-1">
-                <Clock className="inline h-4 w-4 mr-1" />
-                Time *
-              </label>
-              <input
-                type="time"
-                value={confirmForm.appointmentTime}
-                onChange={(e) => setConfirmForm(f => ({ ...f, appointmentTime: e.target.value }))}
-                className="input w-full"
-              />
-            </div>
-
-            {/* Duration */}
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-1">
-                <Clock className="inline h-4 w-4 mr-1" />
-                Duration
-              </label>
-              <select
-                value={confirmForm.duration}
-                onChange={(e) => setConfirmForm(f => ({ ...f, duration: Number(e.target.value) }))}
-                className="input w-full"
-              >
-                <option value={15}>15 minutes</option>
-                <option value={30}>30 minutes</option>
-                <option value={45}>45 minutes</option>
-                <option value={60}>60 minutes</option>
-                <option value={90}>90 minutes</option>
-              </select>
-            </div>
-
-            {/* Address */}
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-1">
-                <MapPin className="inline h-4 w-4 mr-1" />
-                Address
-              </label>
-              <div className="flex items-center space-x-2 mb-2">
-                <label className="flex items-center text-sm text-secondary-600 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useBusinessAddress}
-                    onChange={(e) => {
-                      setUseBusinessAddress(e.target.checked);
-                      if (e.target.checked) {
-                        setConfirmForm(f => ({ ...f, address: BUSINESS.address.full }));
-                      } else {
-                        setConfirmForm(f => ({ ...f, address: '' }));
-                      }
-                    }}
-                    className="mr-2 rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  Use practice office address
-                </label>
-              </div>
-              {useBusinessAddress ? (
-                <p className="input w-full bg-secondary-50 text-secondary-700 flex items-center">
-                  {BUSINESS.address.full}
-                </p>
-              ) : confirmForm.address ? (
-                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <MapPin className="h-4 w-4 text-green-600 flex-shrink-0" />
-                  <span className="text-sm text-green-800 flex-1">{confirmForm.address}</span>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmForm(f => ({ ...f, address: '' }))}
-                    className="text-green-500 hover:text-red-500 flex-shrink-0"
-                    title="Clear address"
-                  >
-                    <XCircle className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <input
-                  ref={addressInputRef}
-                  type="text"
-                  value={confirmForm.address}
-                  onChange={(e) => setConfirmForm(f => ({ ...f, address: e.target.value }))}
-                  placeholder="Search for an address..."
-                  className="input w-full"
-                />
-              )}
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-1">
-                <FileText className="inline h-4 w-4 mr-1" />
-                Appointment Details
-              </label>
-              <textarea
-                value={confirmForm.notes}
-                onChange={(e) => setConfirmForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="e.g., Bring referral paperwork, insurance card..."
-                rows={3}
-                maxLength={FIELD_LIMITS.notes.max}
-                className="input w-full"
-              />
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-2">
-              <Button variant="secondary" onClick={() => setConfirmingRequest(null)}>Cancel</Button>
-              <Button
-                onClick={handleConfirm}
-                loading={confirming}
-                disabled={!confirmForm.appointmentDate || !confirmForm.appointmentTime}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Confirm Appointment
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        onConfirmed={refreshAll}
+      />
 
       <ConfirmModal
         isOpen={!!cancelConfirmId}

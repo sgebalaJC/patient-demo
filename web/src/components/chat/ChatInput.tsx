@@ -51,6 +51,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleSend = () => {
+    // eslint-disable-next-line no-console
+    console.log('[ChatInput] handleSend ENTER', { historyKey, value: JSON.stringify(value), trimmed: value.trim() });
     if (value.trim()) {
       history.push(value);
       // eslint-disable-next-line no-console
@@ -73,6 +75,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       });
     }
     if (e.key === 'Enter' && !e.shiftKey) {
+      // eslint-disable-next-line no-console
+      console.log('[ChatInput] Enter pressed', { sending, value: JSON.stringify(value) });
       e.preventDefault();
       if (!sending) handleSend();
       return;
@@ -145,6 +149,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ref={inputRef}
           value={value}
           onChange={(e) => {
+            // eslint-disable-next-line no-console
+            console.log('[ChatInput] textarea onChange', JSON.stringify(e.target.value));
             history.reset();
             onChange(e.target.value);
           }}

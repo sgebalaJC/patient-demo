@@ -10,6 +10,9 @@ class TutorialStep {
   final IconData icon;
   final Color iconColor;
   final Color iconBg;
+  /// Tab index for "Try It" — null for steps without a corresponding tab
+  /// (welcome stays on home; intake/support open dedicated screens).
+  final int? tabIndex;
 
   const TutorialStep({
     required this.id,
@@ -18,6 +21,7 @@ class TutorialStep {
     required this.icon,
     required this.iconColor,
     required this.iconBg,
+    this.tabIndex,
   });
 }
 
@@ -39,6 +43,7 @@ final _steps = [
     icon: Icons.calendar_today_outlined,
     iconColor: Color(0xFF2563EB),
     iconBg: Color(0xFFDBEAFE),
+    tabIndex: 1,
   ),
   const TutorialStep(
     id: 'messages',
@@ -48,6 +53,7 @@ final _steps = [
     icon: Icons.message_outlined,
     iconColor: Color(0xFF059669),
     iconBg: Color(0xFFD1FAE5),
+    tabIndex: 2,
   ),
   const TutorialStep(
     id: 'refills',
@@ -57,6 +63,7 @@ final _steps = [
     icon: Icons.medication_outlined,
     iconColor: Color(0xFFEA580C),
     iconBg: Color(0xFFFFF7ED),
+    tabIndex: 3,
   ),
   const TutorialStep(
     id: 'intake',
@@ -79,8 +86,14 @@ final _steps = [
 ];
 
 class OnboardingTutorial {
-  /// Check if tutorial should be shown and display it
-  static Future<void> showIfNeeded(BuildContext context, String uid) async {
+  /// Check if tutorial should be shown and display it.
+  /// `onNavigateToTab` powers the "Try It" button — when omitted, that
+  /// button is hidden and only Next/Skip are shown.
+  static Future<void> showIfNeeded(
+    BuildContext context,
+    String uid, {
+    void Function(int tabIndex)? onNavigateToTab,
+  }) async {
     final doc =
         await FirebaseFirestore.instance.collection('users').doc(uid).get();
     final data = doc.data();
@@ -111,6 +124,7 @@ class OnboardingTutorial {
         initialStep: firstIncomplete,
         initialCompleted: completed,
         initialSkipped: skipped,
+        onNavigateToTab: onNavigateToTab,
       ),
     );
   }
@@ -127,12 +141,14 @@ class _TutorialDialog extends StatefulWidget {
   final int initialStep;
   final List<String> initialCompleted;
   final List<String> initialSkipped;
+  final void Function(int tabIndex)? onNavigateToTab;
 
   const _TutorialDialog({
     required this.uid,
     required this.initialStep,
     required this.initialCompleted,
     required this.initialSkipped,
+    this.onNavigateToTab,
   });
 
   @override
@@ -175,6 +191,17 @@ class _TutorialDialogState extends State<_TutorialDialog> {
       _persist({'tutorialCompletedSections': _completed});
     }
     _advance();
+  }
+
+  void _tryFeature() {
+    final step = _steps[_currentStep];
+    if (step.tabIndex == null || widget.onNavigateToTab == null) return;
+    if (!_completed.contains(step.id)) {
+      _completed.add(step.id);
+      _persist({'tutorialCompletedSections': _completed});
+    }
+    Navigator.of(context).pop();
+    widget.onNavigateToTab!(step.tabIndex!);
   }
 
   void _skipStep() {
@@ -304,7 +331,19 @@ class _TutorialDialogState extends State<_TutorialDialog> {
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
-                      onPressed: _completeStep,
+                      onPressed: () {
+                        // Mid-tutorial steps with a tab target jump straight
+                        // there ("Try It"), matching the web tutorial.
+                        final step = _steps[_currentStep];
+                        if (!isFirst &&
+                            !isLast &&
+                            step.tabIndex != null &&
+                            widget.onNavigateToTab != null) {
+                          _tryFeature();
+                        } else {
+                          _completeStep();
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -318,7 +357,10 @@ class _TutorialDialogState extends State<_TutorialDialog> {
                             ? 'Get Started'
                             : isLast
                                 ? "Let's Go!"
-                                : 'Next',
+                                : (_steps[_currentStep].tabIndex != null &&
+                                        widget.onNavigateToTab != null
+                                    ? 'Try It'
+                                    : 'Next'),
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),

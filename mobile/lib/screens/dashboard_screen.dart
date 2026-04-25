@@ -87,7 +87,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Show onboarding tutorial for new patients
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
-            OnboardingTutorial.showIfNeeded(context, patientId);
+            OnboardingTutorial.showIfNeeded(
+              context,
+              patientId,
+              onNavigateToTab: widget.onNavigate,
+            );
           }
         });
       }

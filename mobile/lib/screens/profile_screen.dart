@@ -59,12 +59,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = auth.userProfile;
     if (user == null) return;
 
-    // If phone number changed and is not empty, require verification first
+    // If phone number changed and is not empty, require verification first.
+    // Normalize first so we surface bad numbers before round-tripping the
+    // Cloud Function / SMS provider.
     final phoneChanged = _phoneController.text.trim() != (user.phoneNumber ?? '');
     if (phoneChanged && _phoneController.text.trim().isNotEmpty) {
+      final String normalized;
+      try {
+        normalized = normalizePhoneNumber(_phoneController.text);
+      } on InvalidPhoneException {
+        setState(() => _error = 'Please enter a valid 10-digit US phone number.');
+        return;
+      }
       PhoneVerificationSheet.show(
         context: context,
-        phoneNumber: _phoneController.text.trim(),
+        phoneNumber: normalized,
         onVerified: (verifiedPhone) {
           // Phone already saved by Cloud Function; save the rest
           _phoneController.text = verifiedPhone;

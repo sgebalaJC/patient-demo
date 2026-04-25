@@ -5,7 +5,7 @@ import '../config/colors.dart';
 
 const _storageKey = 'patient-theme';
 
-enum AppThemeId { classic, brand, dark }
+enum AppThemeId { classic, dark }
 
 class AppThemeData {
   final String label;
@@ -26,12 +26,6 @@ const Map<AppThemeId, AppThemeData> appThemes = {
     label: 'Classic',
     primary: Color(0xFF2563EB),
     accent: Color(0xFF64748B),
-  ),
-  // Brand theme — edit these colors to match mobile/lib/config/branding.dart
-  AppThemeId.brand: AppThemeData(
-    label: 'Brand',
-    primary: Color(0xFF0F766E),
-    accent: Color(0xFF475569),
   ),
   AppThemeId.dark: AppThemeData(
     label: 'Dark',
@@ -67,13 +61,7 @@ class ThemeProvider extends ChangeNotifier {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_storageKey);
-    if (saved == 'brand') {
-      _currentId = AppThemeId.brand;
-    } else if (saved == 'dark') {
-      _currentId = AppThemeId.dark;
-    } else {
-      _currentId = AppThemeId.classic;
-    }
+    _currentId = saved == 'dark' ? AppThemeId.dark : AppThemeId.classic;
     _applyColors();
     notifyListeners();
   }

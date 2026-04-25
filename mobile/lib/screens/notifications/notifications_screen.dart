@@ -90,6 +90,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case NotificationType.refillRequest:
         tabIndex = 3; // Refills
         break;
+      case NotificationType.specialistRequest:
+        tabIndex = 1; // Appointments — patients view their requests there
+        break;
       case NotificationType.newPatient:
       case NotificationType.system:
         break; // No deep link
@@ -261,6 +264,8 @@ class _NotificationTile extends StatelessWidget {
         return Icons.message_outlined;
       case NotificationType.refillRequest:
         return Icons.medication_outlined;
+      case NotificationType.specialistRequest:
+        return Icons.medical_services_outlined;
       case NotificationType.newPatient:
         return Icons.person_add_outlined;
       case NotificationType.system:
@@ -279,6 +284,8 @@ class _NotificationTile extends StatelessWidget {
         return AppColors.success;
       case NotificationType.refillRequest:
         return AppColors.warning;
+      case NotificationType.specialistRequest:
+        return AppColors.purple;
       case NotificationType.newPatient:
         return AppColors.purple;
       case NotificationType.system:

@@ -7,6 +7,7 @@ enum NotificationType {
   newMessage,
   newPatient,
   refillRequest,
+  specialistRequest,
   system,
 }
 
@@ -69,6 +70,8 @@ class AppNotification {
         return NotificationType.newPatient;
       case 'refill_request':
         return NotificationType.refillRequest;
+      case 'specialist_request':
+        return NotificationType.specialistRequest;
       default:
         return NotificationType.system;
     }

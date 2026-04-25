@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../config/colors.dart';
 import '../config/branding.dart';
+import '../screens/billing/billing_screen.dart';
 import '../services/firestore/subscriptions_service.dart';
 
 /// Read-only membership status card. Tapping "Manage membership" opens the
-/// web billing page in a browser — Stripe Checkout runs there, not natively.
+/// native billing screen; Stripe Checkout itself still runs on the web
+/// billing page (subscribe handoff).
 class SubscriptionStatusCard extends StatelessWidget {
   final String uid;
 
   const SubscriptionStatusCard({super.key, required this.uid});
 
-  Future<void> _openBilling() async {
-    final url = Uri.parse('https://${branding.domain}/billing');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    }
+  void _openBilling(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const BillingScreen()),
+    );
   }
 
   @override
@@ -106,7 +106,7 @@ class SubscriptionStatusCard extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: _openBilling,
+                  onPressed: () => _openBilling(context),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: BorderSide(color: AppColors.primary),

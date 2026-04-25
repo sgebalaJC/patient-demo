@@ -172,6 +172,8 @@ class _IntakeFormsScreenState extends State<IntakeFormsScreen> {
             Expanded(
               child: Column(
                 children: [
+                  // Provider's review note when the form was sent back for changes.
+                  if (_form?.reviewNotes != null) _buildReviewNoteBanner(),
                   // Progress bar + section pills
                   _buildProgressHeader(),
                   if (_saving)
@@ -198,6 +200,45 @@ class _IntakeFormsScreenState extends State<IntakeFormsScreen> {
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewNoteBanner() {
+    return Container(
+      width: double.infinity,
+      color: Colors.amber.shade50,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.assignment_late_outlined,
+              size: 20, color: Colors.amber.shade800),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your provider asked for changes',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.amber.shade900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _form!.reviewNotes!,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.amber.shade900,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

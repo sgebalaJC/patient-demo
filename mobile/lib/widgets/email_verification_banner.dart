@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -23,6 +25,29 @@ class EmailVerificationBanner extends StatefulWidget {
 class _EmailVerificationBannerState extends State<EmailVerificationBanner> {
   bool _busy = false;
   String? _message;
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    // Match the web banner: poll every 30s while unverified so the banner
+    // disappears soon after the patient taps the verification link, even
+    // without manually pressing "I verified".
+    _poll = Timer.periodic(const Duration(seconds: 30), (_) async {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.emailVerified) return;
+      try {
+        await user.reload();
+      } catch (_) {/* ignore transient errors */}
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
 
   Future<void> _resend() async {
     setState(() {

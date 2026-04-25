@@ -68,6 +68,7 @@ export const FIELD_LIMITS = {
   signature: { max: 200 },
   detailsField: { max: 500 },
   role: { max: 20 },
+  address: { max: 500 },
 
   // Prior Authorization
   priorAuth: {

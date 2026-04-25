@@ -18,6 +18,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { functions } from '../../lib/firebase';
 import { errorMessage } from '../../lib/errors';
+import { FIELD_LIMITS } from '../../lib/validation';
 
 export interface FaxEmailDraftValues {
   to: string;
@@ -102,6 +103,7 @@ export const FaxEmailDraftPanel: React.FC<FaxEmailDraftPanelProps> = ({
             type="email"
             value={draft.to}
             onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
+            maxLength={FIELD_LIMITS.email.max}
             className="input w-full mt-1 text-sm"
             placeholder="patient@example.com"
           />
@@ -117,6 +119,7 @@ export const FaxEmailDraftPanel: React.FC<FaxEmailDraftPanelProps> = ({
             type="text"
             value={draft.subject}
             onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
+            maxLength={FIELD_LIMITS.messageSubject.max}
             className="input w-full mt-1 text-sm"
           />
         </div>

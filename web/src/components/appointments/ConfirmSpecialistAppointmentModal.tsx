@@ -319,6 +319,7 @@ export const ConfirmSpecialistAppointmentModal: React.FC<ConfirmSpecialistAppoin
                 value={confirmForm.address}
                 onChange={(e) => setConfirmForm(f => ({ ...f, address: e.target.value }))}
                 placeholder="Search for an address..."
+                maxLength={FIELD_LIMITS.address.max}
                 className="input w-full"
               />
             )}

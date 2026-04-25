@@ -71,8 +71,6 @@ export const SignupForm: React.FC<SignupFormProps> = ({
   });
 
   const onSubmit = async (data: SignupFormData) => {
-    logger.debug('Form data:', data); // Debug log to see what data is being submitted
-    
     // Defensive check: ensure terms are accepted before proceeding
     // This prevents account creation if validation is somehow bypassed
     if (!data.acceptTerms) {

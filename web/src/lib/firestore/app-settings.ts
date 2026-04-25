@@ -11,6 +11,7 @@ import { db } from '../firebase';
 import { ApiResponse } from '../../types';
 import logger from '../logger';
 import { errorMessage } from '../errors';
+import { audit } from '../audit';
 
 /**
  * App-wide settings stored in Firestore at `system/settings`.
@@ -138,9 +139,14 @@ export const appSettingsOperations = {
     >,
   ): Promise<ApiResponse<void>> {
     try {
-      const payload: Record<string, any> = {
-        updatedAt: serverTimestamp(),
-      };
+      type Payload = Partial<{
+        registrationEnabled: boolean;
+        paginationSize: number;
+        practiceSubscriptionEnforced: boolean;
+        supportEmail: string;
+        simulationMode: boolean;
+      }> & { updatedAt: ReturnType<typeof serverTimestamp> };
+      const payload: Payload = { updatedAt: serverTimestamp() };
       if (settings.registrationEnabled !== undefined) {
         payload.registrationEnabled = !!settings.registrationEnabled;
       }
@@ -157,6 +163,12 @@ export const appSettingsOperations = {
         payload.simulationMode = !!settings.simulationMode;
       }
       await setDoc(DOC_REF, payload, { merge: true });
+      audit({
+        action: 'settings.updated',
+        resourceType: 'system',
+        resourceId: 'settings',
+        metadata: { changedFields: Object.keys(settings) },
+      });
       return { success: true };
     } catch (error: unknown) {
       logger.error('Error saving app settings:', error);

@@ -3,17 +3,19 @@ import {
   getDoc,
   setDoc,
   serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ApiResponse } from '../../types';
 import { BRANDING } from '../../config/branding';
 import logger from '../logger';
 import { errorMessage } from '../errors';
+import { audit } from '../audit';
 
 export interface SmsTemplates {
   reminder24h: string;
   reminderMorning: string;
-  updatedAt?: any;
+  updatedAt?: Timestamp;
 }
 
 const DEFAULTS: SmsTemplates = {
@@ -55,6 +57,7 @@ export const smsTemplateOperations = {
         reminderMorning: templates.reminderMorning,
         updatedAt: serverTimestamp(),
       });
+      audit({ action: 'sms_templates.updated', resourceType: 'system', resourceId: 'sms-templates' });
       return { success: true };
     } catch (error: unknown) {
       logger.error('Error saving SMS templates:', error);

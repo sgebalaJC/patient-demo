@@ -13,6 +13,7 @@ import { emailField, firstNameField, lastNameField, phoneField } from '../../lib
 import { normalizePhoneNumber, InvalidPhoneError } from '../../lib/phone';
 import { BRANDING } from '../../config/branding';
 import logger from '../../lib/logger';
+import { errorCode, errorMessage } from '../../lib/errors';
 
 const bootstrapSchema = z.object({
   email: emailField(),
@@ -170,10 +171,10 @@ export const BootstrapAdminForm: React.FC<BootstrapAdminFormProps> = ({ onSubmit
     } catch (err: unknown) {
       cleanup();
       logger.error('Bootstrap error:', err);
-      if (err?.code === 'permission-denied') {
+      if (errorCode(err) === 'permission-denied') {
         setError('This system has already been set up. Please ask an administrator to invite you.');
       } else {
-        setError(err?.message || 'An unexpected error occurred');
+        setError(errorMessage(err) || 'An unexpected error occurred');
       }
     } finally {
       setLoading(false);

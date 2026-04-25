@@ -7,7 +7,17 @@ import { AuthProvider } from './contexts/AuthContext';
 import { GlobalModals } from './components/ui/GlobalModals';
 import { AppSettingsProvider } from './contexts/AppSettingsContext';
 import { PendingApproval } from './components/ui/PendingApproval';
+import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import { isAdminRole } from './lib/roles';
+
+// Full-viewport spinner used by the auth-resolution paths (ProtectedRoute,
+// RoleBasedRedirect). Centers the LoadingSpinner primitive in the page so
+// we don't reinvent the `animate-spin` div per route.
+const FullPageSpinner = () => (
+  <div className="min-h-screen bg-secondary-50 flex items-center justify-center">
+    <LoadingSpinner size="lg" />
+  </div>
+);
 
 // Eager-loaded (needed immediately)
 const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));
@@ -47,7 +57,7 @@ const AdminSmsPage = lazy(() => import('./pages/AdminSmsPage').then(m => ({ defa
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-64">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+    <LoadingSpinner size="lg" />
   </div>
 );
 
@@ -56,11 +66,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const { user, userProfile, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-secondary-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <FullPageSpinner />;
   }
 
   if (!user) return <Navigate to="/auth" replace />;
@@ -78,11 +84,7 @@ const RoleBasedRedirect: React.FC = () => {
   const { loading, userProfile } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-secondary-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
-      </div>
-    );
+    return <FullPageSpinner />;
   }
 
   const role = userProfile?.role;

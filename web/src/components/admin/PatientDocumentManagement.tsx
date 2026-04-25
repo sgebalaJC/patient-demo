@@ -15,6 +15,7 @@ import {
 import logger from '../../lib/logger';
 import { Modal } from '../ui/Modal';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { useSimulationMode } from '../../hooks/useSimulationMode';
 import { downloadFile, formatFileSize } from '../../lib/storage';
 import { formatDateTime, toDate } from '../../lib/date-helpers';
@@ -43,6 +44,10 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
     if (isOpen && patient) {
       fetchDocuments();
     }
+    // fetchDocuments closes over `patient` + `simulated` (already in deps)
+    // and `setDocuments`/`setLoading`/`setActionError` (stable). Disable
+    // the rule because adding the function reference would re-run on
+    // every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, patient, simulated]);
 
@@ -145,9 +150,9 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
           <ErrorAlert message={actionError} className="mb-4" />
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-              <span className="ml-3 text-secondary-600">Loading documents...</span>
+            <div className="flex items-center justify-center py-12 gap-3">
+              <LoadingSpinner size="lg" className="" />
+              <span className="text-secondary-600">Loading documents...</span>
             </div>
           ) : documents.length === 0 ? (
             <div className="text-center py-12">

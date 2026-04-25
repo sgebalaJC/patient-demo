@@ -12,7 +12,7 @@ type Status = 'idle' | 'saving' | 'connected' | 'disconnecting';
 
 interface SlackSetupProps {
   /** Display name used in the manifest and connected-state label. */
-  agentName?: string;
+  agentName: string;
   /** Initial connected state, usually derived from getConfig() in the parent. */
   initialConnected: boolean;
   initialWorkspaceName?: string;
@@ -38,7 +38,7 @@ const SLACK_LOGO = (
 );
 
 export const SlackSetup: React.FC<SlackSetupProps> = ({
-  agentName = 'Aurelia',
+  agentName,
   initialConnected,
   initialWorkspaceName,
   onStateChange,

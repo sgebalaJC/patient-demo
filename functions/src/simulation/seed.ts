@@ -8,6 +8,16 @@
 import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {isSuperAdminEmail} from "../superAdmins.js";
+import {INCLUDE_SIM_MODE} from "../lib/sim-flag.js";
+
+function assertSimModeIncluded() {
+  if (!INCLUDE_SIM_MODE) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Simulation mode is not included in this fork (INCLUDE_SIM_MODE=false). Real practice forks do not ship the seed/clear callables.",
+    );
+  }
+}
 import {seedFaxes} from "./simulators/faxes.js";
 import {seedSms} from "./simulators/messaging.js";
 import {seedWorkspace} from "./simulators/workspace.js";
@@ -138,6 +148,7 @@ async function seedDrChronoRefills(
 }
 
 export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
+  assertSimModeIncluded();
   assertSuperAdmin(req.auth);
   const db = admin.firestore();
   // Each domain seed is isolated — one failing shouldn't block the others.
@@ -211,6 +222,7 @@ export const seedSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
 });
 
 export const clearSimulationData = onCall({timeoutSeconds: 120}, async (req) => {
+  assertSimModeIncluded();
   assertSuperAdmin(req.auth);
   const db = admin.firestore();
   const paths = [

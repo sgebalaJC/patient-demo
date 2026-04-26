@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useSimulationMode } from './useSimulationMode';
+import { INCLUDE_SIM_MODE } from '../lib/sim-flag';
 
 export type WhereClause = [field: string, op: WhereFilterOp, value: unknown];
 
@@ -88,11 +89,13 @@ export function usePagedCollection<T>(
   const { enabled: simulated } = useSimulationMode();
 
   const path = useMemo(() => {
-    if (!simulated) return real;
-    // Default sim path lives under `simulation/native/<real>` so the segment
-    // count is always odd (collection, not doc). Pages with their own sim
-    // layout (faxes, sms, drchrono) pass `sim` explicitly.
-    return sim || `simulation/native/${real}`;
+    // Build-time tree-shake: when INCLUDE_SIM_MODE is false, Vite drops the
+    // entire branch — sim path strings and `simulation/native/${real}`
+    // template never ship in the bundle.
+    if (INCLUDE_SIM_MODE && simulated) {
+      return sim || `simulation/native/${real}`;
+    }
+    return real;
   }, [simulated, real, sim]);
 
   // Serialize whereClauses so the fetch effect re-runs when they change.

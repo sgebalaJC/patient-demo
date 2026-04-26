@@ -22,6 +22,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { BRANDING } from '../config/branding';
+import { INCLUDE_SIM_MODE } from '../lib/sim-flag';
 import { AdminGuard } from '../components/ui/AdminGuard';
 import { PageHeader } from '../components/ui/PageHeader';
 
@@ -238,8 +239,8 @@ export const AdminSettingsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Simulation mode (super-admin only) */}
-          {isSuperAdmin && (
+          {/* Simulation mode (super-admin only, AND only when this fork bundles sim) */}
+          {INCLUDE_SIM_MODE && isSuperAdmin && (
             <div className="p-4 border border-secondary-200 rounded-lg">
               <div className="flex items-start justify-between space-x-4">
                 <div className="flex items-start space-x-3 flex-1">

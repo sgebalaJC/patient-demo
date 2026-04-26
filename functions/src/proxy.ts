@@ -21,6 +21,7 @@ import {
   sidecarApiKeyEnv,
 } from "./lib/sidecar.js";
 import {isSuperAdminEmail} from "./superAdmins.js";
+import {INCLUDE_SIM_MODE} from "./lib/sim-flag.js";
 
 export const sidecarProxy = onRequest({
   cors: corsOptions,
@@ -60,7 +61,7 @@ export const sidecarProxy = onRequest({
       // banner + dashboard render; without the same fallback here, the
       // proxy rejects every sidecar call (including support chat) with
       // 403 "User not found".
-      if (!userDoc.exists) {
+      if (!userDoc.exists && INCLUDE_SIM_MODE) {
         const settings = await db.doc("system/settings").get();
         const simMode = settings.exists && settings.data()?.simulationMode === true;
         if (simMode) {

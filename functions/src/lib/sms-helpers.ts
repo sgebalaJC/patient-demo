@@ -30,7 +30,10 @@ export const SMS_SECRETS = [
   SIGNALWIRE_SMS_FROM,
 ] as const;
 
+import {INCLUDE_SIM_MODE} from "./sim-flag.js";
+
 async function isSimulationOn(): Promise<boolean> {
+  if (!INCLUDE_SIM_MODE) return false;
   const snap = await admin.firestore().doc("system/settings").get();
   return snap.exists && snap.data()?.simulationMode === true;
 }

@@ -6,6 +6,7 @@ import { FilterTabs } from '../components/ui/FilterTabs';
 import { AdminFaxesPage } from './AdminFaxesPage';
 import { AdminSendFaxPage } from './AdminSendFaxPage';
 import { useSimulationMode } from '../hooks/useSimulationMode';
+import { INCLUDE_SIM_MODE } from '../lib/sim-flag';
 import { faxes as faxesApi } from '../lib/integrations';
 import { subscribeSignalwireStatus } from '../lib/signalwire';
 import { formatPhoneDisplay } from '../lib/phone';
@@ -32,7 +33,10 @@ export const AdminFaxesHubPage: React.FC<{ defaultTab?: Tab }> = ({ defaultTab =
   }, []);
 
   useEffect(() => {
-    if (simulated) {
+    // Build-time sim branch — Vite drops the entire `if (...)` block on
+    // installer-emitted forks, including the faxesApi.getOurFaxNumber call
+    // (and any imports that only existed for it).
+    if (INCLUDE_SIM_MODE && simulated) {
       let alive = true;
       faxesApi.getOurFaxNumber()
         .then((n) => { if (alive) setFaxNumberE164(n || undefined); })

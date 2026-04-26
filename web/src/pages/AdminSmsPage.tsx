@@ -4,6 +4,7 @@ import { Timestamp } from 'firebase/firestore';
 import { MessageSquare, Send, Inbox, Sparkles, RefreshCw, UserCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { usePagedCollection } from '../hooks/usePagedCollection';
+import { INCLUDE_SIM_MODE } from '../lib/sim-flag';
 import { isAdminRole } from '../lib/roles';
 import { sms as smsApi } from '../lib/integrations';
 import { alert as modalAlert } from '../lib/modals';
@@ -55,7 +56,11 @@ export const AdminSmsPage: React.FC = () => {
   const paged = usePagedCollection<SmsDoc>({
     enabled: isAdminUser,
     real: tab === 'outbound' ? 'sms-outbound' : 'sms-inbound',
-    sim: tab === 'outbound' ? 'simulation/sms/outbound' : 'simulation/sms/inbound',
+    // Conditional spread → Vite tree-shakes the sim path strings on
+    // installer-emitted forks (INCLUDE_SIM_MODE false).
+    ...(INCLUDE_SIM_MODE
+      ? { sim: tab === 'outbound' ? 'simulation/sms/outbound' : 'simulation/sms/inbound' }
+      : {}),
     orderField: tab === 'outbound' ? 'sentAt' : 'receivedAt',
     pageSize: 25,
     mapDoc: (d) => ({ sid: d.id, ...(d.data() as Omit<SmsDoc, 'sid'>) }),

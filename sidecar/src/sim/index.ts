@@ -17,6 +17,7 @@
  *   - flip `system/settings.simulationMode: false`
  */
 import { getDb } from "../lib/firebase.js";
+import { INCLUDE_SIM_MODE } from "../lib/sim-flag.js";
 
 let cached: { value: boolean; expiresAt: number } | null = null;
 const TTL_MS = 10_000;
@@ -24,8 +25,13 @@ const TTL_MS = 10_000;
 /**
  * Global sim flag — cached for 10s so Aurelia's tight loops don't hammer
  * Firestore. A short TTL keeps the admin toggle snappy in dev.
+ *
+ * When `INCLUDE_SIM_MODE` is false (the default for installer-emitted
+ * practice forks), we short-circuit before the Firestore lookup —
+ * downstream callers never enter the sim path.
  */
 export async function isSimulationOn(): Promise<boolean> {
+  if (!INCLUDE_SIM_MODE) return false;
   const now = Date.now();
   if (cached && cached.expiresAt > now) return cached.value;
   try {

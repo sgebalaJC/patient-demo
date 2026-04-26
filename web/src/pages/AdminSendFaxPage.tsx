@@ -12,6 +12,7 @@ import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { EmptyState } from '../components/ui/EmptyState';
+import { AlertBanner } from '../components/ui/AlertBanner';
 import { FIELD_LIMITS } from '../lib/validation';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { PaginationBar } from '../components/ui/PaginationBar';
@@ -314,16 +315,8 @@ export const AdminSendFaxPage: React.FC<{ embedded?: boolean }> = ({ embedded = 
           )}
         </div>
 
-        {submitError && (
-          <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-            {submitError}
-          </div>
-        )}
-        {submitOk && (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-            {submitOk}
-          </div>
-        )}
+        <AlertBanner message={submitError} variant="error" />
+        <AlertBanner message={submitOk} variant="success" />
 
         <div className="flex justify-end">
           <Button onClick={handleSubmit} loading={submitting} disabled={!canSubmit}>

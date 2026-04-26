@@ -12,6 +12,7 @@ import type { User } from '../types';
 import logger from '../lib/logger';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
+import { AlertBanner } from '../components/ui/AlertBanner';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
@@ -165,15 +166,10 @@ export const AdminSmsPage: React.FC = () => {
           </p>
         </div>
         {sendStatus && (
-          <div
-            className={`rounded-md border p-2 text-xs ${
-              sendStatus.kind === 'ok'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-rose-200 bg-rose-50 text-rose-700'
-            }`}
-          >
-            {sendStatus.text}
-          </div>
+          <AlertBanner
+            message={sendStatus.text}
+            variant={sendStatus.kind === 'ok' ? 'success' : 'error'}
+          />
         )}
         <div className="flex justify-end">
           <Button onClick={handleSend} loading={sending} disabled={!canSend} size="sm">

@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { AlertBanner } from '../components/ui/AlertBanner';
 import { useAuth } from '../hooks/useAuth';
 import { isAdminRole } from '../lib/roles';
 import { listPayersOnce, listTargetCpts, getPolicy } from '../lib/firestore/prior-auths';
@@ -303,25 +304,30 @@ export const AdminPriorAuthNewPage: React.FC = () => {
         <Card className="p-5 space-y-3">
           <StepHeader n={3} label="Criteria gap check" active={step === 3} done={step > 3} />
           {selectedPayer?.adapterStatus && selectedPayer.adapterStatus !== 'implemented' && (
-            <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900 space-y-1">
-              <div className="font-medium flex items-center gap-1.5">
-                <AlertCircle className="h-4 w-4" />
-                Manual lookup required
-              </div>
-              <div>
-                {selectedPayer.adapterNotes ?? 'This payer does not have an automated adapter.'}
-              </div>
-              {selectedPayer.policyIndexUrl && (
-                <a
-                  href={selectedPayer.policyIndexUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-yellow-900 underline"
-                >
-                  Open {selectedPayer.name} policy index ↗
-                </a>
-              )}
-            </div>
+            <AlertBanner
+              variant="warning"
+              message={
+                <div className="space-y-1">
+                  <div className="font-medium flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4" />
+                    Manual lookup required
+                  </div>
+                  <div>
+                    {selectedPayer.adapterNotes ?? 'This payer does not have an automated adapter.'}
+                  </div>
+                  {selectedPayer.policyIndexUrl && (
+                    <a
+                      href={selectedPayer.policyIndexUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-yellow-900 underline"
+                    >
+                      Open {selectedPayer.name} policy index ↗
+                    </a>
+                  )}
+                </div>
+              }
+            />
           )}
           {policyLoading ? (
             <LoadingSpinner />
@@ -367,11 +373,7 @@ export const AdminPriorAuthNewPage: React.FC = () => {
       {step >= 4 && (
         <Card className="p-5 space-y-3">
           <StepHeader n={4} label="Create" active={step === 4} done={false} />
-          {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {error}
-            </div>
-          )}
+          <AlertBanner message={error} variant="error" />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setStep(3)}>Back</Button>
             <Button onClick={handleCreate} disabled={submitting} className="flex items-center gap-1.5">

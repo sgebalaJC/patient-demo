@@ -146,6 +146,13 @@ export const appointmentOperations = {
     async updateAppointment(appointmentId: string, updates: Partial<Appointment>): Promise<ApiResponse<Appointment>> {
         try {
             const appointmentRef = doc(collections.appointments, appointmentId);
+            // Capture the PRE-update status before writing so the audit
+            // event records the actual transition. Reading post-update
+            // would always show `mapped.status` already equal to the new
+            // value and `previousStatus` would be wrong.
+            const before = await getDoc(appointmentRef);
+            const previousStatus = before.exists() ? (before.data()?.status as string | undefined) : undefined;
+
             const updateData = {
                 ...updates,
                 updatedAt: serverTimestamp(),
@@ -166,14 +173,14 @@ export const appointmentOperations = {
                     action: 'appointment.confirmed',
                     resourceType: 'appointment',
                     resourceId: appointmentId,
-                    metadata: { previousStatus: mapped.status, patientId: mapped.patientId },
+                    metadata: { previousStatus, patientId: mapped.patientId },
                 });
             } else if (updates.status === 'cancelled') {
                 audit({
                     action: 'appointment.cancelled',
                     resourceType: 'appointment',
                     resourceId: appointmentId,
-                    metadata: { patientId: mapped.patientId },
+                    metadata: { previousStatus, patientId: mapped.patientId },
                 });
             }
             audit({

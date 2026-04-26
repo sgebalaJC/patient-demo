@@ -423,6 +423,12 @@ export const messageThreadOperations = {
             if (!mapped) {
                 return { success: false, error: 'Thread updated but could not be re-read' };
             }
+            audit({
+                action: 'thread.status_changed',
+                resourceType: 'message-thread',
+                resourceId: threadId,
+                metadata: { newStatus: status },
+            });
             return { success: true, data: mapped };
         } catch (error: unknown) {
             logger.error('Error updating thread status:', error);

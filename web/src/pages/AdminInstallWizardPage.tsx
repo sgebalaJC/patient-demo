@@ -22,6 +22,8 @@ import {
 } from '../lib/firestore/install-wizard';
 import {
   WIZARD_STEPS,
+  WIZARD_FIELD_LIMITS,
+  WIZARD_NUMERIC_LIMITS,
   type InstallWizardState,
   type WizardStepId,
 } from '../types/install-wizard';
@@ -138,10 +140,28 @@ const AdminInstallWizardPageInner: React.FC = () => {
       const r = await fn();
       const data = r.data;
       if (!data.ok) {
-        setError(data.output);
+        // Surface a one-line summary instead of dumping raw subprocess
+        // stdout (which can include bucket names, error stack traces, and
+        // unrelated noise). The full output is still in Cloud Logging for
+        // operators who need it.
+        const firstLine = (data.output ?? '').split('\n').find((l) => l.trim().length > 0) ?? 'Sync failed';
+        setError(firstLine.slice(0, 240));
       } else {
+        // state.openclaw may be undefined if the operator hits Sync from the
+        // OpenclawStep before `persist({openclaw: ...})` has fired (the step
+        // captures values into local React state and only persists on Next).
+        // Match the OpenclawStep's seeded defaults so we don't silently
+        // overwrite them with empty strings on the operator's eventual
+        // Next click.
+        const baseOpenclaw = state.openclaw ?? {
+          vmName: 'openclaw',
+          vmZone: 'us-central1-a',
+          vmProject: '',
+          vmInternalIp: '',
+          vmExternalIp: '',
+        };
         await persist({
-          openclaw: { ...state.openclaw!, lastPingAt: new Date().toISOString() },
+          openclaw: { ...baseOpenclaw, lastPingAt: new Date().toISOString() },
         });
       }
     } catch (err: unknown) {
@@ -266,12 +286,15 @@ const IdentityStep: React.FC<StepProps<InstallWizardState['identity']>> = ({ sta
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold">Identity</h2>
-      <Input label="App name" value={v.appName} onChange={(e) => setV({ ...v, appName: e.target.value })} />
-      <Input label="Practice name (legal/display)" value={v.practiceName} onChange={(e) => setV({ ...v, practiceName: e.target.value })} />
-      <Input label="Short name (SMS, email subjects)" value={v.shortName} onChange={(e) => setV({ ...v, shortName: e.target.value })} />
-      <Input label="Legal entity" value={v.legalEntity} onChange={(e) => setV({ ...v, legalEntity: e.target.value })} />
-      <Input label="SMS sender prefix" value={v.smsSenderName} onChange={(e) => setV({ ...v, smsSenderName: e.target.value })} />
-      <NavRow onNext={() => onNext(v)} nextDisabled={!v.appName || !v.practiceName} />
+      <Input label="App name" maxLength={WIZARD_FIELD_LIMITS.appName} value={v.appName} onChange={(e) => setV({ ...v, appName: e.target.value })} />
+      <Input label="Practice name (legal/display)" maxLength={WIZARD_FIELD_LIMITS.practiceName} value={v.practiceName} onChange={(e) => setV({ ...v, practiceName: e.target.value })} />
+      <Input label="Short name (SMS, email subjects)" maxLength={WIZARD_FIELD_LIMITS.shortName} value={v.shortName} onChange={(e) => setV({ ...v, shortName: e.target.value })} />
+      <Input label="Legal entity" maxLength={WIZARD_FIELD_LIMITS.legalEntity} value={v.legalEntity} onChange={(e) => setV({ ...v, legalEntity: e.target.value })} />
+      <Input label="SMS sender prefix" maxLength={WIZARD_FIELD_LIMITS.smsSenderName} value={v.smsSenderName} onChange={(e) => setV({ ...v, smsSenderName: e.target.value })} />
+      <NavRow
+        onNext={() => onNext(v)}
+        nextDisabled={!v.appName.trim() || !v.practiceName.trim()}
+      />
     </div>
   );
 };
@@ -283,12 +306,12 @@ const ContactStep: React.FC<StepProps<InstallWizardState['contact']>> = ({ state
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold">Contact + URLs</h2>
-      <Input label="Support email" type="email" value={v.supportEmail} onChange={(e) => setV({ ...v, supportEmail: e.target.value })} />
-      <Input label="From email (transactional)" type="email" value={v.fromEmail} onChange={(e) => setV({ ...v, fromEmail: e.target.value })} />
-      <Input label="Support phone" value={v.supportPhone ?? ''} onChange={(e) => setV({ ...v, supportPhone: e.target.value || null })} />
-      <Input label="Support fax" value={v.supportFax ?? ''} onChange={(e) => setV({ ...v, supportFax: e.target.value || null })} />
-      <Input label="Portal URL" value={v.portalUrl} onChange={(e) => setV({ ...v, portalUrl: e.target.value })} />
-      <Input label="Portal domain (no protocol)" value={v.domain} onChange={(e) => setV({ ...v, domain: e.target.value })} />
+      <Input label="Support email" type="email" maxLength={WIZARD_FIELD_LIMITS.supportEmail} value={v.supportEmail} onChange={(e) => setV({ ...v, supportEmail: e.target.value })} />
+      <Input label="From email (transactional)" type="email" maxLength={WIZARD_FIELD_LIMITS.fromEmail} value={v.fromEmail} onChange={(e) => setV({ ...v, fromEmail: e.target.value })} />
+      <Input label="Support phone" maxLength={WIZARD_FIELD_LIMITS.phone} value={v.supportPhone ?? ''} onChange={(e) => setV({ ...v, supportPhone: e.target.value || null })} />
+      <Input label="Support fax" maxLength={WIZARD_FIELD_LIMITS.fax} value={v.supportFax ?? ''} onChange={(e) => setV({ ...v, supportFax: e.target.value || null })} />
+      <Input label="Portal URL" maxLength={WIZARD_FIELD_LIMITS.url} value={v.portalUrl} onChange={(e) => setV({ ...v, portalUrl: e.target.value })} />
+      <Input label="Portal domain (no protocol)" maxLength={WIZARD_FIELD_LIMITS.domain} value={v.domain} onChange={(e) => setV({ ...v, domain: e.target.value })} />
       <NavRow onBack={onBack} onNext={() => onNext(v)} />
     </div>
   );
@@ -320,17 +343,18 @@ const AddressStep: React.FC<StepProps<InstallWizardState['address']>> = ({ state
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold">Address + Hours</h2>
-      <Input label="Street" value={v.street} onChange={(e) => setV({ ...v, street: e.target.value })} />
+      <Input label="Street" maxLength={WIZARD_FIELD_LIMITS.street} value={v.street} onChange={(e) => setV({ ...v, street: e.target.value })} />
       <div className="grid grid-cols-3 gap-2">
-        <Input label="City" value={v.city} onChange={(e) => setV({ ...v, city: e.target.value })} />
-        <Input label="State" value={v.state} onChange={(e) => setV({ ...v, state: e.target.value })} />
-        <Input label="ZIP" value={v.zip} onChange={(e) => setV({ ...v, zip: e.target.value })} />
+        <Input label="City" maxLength={WIZARD_FIELD_LIMITS.city} value={v.city} onChange={(e) => setV({ ...v, city: e.target.value })} />
+        <Input label="State" maxLength={WIZARD_FIELD_LIMITS.state} value={v.state} onChange={(e) => setV({ ...v, state: e.target.value })} />
+        <Input label="ZIP" maxLength={WIZARD_FIELD_LIMITS.zip} value={v.zip} onChange={(e) => setV({ ...v, zip: e.target.value })} />
       </div>
       <div className="space-y-2">
         <div className="text-sm font-medium">Hours</div>
         {v.hours.map((h, i) => (
           <div key={i} className="grid grid-cols-2 gap-2">
             <Input
+              maxLength={WIZARD_FIELD_LIMITS.hoursDay}
               value={h.day}
               onChange={(e) => {
                 const next = [...v.hours];
@@ -339,6 +363,7 @@ const AddressStep: React.FC<StepProps<InstallWizardState['address']>> = ({ state
               }}
             />
             <Input
+              maxLength={WIZARD_FIELD_LIMITS.hoursTime}
               value={h.time}
               onChange={(e) => {
                 const next = [...v.hours];
@@ -383,8 +408,19 @@ const PracticeStep: React.FC<StepProps<InstallWizardState['practice']>> = ({ sta
       <Input
         label="Default appointment duration (minutes)"
         type="number"
+        min={WIZARD_NUMERIC_LIMITS.appointmentDurationMin}
+        max={WIZARD_NUMERIC_LIMITS.appointmentDurationMax}
         value={String(v.defaultAppointmentDuration)}
-        onChange={(e) => setV({ ...v, defaultAppointmentDuration: Number(e.target.value) || 30 })}
+        onChange={(e) => {
+          const raw = Number(e.target.value);
+          const clamped = Number.isFinite(raw)
+            ? Math.max(
+                WIZARD_NUMERIC_LIMITS.appointmentDurationMin,
+                Math.min(WIZARD_NUMERIC_LIMITS.appointmentDurationMax, Math.floor(raw)),
+              )
+            : 30;
+          setV({ ...v, defaultAppointmentDuration: clamped });
+        }}
       />
       <NavRow onBack={onBack} onNext={() => onNext(v)} />
     </div>
@@ -412,15 +448,21 @@ const BrandingStep: React.FC<StepProps<InstallWizardState['branding']> & { onApp
         <Input label="Secondary" type="color" value={v.colors.secondary} onChange={(e) => setV({ ...v, colors: { ...v.colors, secondary: e.target.value } })} />
         <Input label="Accent" type="color" value={v.colors.accent} onChange={(e) => setV({ ...v, colors: { ...v.colors, accent: e.target.value } })} />
       </div>
-      <Input label="Logo path (light)" value={v.logos.full} onChange={(e) => setV({ ...v, logos: { ...v.logos, full: e.target.value } })} />
-      <Input label="Logo path (dark)" value={v.logos.fullDark} onChange={(e) => setV({ ...v, logos: { ...v.logos, fullDark: e.target.value } })} />
-      <Input label="Icon path" value={v.logos.icon} onChange={(e) => setV({ ...v, logos: { ...v.logos, icon: e.target.value } })} />
-      <Input label="Alt text" value={v.logos.alt} onChange={(e) => setV({ ...v, logos: { ...v.logos, alt: e.target.value } })} />
+      <Input label="Logo path (light)" maxLength={WIZARD_FIELD_LIMITS.logoPath} value={v.logos.full} onChange={(e) => setV({ ...v, logos: { ...v.logos, full: e.target.value } })} />
+      <Input label="Logo path (dark)" maxLength={WIZARD_FIELD_LIMITS.logoPath} value={v.logos.fullDark} onChange={(e) => setV({ ...v, logos: { ...v.logos, fullDark: e.target.value } })} />
+      <Input label="Icon path" maxLength={WIZARD_FIELD_LIMITS.logoPath} value={v.logos.icon} onChange={(e) => setV({ ...v, logos: { ...v.logos, icon: e.target.value } })} />
+      <Input label="Alt text" maxLength={WIZARD_FIELD_LIMITS.logoAlt} value={v.logos.alt} onChange={(e) => setV({ ...v, logos: { ...v.logos, alt: e.target.value } })} />
       <div className="flex gap-2">
         <Button variant="ghost" onClick={onApplyLive} disabled={saving}>
           Apply colors live (system/branding)
         </Button>
       </div>
+      <p className="text-xs text-secondary-500">
+        Heads-up: "Apply colors live" writes to <code>system/branding</code>, which is a
+        runtime <em>override</em>. After you commit the regenerated <code>fork.config.ts</code>
+        and redeploy, this override still wins at runtime — clear it via the admin
+        Settings page (or delete the doc) when you want the deployed config to take effect.
+      </p>
       <NavRow onBack={onBack} onNext={() => onNext(v)} />
     </div>
   );
@@ -438,15 +480,15 @@ const AgentsStep: React.FC<StepProps<InstallWizardState['agents']>> = ({ state, 
       <h2 className="text-lg font-semibold">AI agents</h2>
       <div className="space-y-2">
         <div className="font-medium text-sm">Admin agent</div>
-        <Input label="Name" value={v.admin.name} onChange={(e) => setV({ ...v, admin: { ...v.admin, name: e.target.value } })} />
-        <Input label="Tagline" value={v.admin.tagline} onChange={(e) => setV({ ...v, admin: { ...v.admin, tagline: e.target.value } })} />
-        <Input label="Pronouns" value={v.admin.pronouns} onChange={(e) => setV({ ...v, admin: { ...v.admin, pronouns: e.target.value } })} />
+        <Input label="Name" maxLength={WIZARD_FIELD_LIMITS.agentName} value={v.admin.name} onChange={(e) => setV({ ...v, admin: { ...v.admin, name: e.target.value } })} />
+        <Input label="Tagline" maxLength={WIZARD_FIELD_LIMITS.agentTagline} value={v.admin.tagline} onChange={(e) => setV({ ...v, admin: { ...v.admin, tagline: e.target.value } })} />
+        <Input label="Pronouns" maxLength={WIZARD_FIELD_LIMITS.agentPronouns} value={v.admin.pronouns} onChange={(e) => setV({ ...v, admin: { ...v.admin, pronouns: e.target.value } })} />
       </div>
       <div className="space-y-2">
         <div className="font-medium text-sm">Patient agent</div>
-        <Input label="Name" value={v.patient.name} onChange={(e) => setV({ ...v, patient: { ...v.patient, name: e.target.value } })} />
-        <Input label="Tagline" value={v.patient.tagline} onChange={(e) => setV({ ...v, patient: { ...v.patient, tagline: e.target.value } })} />
-        <Input label="Pronouns" value={v.patient.pronouns} onChange={(e) => setV({ ...v, patient: { ...v.patient, pronouns: e.target.value } })} />
+        <Input label="Name" maxLength={WIZARD_FIELD_LIMITS.agentName} value={v.patient.name} onChange={(e) => setV({ ...v, patient: { ...v.patient, name: e.target.value } })} />
+        <Input label="Tagline" maxLength={WIZARD_FIELD_LIMITS.agentTagline} value={v.patient.tagline} onChange={(e) => setV({ ...v, patient: { ...v.patient, tagline: e.target.value } })} />
+        <Input label="Pronouns" maxLength={WIZARD_FIELD_LIMITS.agentPronouns} value={v.patient.pronouns} onChange={(e) => setV({ ...v, patient: { ...v.patient, pronouns: e.target.value } })} />
       </div>
       <NavRow onBack={onBack} onNext={() => onNext(v)} />
     </div>
@@ -470,11 +512,11 @@ const OpenclawStep: React.FC<
         <code className="mx-1">installerSyncAgentWorkspace</code> Cloud Function which renders the
         agent workspace, uploads to GCS, and signals the gateway.
       </p>
-      <Input label="VM name" value={v.vmName} onChange={(e) => setV({ ...v, vmName: e.target.value })} />
-      <Input label="VM zone" value={v.vmZone} onChange={(e) => setV({ ...v, vmZone: e.target.value })} />
-      <Input label="VM project" value={v.vmProject} onChange={(e) => setV({ ...v, vmProject: e.target.value })} />
-      <Input label="Internal IP" value={v.vmInternalIp} onChange={(e) => setV({ ...v, vmInternalIp: e.target.value })} />
-      <Input label="External IP" value={v.vmExternalIp} onChange={(e) => setV({ ...v, vmExternalIp: e.target.value })} />
+      <Input label="VM name" maxLength={WIZARD_FIELD_LIMITS.vmName} value={v.vmName} onChange={(e) => setV({ ...v, vmName: e.target.value })} />
+      <Input label="VM zone" maxLength={WIZARD_FIELD_LIMITS.vmZone} value={v.vmZone} onChange={(e) => setV({ ...v, vmZone: e.target.value })} />
+      <Input label="VM project" maxLength={WIZARD_FIELD_LIMITS.vmProject} value={v.vmProject} onChange={(e) => setV({ ...v, vmProject: e.target.value })} />
+      <Input label="Internal IP" maxLength={WIZARD_FIELD_LIMITS.ip} value={v.vmInternalIp} onChange={(e) => setV({ ...v, vmInternalIp: e.target.value })} />
+      <Input label="External IP" maxLength={WIZARD_FIELD_LIMITS.ip} value={v.vmExternalIp} onChange={(e) => setV({ ...v, vmExternalIp: e.target.value })} />
       <div className="flex items-center gap-2">
         <Button onClick={onSync} disabled={saving}>
           <Server className="h-4 w-4 mr-1" /> Sync agent workspace + ping gateway
@@ -518,6 +560,11 @@ const ConfirmStep: React.FC<{
         can re-open this wizard at any time. Use "Download fork.config.ts" to get the regenerated
         file; commit it to git so the next deploy bakes the new branding into the bundle.
       </p>
+      <p className="text-xs text-amber-700">
+        ⚠ Mobile app: <code>mobile/lib/config/branding.dart</code> is a manual mirror of
+        <code>fork.config.ts</code> (Flutter cannot import TS). Hand-edit it to match the values
+        in the downloaded <code>fork.config.ts</code> before building the mobile binary.
+      </p>
       <pre className="bg-secondary-50 p-3 text-xs overflow-auto rounded max-h-80">
         {JSON.stringify(summary, null, 2)}
       </pre>
@@ -541,6 +588,25 @@ const ConfirmStep: React.FC<{
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
+// Allowlist of practiceType values. Anything not on this list serializes
+// as the safe default to prevent the wizard's `practiceType` field from
+// landing arbitrary user input in the emitted TS literal.
+const VALID_PRACTICE_TYPES = ['concierge', 'standard'] as const;
+type PracticeType = (typeof VALID_PRACTICE_TYPES)[number];
+
+/**
+ * Render the wizard state as a fork.config.ts blob the operator commits.
+ *
+ * Every interpolated value goes through one of:
+ *   - `j(...)` (JSON.stringify) — safe for arbitrary strings, neutralizes
+ *     quotes / backslashes / newlines so a malicious "practice name" can't
+ *     break out of the string literal and inject TS code into the file.
+ *   - `Number(...)` then `j(...)` — for numeric fields, ensures the emitted
+ *     value is a number literal (no fall-through to raw input concatenation).
+ *   - A fixed allowlist coercion (practiceType) — for enums.
+ *
+ * Never interpolate a string from `state.*` directly without `j()`.
+ */
 function renderForkConfigTs(s: InstallWizardState): string {
   const j = (v: unknown) => JSON.stringify(v);
   const i = s.identity ?? { appName: '', practiceName: '', shortName: '', legalEntity: '', smsSenderName: '' };
@@ -555,6 +621,15 @@ function renderForkConfigTs(s: InstallWizardState): string {
     admin: { name: 'Sunny', tagline: '', pronouns: 'they/them' },
     patient: { name: 'Aurelia', tagline: '', pronouns: 'they/them' },
   };
+  const duration = (() => {
+    const n = Number(p.defaultAppointmentDuration);
+    const min = WIZARD_NUMERIC_LIMITS.appointmentDurationMin;
+    const max = WIZARD_NUMERIC_LIMITS.appointmentDurationMax;
+    return Number.isFinite(n) && n >= min && n <= max ? Math.floor(n) : 30;
+  })();
+  const practiceType: PracticeType = (VALID_PRACTICE_TYPES as readonly string[]).includes(p.practiceType)
+    ? (p.practiceType as PracticeType)
+    : 'standard';
   return `// Generated from /admin/install. Overwrite /fork.config.ts in the repo.
 import type { ForkConfig } from './fork.config';
 
@@ -586,8 +661,8 @@ export const FORK_CONFIG: ForkConfig = {
     mapsQuery: ${j(a.mapsQuery)},
   },
   hours: ${j(a.hours)},
-  defaultAppointmentDuration: ${p.defaultAppointmentDuration},
-  practiceType: ${j(p.practiceType)},
+  defaultAppointmentDuration: ${j(duration)},
+  practiceType: ${j(practiceType)},
   logos: ${j(b.logos)},
   colors: ${j(b.colors)},
   agents: ${j(ag)},

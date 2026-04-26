@@ -12,6 +12,12 @@ import { installedIntegrationsOps, type InstalledIntegration } from '../../lib/f
  * in the project. "Deploy" button submits a Cloud Build job that runs
  * `firebase deploy --only functions:<list>` from the source bundle uploaded
  * by installer step 12b. UI polls build status until SUCCESS/FAILURE.
+ *
+ * Polling caps at MAX_POLL_MS — beyond that the UI surfaces a "still
+ * running" message and stops paying for callable invocations. The
+ * reconcileStuckIntegrationDeploys scheduled function will reconcile the
+ * Firestore mirror within 30 minutes of staleness, so the live-subscription
+ * picks up the terminal state without any UI poll.
  */
 
 interface DeployStatus {
@@ -36,6 +42,8 @@ interface IntegrationDeployControlProps {
 }
 
 const TERMINAL_STATUSES = new Set(['SUCCESS', 'FAILURE', 'INTERNAL_ERROR', 'TIMEOUT', 'CANCELLED', 'EXPIRED']);
+const POLL_INTERVAL_MS = 5_000;
+const MAX_POLL_MS = 30 * 60 * 1000;
 
 export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> = ({
   integrationId,
@@ -47,7 +55,20 @@ export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> =
   const [error, setError] = useState<string>('');
   const [build, setBuild] = useState<BuildStatus | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pollExpired, setPollExpired] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollDeadlineRef = useRef<number>(0);
+  // `alive` guards async setStatus calls against an unmounted component or a
+  // mid-flight integrationId change. Without it, a slow callable response
+  // for a previous integration would land in the new component instance.
+  const aliveRef = useRef(true);
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -58,24 +79,30 @@ export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> =
         'getIntegrationFunctionStatus',
       );
       const r = await fn({ integrationId });
+      if (!aliveRef.current) return;
       setStatus(r.data);
     } catch (err) {
+      if (!aliveRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch status');
     } finally {
-      setLoading(false);
+      if (aliveRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
+    aliveRef.current = true;
     void refresh();
     // Live-subscribe to the installed-integrations doc so the build's
     // terminal status (deployed/failed + bundle version) appears as soon
     // as the Cloud Build's final step PATCHes Firestore — even if the UI
     // poll loop missed it.
-    const unsub = installedIntegrationsOps.subscribe(integrationId, setInstalled);
+    const unsub = installedIntegrationsOps.subscribe(integrationId, (next) => {
+      if (aliveRef.current) setInstalled(next);
+    });
     return () => {
+      aliveRef.current = false;
       unsub();
-      if (pollRef.current) clearInterval(pollRef.current);
+      stopPolling();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [integrationId]);
@@ -84,33 +111,50 @@ export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> =
     setSubmitting(true);
     setError('');
     setBuild(null);
+    setPollExpired(false);
     try {
-      const enableFn = httpsCallable<{ integrationId: string }, { buildId: string }>(
+      const enableFn = httpsCallable<{ integrationId: string }, { buildId?: string }>(
         functions!,
         'enableIntegration',
       );
       const r = await enableFn({ integrationId });
-      const initial = { buildId: r.data.buildId, status: 'QUEUED' };
+      const buildId = r.data?.buildId;
+      if (!buildId || typeof buildId !== 'string' || buildId.length === 0) {
+        throw new Error('enableIntegration returned no buildId');
+      }
+      const initial: BuildStatus = { buildId, status: 'QUEUED' };
       setBuild(initial);
 
-      // Poll every 5s until terminal.
+      // Poll every 5s until terminal OR until MAX_POLL_MS elapses.
+      // Always clear any prior interval before installing a new one — a
+      // double-click race would otherwise leak the previous interval.
+      stopPolling();
+      pollDeadlineRef.current = Date.now() + MAX_POLL_MS;
       const statusFn = httpsCallable<{ buildId: string }, BuildStatus>(functions!, 'getDeployBuildStatus');
       pollRef.current = setInterval(async () => {
+        if (!aliveRef.current) {
+          stopPolling();
+          return;
+        }
+        if (Date.now() > pollDeadlineRef.current) {
+          stopPolling();
+          setPollExpired(true);
+          return;
+        }
         try {
-          const s = await statusFn({ buildId: r.data.buildId });
+          const s = await statusFn({ buildId });
+          if (!aliveRef.current) return;
           setBuild(s.data);
           if (TERMINAL_STATUSES.has(s.data.status)) {
-            if (pollRef.current) clearInterval(pollRef.current);
-            pollRef.current = null;
-            // Re-fetch deploy status to update the function-count badge.
+            stopPolling();
             void refresh();
           }
         } catch (err) {
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
+          if (!aliveRef.current) return;
+          stopPolling();
           setError(err instanceof Error ? err.message : 'Status poll failed');
         }
-      }, 5000);
+      }, POLL_INTERVAL_MS);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Deploy failed to start');
     } finally {
@@ -128,9 +172,16 @@ export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> =
 
   const allDeployed = status.missing.length === 0;
   const partial = status.deployed.length > 0 && status.missing.length > 0;
-  const buildInProgress = build && !TERMINAL_STATUSES.has(build.status);
+  const buildInProgress = !!build && !TERMINAL_STATUSES.has(build.status);
   const buildSucceeded = build?.status === 'SUCCESS';
-  const buildFailed = build && TERMINAL_STATUSES.has(build.status) && build.status !== 'SUCCESS';
+  const buildFailed = !!build && TERMINAL_STATUSES.has(build.status) && build.status !== 'SUCCESS';
+  const remoteDeploying = installed?.status === 'deploying';
+  // Disable the deploy button across every concurrent-deploy vector: the
+  // local submit-in-progress AND the remote in-flight build (which the
+  // installed-integrations live-sub surfaces). Without the second clause a
+  // page reload mid-build would re-enable the button and let the operator
+  // start a second deploy on top of an already-running one.
+  const deployDisabled = submitting || buildInProgress || remoteDeploying;
 
   if (compact) {
     return (
@@ -169,7 +220,7 @@ export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> =
             </>
           )}
         </div>
-        <Button variant="ghost" onClick={refresh} disabled={loading || !!buildInProgress}>
+        <Button variant="ghost" onClick={refresh} disabled={loading || buildInProgress}>
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </Button>
       </div>
@@ -185,7 +236,7 @@ export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> =
             (uploaded by installer step 12b).
           </p>
           <div className="flex items-center gap-2">
-            <Button onClick={handleDeploy} disabled={submitting}>
+            <Button onClick={handleDeploy} disabled={deployDisabled}>
               <Rocket className="h-4 w-4 mr-1" />
               Deploy {status.missing.length} function{status.missing.length !== 1 ? 's' : ''}
             </Button>
@@ -196,29 +247,43 @@ export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> =
               </pre>
             </details>
           </div>
+          {remoteDeploying && (
+            <p className="text-xs text-amber-700">
+              A deploy submitted from another tab is still in progress. Wait for it to
+              finish before starting another.
+            </p>
+          )}
         </div>
       )}
 
-      {buildInProgress && (
+      {buildInProgress && build && (
         <div className="flex items-center gap-2 text-sm text-blue-700">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span>
-            Cloud Build {build!.buildId.slice(0, 12)}… status: <strong>{build!.status}</strong>
+            Cloud Build {build.buildId ? build.buildId.slice(0, 12) : '?'}… status:{' '}
+            <strong>{build.status}</strong>
           </span>
-          {build!.logUrl && (
-            <a href={build!.logUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs">
+          {build.logUrl && (
+            <a href={build.logUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs">
               logs ↗
             </a>
           )}
         </div>
       )}
 
-      {buildSucceeded && (
+      {pollExpired && (
+        <p className="text-xs text-amber-700">
+          Build still running after 30 minutes — UI stopped polling. Check the Cloud
+          Build console; the live status will update automatically when it finishes.
+        </p>
+      )}
+
+      {buildSucceeded && build && (
         <div className="flex items-center gap-2 text-sm text-emerald-700">
           <CheckCircle2 className="h-4 w-4" />
           <span>Deploy succeeded.</span>
-          {build!.logUrl && (
-            <a href={build!.logUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs">
+          {build.logUrl && (
+            <a href={build.logUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs">
               logs ↗
             </a>
           )}
@@ -246,15 +311,15 @@ export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> =
         </div>
       )}
 
-      {buildFailed && (
+      {buildFailed && build && (
         <div className="text-sm text-rose-700">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
             <span>
-              Deploy failed: <strong>{build!.status}</strong>
+              Deploy failed: <strong>{build.status}</strong>
             </span>
-            {build!.logUrl && (
-              <a href={build!.logUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs">
+            {build.logUrl && (
+              <a href={build.logUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs">
                 logs ↗
               </a>
             )}

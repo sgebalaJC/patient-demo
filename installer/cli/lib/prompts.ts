@@ -203,6 +203,35 @@ export async function collectInputs(prefill: Partial<InstallerInputs>): Promise<
   });
   if (p.isCancel(provisionApphosting)) throw new Error("cancelled");
 
+  // Optional integration groups bundled into the install-time deploy.
+  // Multi-select; empty = `core` only. Each selected group adds ~5
+  // additional Cloud Functions to the first deploy (see installer/cli/lib/
+  // function-groups.ts for the full list).
+  const integrationOptions = [
+    {value: "google-workspace", label: "Google Workspace (Gmail, Calendar, Drive)"},
+    {value: "signalwire", label: "SignalWire (SMS + fax)"},
+    {value: "stripe", label: "Stripe (patient billing)"},
+    {value: "pa", label: "Prior auth"},
+    {value: "backup", label: "Daily sidecar backup"},
+    {value: "ehr-drchrono", label: "EHR · DrChrono"},
+    {value: "ehr-athena", label: "EHR · Athena"},
+    {value: "ehr-elation", label: "EHR · Elation"},
+    {value: "ehr-ecw", label: "EHR · eCW"},
+    {value: "ehr-nextgen", label: "EHR · NextGen"},
+    {value: "ehr-tebra", label: "EHR · Tebra"},
+    {value: "ehr-greenway", label: "EHR · Greenway"},
+    {value: "ehr-pfusion", label: "EHR · Practice Fusion"},
+    {value: "ehr-cerner", label: "EHR · Cerner"},
+    {value: "ehr-epic", label: "EHR · Epic"},
+  ];
+  const enabledIntegrations = await p.multiselect({
+    message: "Enable integrations at install time? (use space to toggle, enter to confirm)",
+    options: integrationOptions,
+    initialValues: prefill.enabledIntegrations ?? [],
+    required: false,
+  });
+  if (p.isCancel(enabledIntegrations)) throw new Error("cancelled");
+
   const ok = await p.confirm({
     message: `Project ${pc.cyan(projectId as string)} in ${pc.cyan(region as string)}, billing ${pc.cyan(
       billingAccountId,
@@ -227,6 +256,7 @@ export async function collectInputs(prefill: Partial<InstallerInputs>): Promise<
     githubRepo: githubRepo ? (githubRepo as string) : undefined,
     provisionOpenclaw: provisionOpenclaw as boolean,
     provisionApphosting: provisionApphosting as boolean,
+    enabledIntegrations: enabledIntegrations as string[],
   });
   return parsed;
 }

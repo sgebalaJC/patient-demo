@@ -36,8 +36,10 @@ export const secretsStep: Step = {
       {name: "openclaw_gateway_token", value: () => randomBytes(48).toString("hex")},
 
       // Cloud Function defineSecret() declarations — seeded with placeholders
-      // so non-interactive deploys succeed. Overwritten later via the
-      // Integrations panel or by step 12 (SIDECAR_URL when VM exists).
+      // so non-interactive deploys succeed. SIDECAR_URL placeholder is
+      // immediately overwritten by step 09 once the VM has an external IP
+      // (and again by step 12 if 09 was skipped); other placeholders are
+      // overwritten via the Integrations panel after first deploy.
       {name: "SIDECAR_URL", value: () => "http://placeholder.invalid:8081"},
       {name: "SIDECAR_API_KEY", value: () => randomBytes(48).toString("hex")},
 

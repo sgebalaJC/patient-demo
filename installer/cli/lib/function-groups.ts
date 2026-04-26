@@ -70,6 +70,14 @@ export const FUNCTION_GROUPS: Record<GroupId, readonly string[]> = {
     // Sidecar proxy + installer wizard agent sync
     "sidecarProxy",
     "installerSyncAgentWorkspace",
+    // Admin-UI deploy controls — must ship in `core` so a fresh fork can
+    // deploy any other group from the integrations panel.
+    "enableIntegration",
+    "getDeployBuildStatus",
+    "getIntegrationFunctionStatus",
+    // Sweeper that reconciles `installed-integrations` docs whose Cloud Build
+    // never reported a terminal status. Cron — runs every 10 minutes.
+    "reconcileStuckIntegrationDeploys",
   ],
 
   // ── Backup cron (~1) — separate so a fork can opt out ──────────────────

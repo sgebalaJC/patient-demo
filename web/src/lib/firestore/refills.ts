@@ -434,6 +434,11 @@ export const prescriptionRefillOperations = {
         updatedAt: serverTimestamp(),
       });
 
+      audit({
+        action: 'refill.cancelled',
+        resourceType: 'prescription-refill',
+        resourceId: refillId,
+      });
       return { success: true, data: true };
     } catch (error: unknown) {
       logger.error('Error deleting refill request:', error);

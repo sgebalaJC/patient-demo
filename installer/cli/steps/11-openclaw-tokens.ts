@@ -102,19 +102,40 @@ function substitutePlaceholders(targetDir: string, state: InstallerState, log: L
     "{{GOOGLE_WORKSPACE_PROXY_URL}}": "TBD — set via /admin/integrations",
   };
 
+  // Reject any token VALUE that itself contains `{{...}}` substrings — a
+  // value like `{{PRACTICE_NAME}}` set as the practice name would re-feed
+  // into the loop on next run AND throw off the "unresolved" scan with a
+  // false positive.
+  for (const [k, v] of Object.entries(tokens)) {
+    if (/\{\{[A-Z_]+\}\}/.test(v)) {
+      throw new Error(
+        `Token value for ${k} contains placeholder syntax (\`${v}\`); refusing to substitute. Pick a value without {{X}} markers.`,
+      );
+    }
+  }
+
   const root = resolve(targetDir);
   const dirs = [join(root, "openclaw"), join(root, "infra", "agents")];
   let touched = 0;
   const unresolved = new Set<string>();
+  // Compile one regex per token with anchored `\{\{KEY\}\}` boundaries so a
+  // value containing `{{` (which we now reject above, but be defensive) cannot
+  // bleed into adjacent tokens. Captures the unresolved set BEFORE
+  // substitution so a token whose value happens to mention `{{X}}` doesn't
+  // produce a false-positive in the warning.
+  const replacers = Object.entries(tokens).map(([k, v]) => ({
+    re: new RegExp(k.replace(/[{}]/g, "\\$&"), "g"),
+    value: v,
+  }));
   for (const d of dirs) {
     walk(d, (path) => {
       if (!path.endsWith(".md") && !path.endsWith(".json")) return;
       const before = readFileSync(path, "utf8");
-      let after = before;
-      for (const [k, v] of Object.entries(tokens)) {
-        after = after.split(k).join(v);
+      for (const m of before.matchAll(/\{\{[A-Z_]+\}\}/g)) {
+        if (!(m[0] in tokens)) unresolved.add(m[0]);
       }
-      for (const m of after.matchAll(/\{\{[A-Z_]+\}\}/g)) unresolved.add(m[0]);
+      let after = before;
+      for (const r of replacers) after = after.replace(r.re, r.value);
       if (after !== before) {
         writeFileSync(path, after);
         touched++;

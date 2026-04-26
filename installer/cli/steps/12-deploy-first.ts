@@ -58,7 +58,7 @@ export const deployFirstStep: Step = {
     const fnFilter = deployFilterFor(enabled);
     const onlyFilter = ["firestore:rules", "firestore:indexes", ...fnFilter].join(",");
     log.info(`Deploying ${fnFilter.length} functions (groups: core${enabled.length ? "+" + enabled.join("+") : ""}).`);
-    const deployArgs = [
+    const fullArgs = [
       "deploy",
       "--only",
       onlyFilter,
@@ -67,29 +67,58 @@ export const deployFirstStep: Step = {
       "--force",
     ];
     const sp = log.spinner(`firebase deploy (rules, indexes, functions) → ${projectId}`);
-    const tryDeploy = () => {
-      const r = run("firebase", deployArgs, {capture: true, allowFail: true});
-      const failures = (r.stdout + "\n" + r.stderr).match(/failed to create function (\S+)/g) ?? [];
-      const exitOk = r.exitCode === 0;
-      const noPartial = failures.length === 0;
-      return {exitOk, noPartial, failures, raw: r.stdout + r.stderr};
+    // Match `failed to create function <name>` AND `... function us-west1-<name>`
+    // (firebase-tools alternates the format depending on region/version).
+    // Function names are valid TS identifiers (start with letter, then word
+    // chars only). Anchoring to that drops trailing punctuation like `.` or
+    // `,` that firebase-tools sometimes appends in human-readable log lines.
+    const failureRe = /failed to create function (?:[\w-]+-)?([A-Za-z][\w]*)/g;
+    const tryDeploy = (args: string[]) => {
+      const r = run("firebase", args, {capture: true, allowFail: true});
+      const out = `${r.stdout}\n${r.stderr}`;
+      const failures = Array.from(out.matchAll(failureRe)).map((m) => m[1]);
+      return {
+        exitOk: r.exitCode === 0,
+        noPartial: failures.length === 0,
+        failures,
+      };
+    };
+    /**
+     * Retry policy: on partial failure, redeploy ONLY the failed functions
+     * (plus the rules/indexes — cheap and ensures consistency). Re-running
+     * the full filter wastes minutes per retry and can trip per-region
+     * Cloud Functions create quota when a fork has 100+ functions.
+     */
+    const retryArgs = (failures: string[]) => {
+      const fnTokens = failures.map((f) => `functions:${f}`);
+      const onlyRetry = ["firestore:rules", "firestore:indexes", ...fnTokens].join(",");
+      return [
+        "deploy",
+        "--only",
+        onlyRetry,
+        `--project=${projectId}`,
+        "--non-interactive",
+        "--force",
+      ];
     };
     try {
-      let result = tryDeploy();
+      let result = tryDeploy(fullArgs);
       if (!result.exitOk || !result.noPartial) {
         sp.update(
           result.failures.length > 0
-            ? `Partial deploy: ${result.failures.length} trigger(s) failed (Eventarc IAM propagation). Retrying in 60s...`
+            ? `Partial deploy: ${result.failures.length} trigger(s) failed (Eventarc IAM propagation). Retrying failed functions in 60s...`
             : "First deploy failed; retrying in 60s...",
         );
         await new Promise((r) => setTimeout(r, 60_000));
-        result = tryDeploy();
+        const args = result.failures.length > 0 ? retryArgs(result.failures) : fullArgs;
+        result = tryDeploy(args);
         if (!result.exitOk || !result.noPartial) {
-          // One more retry after a longer wait — sometimes Eventarc IAM
-          // can take 2+ minutes to propagate on a brand-new project.
-          sp.update("Second attempt still partial; retrying in 90s...");
+          // One more retry after a longer wait — Eventarc IAM can take
+          // 2+ minutes to propagate on a brand-new project.
+          sp.update("Second attempt still partial; retrying failed functions in 90s...");
           await new Promise((r) => setTimeout(r, 90_000));
-          result = tryDeploy();
+          const args2 = result.failures.length > 0 ? retryArgs(result.failures) : fullArgs;
+          result = tryDeploy(args2);
         }
       }
       if (!result.exitOk || !result.noPartial) {
@@ -161,27 +190,26 @@ export const deployFirstStep: Step = {
       }
     }
 
-    // 5. Commit the patched web/apphosting.yaml so the next git push (which
-    //    triggers App Hosting auto-deploy) carries the real sidecarProxy URL.
+    // 5. Surface the patched web/apphosting.yaml so the operator can review
+    //    + commit. We deliberately DO NOT auto-commit/push: silently
+    //    creating commits in the operator's working copy can stack on
+    //    half-failed deploys and pollute the history. The next-steps
+    //    output prints the exact commands.
     try {
-      const status = runCapture("git", ["status", "--porcelain"], {cwd});
+      const status = runCapture("git", ["status", "--porcelain", "web/apphosting.yaml"], {cwd, allowFail: true});
       if (status.trim()) {
-        run("git", ["add", "web/apphosting.yaml"], {cwd, capture: true});
-        run("git", ["commit", "-m", "chore(installer): pin sidecarProxy URL in apphosting.yaml"], {cwd, capture: true});
-        log.info("Committed apphosting.yaml update.");
-        // Push if a remote exists; ignore failures (repo may be local-only).
-        const remotes = runCapture("git", ["remote"], {cwd, allowFail: true} as never);
-        if (remotes.split("\n").includes("origin")) {
-          try {
-            run("git", ["push", "origin", "main"], {cwd, capture: true});
-            log.info("Pushed to origin/main.");
-          } catch (err) {
-            log.warn(`git push failed (push manually): ${(err as Error).message.split("\n")[0]}`);
-          }
-        }
+        log.info(
+          [
+            "web/apphosting.yaml was patched with the sidecarProxy URL but NOT committed.",
+            "Review and commit yourself when ready:",
+            "  git -C " + cwd + " diff web/apphosting.yaml",
+            "  git -C " + cwd + " add web/apphosting.yaml && git -C " + cwd + " commit -m 'chore(installer): pin sidecarProxy URL'",
+            "  git -C " + cwd + " push origin main",
+          ].join("\n   "),
+        );
       }
     } catch (err) {
-      log.warn(`commit step skipped: ${(err as Error).message.split("\n")[0]}`);
+      log.warn(`could not check git status: ${(err as Error).message.split("\n")[0]}`);
     }
   },
 };

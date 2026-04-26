@@ -10,6 +10,7 @@ import {iamStep} from "./08-iam.ts";
 import {auditRetentionStep} from "./08b-audit-retention.ts";
 import {openclawVmStep} from "./09-openclaw-vm.ts";
 import {forkConfigStep} from "./10-fork-config.ts";
+import {rewriteSuperAdminStep} from "./10b-rewrite-superadmin.ts";
 import {openclawTokensStep} from "./11-openclaw-tokens.ts";
 import {deployFirstStep} from "./12-deploy-first.ts";
 import {packageSourceStep} from "./12b-package-source.ts";
@@ -33,6 +34,7 @@ export const STEPS: readonly Step[] = [
   auditRetentionStep,
   openclawVmStep,
   forkConfigStep,
+  rewriteSuperAdminStep,
   openclawTokensStep,
   deployFirstStep,
   packageSourceStep,

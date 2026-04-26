@@ -18,11 +18,27 @@ import { errorMessage } from '../errors';
  * Firestore mirror of audit events. Written by the `logAuditEvent` Cloud
  * Function (Admin SDK); read-only here. Super-admin gated by Firestore
  * rules — admins who can't pass `isSuperAdmin()` get permission-denied.
+ *
+ * Index coverage (firestore.indexes.json):
+ *   actorId                                          ✓
+ *   action                                           ✓
+ *   resourceType                                     ✓
+ *   (resourceType, resourceId)                       ✓
+ *   (actorId, action)                                ✓
+ *   (actorId, resourceType)                          ✓
+ *   (action, resourceType)                           ✓
+ *   (actorId, resourceId)                            ✓
+ *   (action, resourceId)                             ✓
+ *   (actorId, action, resourceType)                  ✓
+ *   (actorId, action, resourceType, resourceId)      ✓ (full 4-way)
+ *
+ * Filter combinations OUTSIDE the above set will fail at query time with
+ * `failed-precondition`. Add the matching composite if you wire a new combo
+ * into the AdminAuditLogPage filter UI.
  */
 export interface AuditLogEntry {
   id: string;
   actorId: string;
-  actorEmail: string | null;
   actorRole: string;
   action: string;
   resourceType: string | null;
@@ -72,7 +88,6 @@ export const auditLogOps = {
         return {
           id: d.id,
           actorId: data.actorId ?? '',
-          actorEmail: data.actorEmail ?? null,
           actorRole: data.actorRole ?? 'unknown',
           action: data.action ?? '',
           resourceType: data.resourceType ?? null,

@@ -134,7 +134,7 @@ const AdminAuditLogPageInner: React.FC = () => {
                         {when.toLocaleString()}
                       </td>
                       <td className="px-3 py-2 text-xs">
-                        <div className="text-secondary-900">{e.actorEmail ?? e.actorId}</div>
+                        <div className="text-secondary-900 font-mono">{e.actorId}</div>
                         <div className="text-secondary-500">{e.actorRole}</div>
                       </td>
                       <td className="px-3 py-2 text-xs">

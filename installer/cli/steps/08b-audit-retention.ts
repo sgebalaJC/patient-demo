@@ -23,7 +23,14 @@ import type {Step} from "../lib/types.ts";
 const RETENTION_YEARS = 7;
 const RETENTION_SECONDS = RETENTION_YEARS * 365 * 24 * 3600;
 const SINK_NAME = "audit-archive-sink";
-const SINK_FILTER = 'jsonPayload.audit=true OR labels.audit=true';
+// Filter narrowed to logEvents that explicitly mark themselves audit AND
+// originate from the `logAuditEvent` callable (or the inline emitAudit
+// helper, which always carries `jsonPayload.audit=true`). Removing the
+// blanket `OR labels.audit=true` half — no code currently sets
+// labels.audit, so the disjunction was dead-code and a future stray label
+// could accidentally route non-audit logs to the 7-year archive (cost +
+// PII risk).
+const SINK_FILTER = 'jsonPayload.audit=true';
 
 interface SinkDescribe {
   name: string;

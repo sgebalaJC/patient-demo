@@ -128,9 +128,19 @@ export const firebaseInitStep: Step = {
     }
     state.artifacts.firebaseAppId = appId;
 
-    // Pull SDK config.
-    const cfgRaw = firebaseText(["apps:sdkconfig", "WEB", appId!, `--project=${projectId}`]);
+    // Pull SDK config. Use --json so we get clean JSON instead of the
+    // legacy JS-ish blob (which we used to regex-parse — fragile against
+    // colons inside string values).
+    const cfgRaw = firebaseText(["apps:sdkconfig", "WEB", appId!, `--project=${projectId}`, "--json"]);
     const cfg = parseSdkConfig(cfgRaw);
+    // The apiKey IS retained in state.json: step 07 reads
+    // `state.artifacts.firebaseConfig.apiKey` to seed the
+    // VITE_FIREBASE_API_KEY secret in Secret Manager. Firebase web API keys
+    // are public routing identifiers (Firebase Rules + App Check are the
+    // real defense), so persisting to .installer-state.json is acceptable —
+    // the file already lives in the operator's working dir which is
+    // .gitignored by the installer's own template. Anyone with file access
+    // to .installer-state.json can recover the key from the project anyway.
     state.artifacts.firebaseConfig = cfg;
     log.info(`Captured Firebase SDK config (apiKey ${cfg.apiKey.slice(0, 8)}…).`);
 
@@ -143,7 +153,10 @@ export const firebaseInitStep: Step = {
     log.success(`Wrote .firebaserc → default = ${projectId}`);
 
     // web/apphosting.yaml — backend id derived from short, lowercase project id.
-    const backendId = `web-${projectId}`.slice(0, 32);
+    // Trim trailing hyphens left over by the .slice(0, 32) cap; App Hosting
+    // backend ids must match `^[a-z][a-z0-9-]*[a-z0-9]$`, so a final `-`
+    // is rejected by the API.
+    const backendId = `web-${projectId}`.slice(0, 32).replace(/-+$/, '');
     state.artifacts.apphostingBackendId = backendId;
     const yamlPath = resolve(targetDir, "web", "apphosting.yaml");
     writeFileSync(yamlPath, renderApphostingYaml(cfg, backendId));
@@ -163,18 +176,34 @@ export const firebaseInitStep: Step = {
 };
 
 function parseSdkConfig(raw: string): WebAppConfig {
-  // CLI output is JS-ish; the JSON object lives between the first { and last }.
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start < 0 || end < 0) throw new Error(`Could not find SDK config object in:\n${raw}`);
-  const body = raw
-    .slice(start, end + 1)
-    // Quote unquoted keys.
-    .replace(/([,{]\s*)([A-Za-z_][\w]*)\s*:/g, '$1"$2":')
-    // Single → double quotes.
-    .replace(/'/g, '"');
-  const obj = JSON.parse(body) as WebAppConfig;
-  return obj;
+  // With `--json`, firebase-tools wraps the SDK config in a `result` envelope:
+  //   { "status": "success", "result": { "sdkConfig": { ... } } }
+  // Tolerate variations: top-level result, result.sdkConfig, or a bare config
+  // object (older CLI versions). The error message lists the shapes we tried
+  // so the operator can paste the raw output if a future shape lands.
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`firebase apps:sdkconfig --json did not return JSON:\n${raw.slice(0, 400)}\n${(err as Error).message}`);
+  }
+  const candidates: unknown[] = [];
+  const env = parsed as {result?: {sdkConfig?: unknown} | unknown} & Record<string, unknown>;
+  if (env?.result && typeof env.result === "object") {
+    const r = env.result as {sdkConfig?: unknown};
+    if (r.sdkConfig) candidates.push(r.sdkConfig);
+    candidates.push(env.result);
+  }
+  candidates.push(parsed);
+  for (const c of candidates) {
+    if (c && typeof c === "object") {
+      const o = c as Partial<WebAppConfig>;
+      if (typeof o.apiKey === "string" && typeof o.appId === "string" && typeof o.projectId === "string") {
+        return o as WebAppConfig;
+      }
+    }
+  }
+  throw new Error(`Could not find SDK config in --json output (tried result.sdkConfig, result, root):\n${raw.slice(0, 400)}`);
 }
 
 function renderApphostingYaml(cfg: WebAppConfig, backendId: string): string {

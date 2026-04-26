@@ -170,7 +170,9 @@ export const UserManagementPage: React.FC = () => {
         action: 'auth.impersonation-started',
         resourceType: 'user',
         resourceId: targetUser.id,
-        metadata: { actor: userProfile?.email, targetRole: targetUser.role },
+        // Never log the operator's email — actorId on the audit doc already
+        // identifies them by UID. `targetRole` is non-PII metadata.
+        metadata: { targetRole: targetUser.role },
       });
       try {
         await signInWithCustomToken(auth, res.data.token);

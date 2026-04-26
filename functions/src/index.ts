@@ -143,15 +143,13 @@ export const updateUserAuth = onCall({
 
     // Audit log: user update
     const changedFields = Object.keys(userDocData).filter(k => k !== 'updatedAt');
-    logger.info('[AUDIT]', {
-      audit: true,
+    await emitAudit({
       actorId: context.uid,
       actorRole: 'admin',
       action: 'user.updated',
       resourceType: 'user',
       resourceId: uid,
       metadata: { changedFields },
-      timestamp: new Date().toISOString(),
     });
 
     return {
@@ -198,14 +196,12 @@ export const setUserPassword = onCall({
 
     await admin.auth().updateUser(uid, { password });
 
-    logger.info('[AUDIT]', {
-      audit: true,
+    await emitAudit({
       actorId: context.uid,
       actorRole: 'admin',
       action: 'user.password_set',
       resourceType: 'user',
       resourceId: uid,
-      timestamp: new Date().toISOString(),
     });
 
     return { success: true, message: 'Password set successfully' };
@@ -223,6 +219,116 @@ export const setUserPassword = onCall({
 /**
  * HTTP Callable Functions for User Management
  */
+
+/**
+ * PII field names dropped from audit metadata at any depth.
+ *
+ * Centralized so every [AUDIT] logger.info call (and future ones) gets the
+ * same scrub. Adding a name here transparently protects all call sites.
+ */
+const AUDIT_PII_FIELD_NAMES = new Set([
+  'email', 'name', 'firstname', 'lastname', 'phone', 'phonenumber',
+  'dateofbirth', 'dob', 'address', 'ssn', 'content', 'message', 'body',
+  'password', 'token', 'allergies', 'diagnosis', 'medication', 'medications',
+  'actor', 'operator', 'recipient', 'recipientemail', 'targetemail',
+  'realemail',
+  // Prototype-pollution hygiene: never copy these onto the scrubbed
+  // output even though Object.entries already filters inherited props.
+  // Keeps the resulting object's prototype chain clean for any consumer
+  // that uses `for...in` or has-own-property reflection on the audit doc.
+  '__proto__', 'constructor', 'prototype',
+]);
+
+/**
+ * Recursively walk an audit-metadata value and drop any object key whose
+ * lowercased name appears in `AUDIT_PII_FIELD_NAMES`. Arrays and primitives
+ * pass through unchanged. Returns a new structure; input is not mutated.
+ *
+ * Why deep-walk: callers sometimes nest details one level down
+ * (`metadata: { user: { email } }`); a top-level filter would leak `email`.
+ *
+ * Cycle + depth guards: `logAuditEvent` accepts arbitrary client metadata.
+ * A self-referential object would otherwise stack-overflow the function;
+ * a deeply-nested attacker payload could blow the call stack and deny the
+ * audit logger to legitimate callers. The `seen` WeakSet kills cycles
+ * and SCRUB_MAX_DEPTH caps adversarial nesting at a realistic ceiling.
+ */
+const SCRUB_MAX_DEPTH = 8;
+
+export function scrubPii(input: unknown, depth = 0, seen?: WeakSet<object>): unknown {
+  if (depth > SCRUB_MAX_DEPTH) return null;
+  if (Array.isArray(input)) {
+    if (!seen) seen = new WeakSet();
+    if (seen.has(input)) return null;
+    seen.add(input);
+    return input.map((v) => scrubPii(v, depth + 1, seen));
+  }
+  if (input && typeof input === 'object') {
+    if (!seen) seen = new WeakSet();
+    if (seen.has(input as object)) return null;
+    seen.add(input as object);
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      if (AUDIT_PII_FIELD_NAMES.has(key.toLowerCase())) continue;
+      out[key] = scrubPii(value, depth + 1, seen);
+    }
+    return out;
+  }
+  return input;
+}
+
+/**
+ * Common shape for audit emits. Every server-side audit point should use
+ * `emitAudit(...)` instead of writing `logger.info('[AUDIT]', ...)` directly:
+ * the helper applies the PII scrub AND mirrors to Firestore so the
+ * AdminAuditLogPage shows the full server-side trail (not just client-driven
+ * actions). Fire-and-forget mirror — Firestore failure must not block the
+ * primary action's success.
+ */
+interface AuditEmitInput {
+  actorId: string;
+  actorRole: string;
+  action: string;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export async function emitAudit(input: AuditEmitInput): Promise<void> {
+  const safeMetadata = input.metadata ? (scrubPii(input.metadata) as Record<string, unknown>) : {};
+  const timestamp = new Date().toISOString();
+  logger.info('[AUDIT]', {
+    audit: true,
+    actorId: input.actorId,
+    actorRole: input.actorRole,
+    action: input.action,
+    resourceType: input.resourceType ?? null,
+    resourceId: input.resourceId ?? null,
+    metadata: safeMetadata,
+    timestamp,
+  });
+  // Awaited Firestore mirror — adds ~50ms to the calling handler but
+  // guarantees durability. Cloud Functions v2 may tear down containers
+  // immediately after the response resolves, so an unawaited `add()` can be
+  // cancelled mid-flight; for HIPAA-classified audit entries that's not
+  // acceptable. Mirror failures still degrade gracefully (Cloud Logging is
+  // the primary archive via the audit sink) but get logged at warn so ops
+  // can investigate.
+  try {
+    await db.collection('audit-logs').add({
+      actorId: input.actorId,
+      actorRole: input.actorRole,
+      action: input.action,
+      resourceType: input.resourceType ?? null,
+      resourceId: input.resourceId ?? null,
+      metadata: safeMetadata,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      clientTimestamp: timestamp,
+    });
+  } catch (err) {
+    logger.warn('[AUDIT] Firestore mirror failed:', { message: (err as Error).message });
+  }
+}
 
 /**
  * Audit Logging — writes structured, HIPAA-safe audit events to GCP Cloud Logging.
@@ -251,19 +357,12 @@ export const logAuditEvent = onCall({
       // If role lookup fails, proceed with 'unknown' — don't block audit
     }
 
-    // Sanitize metadata: strip any fields that could contain PII
-    const PII_FIELD_NAMES = [
-      'email', 'name', 'firstName', 'lastName', 'phone', 'phoneNumber',
-      'dateOfBirth', 'dob', 'address', 'ssn', 'content', 'message',
-      'password', 'token', 'allergies', 'diagnosis', 'medication',
-    ];
+    // Sanitize metadata: recursively strip any fields that could contain PII.
+    // Deep-walk because callers sometimes nest details (e.g. `user: { email }`)
+    // and the previous shallow filter would let `email` through one level down.
     let safeMetadata: Record<string, unknown> = {};
     if (metadata && typeof metadata === 'object') {
-      safeMetadata = Object.fromEntries(
-        Object.entries(metadata).filter(
-          ([key]) => !PII_FIELD_NAMES.includes(key.toLowerCase())
-        )
-      );
+      safeMetadata = scrubPii(metadata) as Record<string, unknown>;
     }
 
     const timestamp = new Date().toISOString();
@@ -286,7 +385,6 @@ export const logAuditEvent = onCall({
     try {
       await db.collection('audit-logs').add({
         actorId: context.uid,
-        actorEmail: context.token?.email || null,
         actorRole,
         action,
         resourceType: resourceType || null,
@@ -481,15 +579,13 @@ export const createUserWithAuth = onCall({
     }
 
     // Audit log: user creation
-    logger.info('[AUDIT]', {
-      audit: true,
+    await emitAudit({
       actorId: context.uid,
       actorRole: 'admin',
       action: 'user.created',
       resourceType: 'user',
       resourceId: userRecord.uid,
       metadata: { targetRole: role, smsSent, emailSent },
-      timestamp: new Date().toISOString(),
     });
 
     return {
@@ -688,13 +784,12 @@ export const onBootstrapRequestCreated = onDocumentCreated({
 
       const token = await admin.auth().createCustomToken(userRecord.uid, { role: 'admin' });
 
-      logger.info('[AUDIT] First admin bootstrapped', {
-        audit: true,
+      await emitAudit({
         actorId: 'bootstrap',
+        actorRole: 'system',
         action: 'user.bootstrap',
         resourceType: 'user',
         resourceId: userRecord.uid,
-        timestamp: new Date().toISOString(),
       });
 
       await requestRef.update({
@@ -760,11 +855,12 @@ export const deleteAccount = onCall({
     // Rate limit: 1 deletion per 10 minutes
     await checkRateLimit(context.uid, 'deleteAccount', 1, 10);
 
-    logger.info('[AUDIT] Account deletion started', {
-      audit: true,
+    await emitAudit({
       actorId: context.uid,
-      targetUserId: uidToDelete,
-      timestamp: new Date().toISOString(),
+      actorRole: uidToDelete === context.uid ? 'self' : 'admin',
+      action: 'account.deletion_started',
+      resourceType: 'user',
+      resourceId: uidToDelete,
     });
 
     const batch = db.batch();
@@ -826,12 +922,13 @@ export const deleteAccount = onCall({
       }
     }
 
-    logger.info('[AUDIT] Account deletion completed', {
-      audit: true,
+    await emitAudit({
       actorId: context.uid,
-      targetUserId: uidToDelete,
-      documentsDeleted: totalDeleted,
-      timestamp: new Date().toISOString(),
+      actorRole: uidToDelete === context.uid ? 'self' : 'admin',
+      action: 'account.deletion_completed',
+      resourceType: 'user',
+      resourceId: uidToDelete,
+      metadata: { documentsDeleted: totalDeleted },
     });
 
     return {
@@ -877,11 +974,12 @@ export const exportPatientData = onCall({
     // Rate limit: 1 export per 60 minutes
     await checkRateLimit(patientId, "exportPatientData", 1, 60);
 
-    logger.info("[AUDIT] Patient data export started", {
-      audit: true,
+    await emitAudit({
       actorId: patientId,
-      action: "patient.export",
-      timestamp: new Date().toISOString(),
+      actorRole: 'patient',
+      action: 'patient.export_started',
+      resourceType: 'user',
+      resourceId: patientId,
     });
 
     // ── Collect all patient data from Firestore ──
@@ -1077,14 +1175,17 @@ export const exportPatientData = onCall({
       expires: Date.now() + 60 * 60 * 1000, // 1 hour
     });
 
-    logger.info("[AUDIT] Patient data export completed", {
-      audit: true,
+    await emitAudit({
       actorId: patientId,
-      action: "patient.export.completed",
-      zipSizeBytes: zipBuffer.length,
-      fileCount: downloadedFiles.length,
-      filesSkipped,
-      timestamp: new Date().toISOString(),
+      actorRole: 'patient',
+      action: 'patient.export_completed',
+      resourceType: 'user',
+      resourceId: patientId,
+      metadata: {
+        zipSizeBytes: zipBuffer.length,
+        fileCount: downloadedFiles.length,
+        filesSkipped,
+      },
     });
 
     return {
@@ -1842,15 +1943,12 @@ export const verifyPhoneLogin = onCall({
 
     logger.info('Phone registration successful (pending activation)', { uid: userRecord.uid });
 
-    // Audit log
-    logger.info('[AUDIT]', {
-      audit: true,
+    await emitAudit({
       actorId: userRecord.uid,
       actorRole: 'patient',
       action: 'user.phone_registered',
       resourceType: 'user',
       resourceId: userRecord.uid,
-      timestamp: new Date().toISOString(),
     });
 
     return { success: true, token, isNewUser: true };
@@ -2158,6 +2256,7 @@ export {
   getIntegrationFunctionStatus,
   enableIntegration,
   getDeployBuildStatus,
+  reconcileStuckIntegrationDeploys,
 } from "./installer.js";
 
 

@@ -1,4 +1,5 @@
-import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
+import {existsSync, mkdirSync, readFileSync, renameSync, writeFileSync} from "node:fs";
+import {randomBytes} from "node:crypto";
 import {dirname, join} from "node:path";
 import {InstallerStateSchema, type InstallerState} from "./types.ts";
 
@@ -15,11 +16,21 @@ export function loadState(targetDir: string): InstallerState | null {
   return InstallerStateSchema.parse(raw);
 }
 
+/**
+ * Atomic write: render to a sibling tempfile, then rename over the target.
+ * `rename(2)` on the same filesystem is atomic on POSIX, so a SIGINT or
+ * crash mid-write either leaves the previous state.json intact OR replaces
+ * it wholesale — never a half-written JSON that would fail Zod parse on the
+ * next resume. Tempfile name uses a random suffix to avoid collisions when
+ * two installer processes happen to overlap.
+ */
 export function saveState(targetDir: string, state: InstallerState): void {
   const p = statePath(targetDir);
   mkdirSync(dirname(p), {recursive: true});
   state.updatedAt = new Date().toISOString();
-  writeFileSync(p, JSON.stringify(state, null, 2) + "\n");
+  const tmp = `${p}.${randomBytes(4).toString("hex")}.tmp`;
+  writeFileSync(tmp, JSON.stringify(state, null, 2) + "\n");
+  renameSync(tmp, p);
 }
 
 export function newState(): InstallerState {

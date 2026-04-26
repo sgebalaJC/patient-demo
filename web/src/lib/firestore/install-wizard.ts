@@ -4,6 +4,7 @@ import type { ApiResponse } from '../../types';
 import type { InstallWizardState } from '../../types/install-wizard';
 import logger from '../logger';
 import { errorMessage } from '../errors';
+import { audit } from '../audit';
 
 const DOC_REF = doc(db, 'system', 'installWizard');
 
@@ -35,6 +36,12 @@ export const installWizardOps = {
         { ...patch, updatedAt: serverTimestamp() },
         { merge: true },
       );
+      audit({
+        action: 'install-wizard.saved',
+        resourceType: 'system',
+        resourceId: 'installWizard',
+        metadata: { sections: Object.keys(patch) },
+      });
       return { success: true };
     } catch (error: unknown) {
       logger.error('Error saving install wizard state:', error);
@@ -66,6 +73,12 @@ export const liveBrandingOps = {
   async save(patch: LiveBranding): Promise<ApiResponse<void>> {
     try {
       await setDoc(BRANDING_REF, { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+      audit({
+        action: 'branding.updated',
+        resourceType: 'system',
+        resourceId: 'branding',
+        metadata: { sections: Object.keys(patch) },
+      });
       return { success: true };
     } catch (error: unknown) {
       return { success: false, error: errorMessage(error) };

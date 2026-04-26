@@ -32,11 +32,27 @@ export interface InstalledIntegration {
 
 const collectionPath = 'installed-integrations';
 
+// Allowlist of valid status values. A doc with `status: 'frobnicate'`
+// (corrupt write, future schema drift) gets coerced to 'pending' rather
+// than typing as the union and crashing downstream consumers that switch
+// on the value.
+const VALID_STATUSES: ReadonlyArray<InstalledIntegration['status']> = [
+  'deploying',
+  'deployed',
+  'failed',
+  'pending',
+];
+function isValidStatus(value: unknown): value is InstalledIntegration['status'] {
+  return typeof value === 'string' && (VALID_STATUSES as readonly string[]).includes(value);
+}
+
 function normalize(integrationId: string, data: Record<string, unknown> | undefined): InstalledIntegration {
   return {
     integrationId,
-    status: ((data?.status as InstalledIntegration['status']) ?? 'pending'),
-    deployedFunctions: (data?.deployedFunctions as string[]) ?? [],
+    status: isValidStatus(data?.status) ? data.status : 'pending',
+    deployedFunctions: Array.isArray(data?.deployedFunctions)
+      ? (data.deployedFunctions as unknown[]).filter((s): s is string => typeof s === 'string')
+      : [],
     deployedAt: data?.deployedAt instanceof Timestamp ? (data.deployedAt as Timestamp) : null,
     deployedFromBundle: typeof data?.deployedFromBundle === 'string' ? (data.deployedFromBundle as string) : undefined,
     lastBuildId: typeof data?.lastBuildId === 'string' ? (data.lastBuildId as string) : undefined,

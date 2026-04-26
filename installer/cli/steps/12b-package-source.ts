@@ -58,14 +58,62 @@ export const packageSourceStep: Step = {
       }
     }
 
-    // 1. Compute version tag.
+    // Object versioning: keeps prior `latest` pointers around as noncurrent
+    // versions so a poisoned overwrite is recoverable. Cheap (~one tarball
+    // per push to main) and lets ops audit the bundle history.
+    try {
+      gcloud(
+        ["storage", "buckets", "update", `gs://${bucket}`, "--versioning", `--project=${projectId}`],
+        {capture: true},
+      );
+    } catch (err) {
+      log.warn(`enabling versioning on gs://${bucket} returned non-zero: ${(err as Error).message.split("\n")[0]}`);
+    }
+
+    // Bucket-scoped IAM: Cloud Build SA needs write so the in-app deploy
+    // path AND the push-on-main refresh trigger can replace the bundle.
+    // Project-level granting in step 08 is `objectViewer` only — we tighten
+    // write to this bucket explicitly so a project Editor cannot swap the
+    // tarball without also touching this binding. Use objectCreator (NOT
+    // objectAdmin): the SA only needs to upload new bundles, not delete
+    // historical versions. objectAdmin would let the SA wipe the immutable
+    // versions/<version>/ history that the rollback story relies on.
+    const projectNumber = state.artifacts.projectNumber;
+    if (projectNumber) {
+      const cloudBuildSA = `${projectNumber}@cloudbuild.gserviceaccount.com`;
+      for (const role of ["roles/storage.objectCreator", "roles/storage.objectViewer"]) {
+        try {
+          gcloud(
+            [
+              "storage",
+              "buckets",
+              "add-iam-policy-binding",
+              `gs://${bucket}`,
+              `--member=serviceAccount:${cloudBuildSA}`,
+              `--role=${role}`,
+              `--project=${projectId}`,
+            ],
+            {capture: true},
+          );
+          log.info(`Granted ${role} on gs://${bucket} → Cloud Build SA`);
+        } catch (err) {
+          log.warn(`bucket IAM grant ${role} for Cloud Build SA returned non-zero: ${(err as Error).message.split("\n")[0]}`);
+        }
+      }
+    }
+
+    // 1. Compute version tag. Keep millisecond precision in the timestamp
+    //    so two runs in the same second don't produce the same version
+    //    (which would silently overwrite the immutable historical copy
+    //    in versions/<version>/...).
     let gitSha = "unknown";
     try {
       gitSha = runCapture("git", ["rev-parse", "--short", "HEAD"], {cwd}).slice(0, 12);
     } catch {
       log.warn("git rev-parse failed in target dir; using 'unknown' for sha.");
     }
-    const isoNow = new Date().toISOString().replace(/[:.]/g, "-").replace(/-\d+Z$/, "Z");
+    // 2026-04-26T22-30-00-123Z-<sha> (ms preserved, only `:` and `.` swapped).
+    const isoNow = new Date().toISOString().replace(/[:.]/g, "-");
     const version = `${isoNow}-${gitSha}`;
     state.artifacts.installerSourceVersion = version;
 

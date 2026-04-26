@@ -1,4 +1,4 @@
-import {gcloud, gcloudJson, exists} from "../lib/gcloud.ts";
+import {gcloud, gcloudJson} from "../lib/gcloud.ts";
 import type {Step} from "../lib/types.ts";
 
 const TRIGGER_NAME = "refresh-functions-source";
@@ -61,14 +61,6 @@ export const sourceRefreshTriggerStep: Step = {
     const existing = triggers.find((t) => t.name === TRIGGER_NAME);
     if (existing) {
       log.info(`Trigger ${TRIGGER_NAME} already exists; skipping create.`);
-      return;
-    }
-
-    // Pre-flight: detect whether the Cloud Build GitHub App is installed
-    // on this account/repo. If not, surface a clear instruction instead of
-    // a cryptic INVALID_ARGUMENT from the create call.
-    if (!exists(["builds", "triggers", "list", `--project=${projectId}`])) {
-      log.warn("Cloud Build API not yet enabled. Step 05 should have done that — check IAM.");
       return;
     }
 

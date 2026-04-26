@@ -255,8 +255,29 @@ service cloud.firestore {
         || isSuperAdmin()
       );
     }
+    // Install wizard state — captures the entire fork-config draft, including
+    // operator decisions about super-admin email + branding. Super-admin only;
+    // a regular practice admin must not be able to read or rewrite the wizard.
+    match /system/installWizard {
+      allow read, write: if isSuperAdmin();
+    }
+    // Live branding override — written by the install wizard's "Apply colors
+    // live" button. Read by `liveBrandingOps.get()` from the wizard only,
+    // which is itself super-admin gated. Tightening to admin-read so
+    // unauthenticated visitors and patients can't enumerate the override.
+    match /system/branding {
+      allow read: if isAdmin();
+      allow write: if isSuperAdmin();
+    }
+    // Catch-all for OTHER /system/* docs. Firestore rules engine OR's all
+    // matching rules — if this `{docId}` block grants `isAdmin()` to ANY
+    // doc, it ORs with the specific super-admin gates above and lets a
+    // practice admin slip past. The `docId not in [...]` guard pins the
+    // catch-all to genuinely-other docs. Any future super-admin-only doc
+    // added above MUST also be added to this exclusion list.
     match /system/{docId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAdmin()
+        && !(docId in ['installWizard', 'branding', 'settings']);
     }
 
     // ───────────────────────── Audit logs ─────────────────────────

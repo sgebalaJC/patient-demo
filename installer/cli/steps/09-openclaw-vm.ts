@@ -2,7 +2,7 @@ import {writeFileSync, mkdirSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {resolve} from "node:path";
 import {exists, gcloud, gcloudJson, gcloudText} from "../lib/gcloud.ts";
-import type {Step} from "../lib/types.ts";
+import type {Step, Logger} from "../lib/types.ts";
 
 const VM_NAME = "openclaw";
 const VM_MACHINE = "e2-standard-2";
@@ -155,13 +155,44 @@ export const openclawVmStep: Step = {
     );
     log.info(`Wrote ${hostCfgPath} for infra/deploy.sh.`);
 
-    // 6. Hint about config staging — the actual openclaw.json render+upload
+    // 6. Write the real SIDECAR_URL secret value now that the VM's external
+    //    IP is known. Step 07 seeded a placeholder so `firebase deploy`
+    //    (defineSecret check) succeeds; doing the overwrite here — BEFORE
+    //    step 12 — means the very first sidecarProxy invocation reads the
+    //    real URL, not the placeholder.
+    if (externalIp) {
+      writeSidecarUrlSecret(projectId, `http://${externalIp}:${SIDECAR_PORT}`, log);
+    }
+
+    // 7. Hint about config staging — the actual openclaw.json render+upload
     //    happens in step 11 (which has access to the rewritten placeholders).
     log.info(`Startup script will pull openclaw.json from gs://${configBucket}/openclaw.json on each boot.`);
     log.info(`Gateway port (loopback-only on VM): ${GATEWAY_PORT}.`);
     void gcloudText;
   },
 };
+
+/**
+ * Idempotent SIDECAR_URL secret update — adds a new version when the secret
+ * already exists, creates it otherwise. Logged but not fatal: if the binding
+ * fails, step 12 still runs the same logic with sufficient retry runway.
+ */
+function writeSidecarUrlSecret(projectId: string, sidecarUrl: string, log: Logger): void {
+  const secretExists = exists(["secrets", "describe", "SIDECAR_URL", `--project=${projectId}`]);
+  try {
+    if (secretExists) {
+      gcloud(["secrets", "versions", "add", "SIDECAR_URL", `--project=${projectId}`, "--data-file=-"], {input: sidecarUrl});
+    } else {
+      gcloud(
+        ["secrets", "create", "SIDECAR_URL", "--replication-policy=automatic", `--project=${projectId}`, "--data-file=-"],
+        {input: sidecarUrl},
+      );
+    }
+    log.info(`Set SIDECAR_URL secret → ${sidecarUrl}`);
+  } catch (err) {
+    log.warn(`Could not set SIDECAR_URL: ${(err as Error).message.split("\n")[0]}`);
+  }
+}
 
 /**
  * Write the VM startup script to a temp file (so gcloud can read via
@@ -217,9 +248,11 @@ fi
 # 4. Pull secrets from Secret Manager into /root/sidecar.env
 mkdir -p /root
 {
+  # Secret names must match step 07's specs exactly. Casing matters: Secret
+  # Manager treats names case-sensitively; a mismatch silently writes MISSING.
   echo "OPENCLAW_GATEWAY_TOKEN=$(gcloud secrets versions access latest --secret=openclaw_gateway_token 2>/dev/null || echo MISSING)"
-  echo "SIDECAR_API_KEY=$(gcloud secrets versions access latest --secret=sidecar_api_key 2>/dev/null || echo MISSING)"
-  echo "SIGNALWIRE_AUTH_TOKEN=$(gcloud secrets versions access latest --secret=signalwire_auth_token 2>/dev/null || echo MISSING)"
+  echo "SIDECAR_API_KEY=$(gcloud secrets versions access latest --secret=SIDECAR_API_KEY 2>/dev/null || echo MISSING)"
+  echo "SIGNALWIRE_AUTH_TOKEN=$(gcloud secrets versions access latest --secret=SIGNALWIRE_AUTH_TOKEN 2>/dev/null || echo MISSING)"
   echo "OPENCLAW_STATE_DIR=/root/.openclaw"
 } > /root/sidecar.env
 chmod 600 /root/sidecar.env
@@ -233,7 +266,13 @@ else
   echo "[startup] gs://\${CONFIG_BUCKET}/openclaw.json not yet uploaded; skipping"
 fi
 
-# 6. systemd unit for openclaw-gateway (only writes if absent)
+# 6. systemd unit for openclaw-gateway (only writes if absent).
+#    The gateway listens on loopback (port 18789) — that's intentional.
+#    The publicly-reachable sidecar HTTP (port 8081, opened by the firewall
+#    rule above) is a SEPARATE service deployed via \`infra/deploy.sh\`
+#    after this step; it has its own systemd unit and HMAC-verifies inbound
+#    requests at the app layer. Do not change \`--bind loopback\` here:
+#    that would expose the gateway's unauthenticated control plane.
 if [ ! -f /etc/systemd/system/openclaw-gateway.service ]; then
   cat > /etc/systemd/system/openclaw-gateway.service <<'UNIT'
 [Unit]

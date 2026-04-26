@@ -9,6 +9,7 @@ import { EhrSetup } from '../components/agent/EhrSetup';
 import { GoogleWorkspaceSetup } from '../components/agent/GoogleWorkspaceSetup';
 import { SignalWireSetup } from '../components/agent/SignalWireSetup';
 import { SlackSetup } from '../components/agent/SlackSetup';
+import { IntegrationDeployControl } from '../components/agent/IntegrationDeployControl';
 import { EHR_PROVIDERS } from '../lib/integrations/registry';
 import { sidecar } from '../lib/sidecar';
 import { readSlackStatus, type SlackChannelStatus } from '../lib/slack';
@@ -73,9 +74,16 @@ const IntegrationsPanel: React.FC = () => {
               encrypted at rest and never exposed to practice admins.
             </p>
           </div>
-          <div className="space-y-3">
-            <GoogleWorkspaceSetup />
-            <SignalWireSetup />
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <IntegrationDeployControl integrationId="google-workspace" />
+              <GoogleWorkspaceSetup />
+            </div>
+            <div className="space-y-2">
+              <IntegrationDeployControl integrationId="signalwire" />
+              <SignalWireSetup />
+            </div>
+            {/* Slack uses webhooks (no Cloud Functions of its own); no deploy control needed. */}
             <SlackSetup
               agentName={BRANDING.adminAgent.name}
               initialConnected={slack.enabled}
@@ -97,9 +105,12 @@ const IntegrationsPanel: React.FC = () => {
               toggling on activates the matching agent skill.
             </p>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-6">
             {EHR_PROVIDERS.map((p) => (
-              <EhrSetup key={p.id} provider={p} />
+              <div key={p.id} className="space-y-2">
+                <IntegrationDeployControl integrationId={`ehr-${p.id}`} />
+                <EhrSetup provider={p} />
+              </div>
             ))}
           </div>
         </section>

@@ -1,0 +1,64 @@
+# Refreshes gs://<project>-installer-source/ when functions/ changes.
+#
+# Triggered by the Cloud Build trigger registered by installer step 12c
+# on every push to main that touches functions/ (or this file).
+# Mirrors what installer/cli/steps/12b-package-source.ts does at install
+# time, but runs in CI instead of on the operator's laptop — so the
+# source bundle stays current with the GitHub repo without manual
+# `--rerun 12b-package-source`.
+#
+# Layout produced (matches installer step 12b):
+#   gs://<project>-installer-source/functions-source.tar.gz
+#   gs://<project>-installer-source/version.json
+#   gs://<project>-installer-source/versions/<version>/functions-source.tar.gz
+#   gs://<project>-installer-source/versions/<version>/version.json
+#
+# Where <version> = <ISO-no-colons>-<short-sha> (matches step 12b's format).
+
+steps:
+  - name: gcr.io/cloud-builders/gsutil
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        SHORT_SHA="${SHORT_SHA:-$(echo "$COMMIT_SHA" | cut -c1-12)}"
+        ISO_NOW="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+        VERSION="${ISO_NOW}-${SHORT_SHA}"
+        BUCKET="${PROJECT_ID}-installer-source"
+
+        echo "[refresh] version=${VERSION} bucket=${BUCKET}"
+
+        # Tar from the trigger's checked-out source root.
+        tar \
+          --exclude=node_modules \
+          --exclude=lib \
+          --exclude=*.log \
+          -czf /tmp/functions-source.tar.gz \
+          functions firebase.json .firebaserc
+
+        cat > /tmp/version.json <<JSON
+        {
+          "version": "${VERSION}",
+          "gitSha": "${COMMIT_SHA}",
+          "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "generatedBy": "cloud-build-refresh-trigger",
+          "projectId": "${PROJECT_ID}",
+          "branchName": "${BRANCH_NAME}",
+          "latestPointer": "gs://${BUCKET}/functions-source.tar.gz",
+          "versionedPointer": "gs://${BUCKET}/versions/${VERSION}/functions-source.tar.gz"
+        }
+        JSON
+
+        # Upload BOTH the latest pointer and the immutable versioned copy.
+        gsutil cp /tmp/functions-source.tar.gz gs://${BUCKET}/versions/${VERSION}/functions-source.tar.gz
+        gsutil cp /tmp/version.json            gs://${BUCKET}/versions/${VERSION}/version.json
+        gsutil cp /tmp/functions-source.tar.gz gs://${BUCKET}/functions-source.tar.gz
+        gsutil cp /tmp/version.json            gs://${BUCKET}/version.json
+
+        echo "[refresh] uploaded → gs://${BUCKET}/{functions-source.tar.gz,version.json}"
+        echo "[refresh] versioned → gs://${BUCKET}/versions/${VERSION}/"
+
+timeout: 300s
+options:
+  logging: CLOUD_LOGGING_ONLY

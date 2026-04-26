@@ -77,7 +77,7 @@
       "mediaMaxMb": 50
     },
     "web-chat": {
-      "webhookSecret": "fd959b01ce6ddb3ec98a4d1517c649ac0602a8e91deaaccb",
+      "webhookSecret": "{{GATEWAY_TOKEN}}",
       "enabled": true
     }
   },
@@ -87,7 +87,7 @@
     "bind": "loopback",
     "auth": {
       "mode": "token",
-      "token": "fd959b01ce6ddb3ec98a4d1517c649ac0602a8e91deaaccb"
+      "token": "{{GATEWAY_TOKEN}}"
     },
     "tailscale": {
       "mode": "off",

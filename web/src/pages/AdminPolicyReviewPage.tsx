@@ -14,6 +14,7 @@ import { getPolicy } from '../lib/firestore/prior-auths';
 import type { PayerPolicy } from '../types/prior-auth';
 import { PolicyStatusBadge } from '../components/prior-auth/StatusBadge';
 import { FreshnessBadge } from '../components/prior-auth/FreshnessBadge';
+import { formatDate } from '../lib/date-helpers';
 
 export const AdminPolicyReviewPage: React.FC = () => {
   const { policyId } = useParams();
@@ -115,7 +116,7 @@ export const AdminPolicyReviewPage: React.FC = () => {
         </div>
         {policy.sourceEffectiveDate && (
           <div className="text-xs text-secondary-500">
-            Effective: {new Date(policy.sourceEffectiveDate.toMillis()).toLocaleDateString()}
+            Effective: {formatDate(policy.sourceEffectiveDate)}
           </div>
         )}
         {policy.brokenReason && (

@@ -10,6 +10,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { documentOperations } from '../lib/firestore';
 import { PatientDocument, DocumentType } from '../types';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
+import { formatDate } from '../lib/date-helpers';
 import {
   Plus,
   FileText,
@@ -170,7 +171,7 @@ export const DocumentsPage: React.FC = () => {
                           </p>
                           <div className="flex flex-col sm:flex-row sm:items-center text-sm text-secondary-600 space-y-1 sm:space-y-0 sm:space-x-4">
                             <span className="flex-shrink-0">{formatFileSize(document.fileSize)}</span>
-                            <span className="flex-shrink-0">Uploaded {document.uploadedAt?.toDate?.()?.toLocaleDateString()}</span>
+                            <span className="flex-shrink-0">Uploaded {formatDate(document.uploadedAt)}</span>
                             {document.description && (
                               <span className="truncate">• {document.description}</span>
                             )}

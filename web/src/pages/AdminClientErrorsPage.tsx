@@ -14,6 +14,7 @@ import { LoadingState } from '../components/ui/LoadingState';
 import { PaginationBar } from '../components/ui/PaginationBar';
 import { usePagedCollection, type WhereClause } from '../hooks/usePagedCollection';
 import { useCollectionCounts } from '../hooks/useCollectionCounts';
+import { formatDateTime } from '../lib/date-helpers';
 
 interface ClientErrorDoc {
   id: string;
@@ -118,8 +119,7 @@ export const AdminClientErrorsPage: React.FC = () => {
         <div className="space-y-2">
           {rows.map((row) => {
             const isOpen = expanded.has(row.id);
-            const ts = row.createdAt?.toDate?.();
-            const timeStr = ts ? ts.toLocaleString() : '—';
+            const timeStr = row.createdAt ? formatDateTime(row.createdAt) : '—';
             return (
               <Card key={row.id}>
                 <button

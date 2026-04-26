@@ -6,6 +6,7 @@ import { notificationOperations } from '../../lib/firestore';
 import { getNotificationLink } from '../../lib/notification-links';
 import { useAuth } from '../../hooks/useAuth';
 import { isAdminRole } from '../../lib/roles';
+import { formatDate } from '../../lib/date-helpers';
 
 const typeConfig: Record<NotificationType, { icon: React.ElementType; color: string; bgColor: string }> = {
   appointment_booked: { icon: Calendar, color: 'text-primary-600', bgColor: 'bg-primary-50' },
@@ -27,7 +28,7 @@ function timeAgo(date: Date): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString();
+  return formatDate(date);
 }
 
 interface NotificationBellProps {

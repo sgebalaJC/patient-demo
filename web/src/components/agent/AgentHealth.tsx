@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Server, Cpu, HardDrive, Clock, Wifi, WifiOff } from 'lucide-react';
 import { sidecar } from '../../lib/sidecar';
+import { formatTime } from '../../lib/date-helpers';
 
 interface Stats {
   memoryTotalMb: number;
@@ -80,7 +81,7 @@ export const AgentHealth: React.FC = () => {
           className="flex items-center gap-1.5 text-xs text-secondary-500 hover:text-secondary-700 disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          {lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString()}` : 'Refresh'}
+          {lastRefresh ? `Updated ${formatTime(lastRefresh)}` : 'Refresh'}
         </button>
       </div>
 

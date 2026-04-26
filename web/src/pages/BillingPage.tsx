@@ -13,7 +13,7 @@ import { useAuth } from '../hooks/useAuth';
 import { subscriptionOperations } from '../lib/firestore/subscriptions';
 import type { SubscriptionPlan, PatientSubscription } from '../types';
 import { BRANDING } from '../config/branding';
-import { formatCurrency } from '../lib/date-helpers';
+import { formatCurrency, formatDate } from '../lib/date-helpers';
 import { safeExternalRedirect } from '../lib/external-redirect';
 import { useSupportEmail } from '../hooks/useSupportEmail';
 import { CreditCard, CheckCircle, XCircle } from 'lucide-react';
@@ -136,12 +136,12 @@ export const BillingPage: React.FC = () => {
                 })()}
                 {activeSub.cancelAtPeriodEnd && activeSub.cancelAt && (
                   <p className="text-sm text-amber-700 mt-2">
-                    Will cancel on {new Date(activeSub.cancelAt * 1000).toLocaleDateString()}.
+                    Will cancel on {formatDate(activeSub.cancelAt * 1000)}.
                   </p>
                 )}
                 {!activeSub.cancelAtPeriodEnd && activeSub.currentPeriodEnd && (
                   <p className="text-sm text-secondary-500 mt-2">
-                    Renews on {new Date(activeSub.currentPeriodEnd * 1000).toLocaleDateString()}.
+                    Renews on {formatDate(activeSub.currentPeriodEnd * 1000)}.
                   </p>
                 )}
               </div>

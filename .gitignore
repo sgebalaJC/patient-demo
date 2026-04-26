@@ -78,6 +78,11 @@ emulator-data
 
 # Claude Code memory
 memory/.github_pat
+.claude/
+
+# Installer state (per-fork target dir scratch)
+.installer-state.json
+.installer-functions-source.tar.gz
 sidecar/patient-sidecar
 functions/drchrono-patients-cache.json
 

@@ -40,6 +40,8 @@ const AgentPage = lazy(() => import('./pages/AgentPage').then(m => ({ default: m
 const AdminIntakeFormsPage = lazy(() => import('./pages/AdminIntakeFormsPage').then(m => ({ default: m.AdminIntakeFormsPage })));
 const AdminSpecialistRequestsPage = lazy(() => import('./pages/AdminSpecialistRequestsPage').then(m => ({ default: m.AdminSpecialistRequestsPage })));
 const AdminSettingsPage = lazy(() => import('./pages/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })));
+const AdminInstallWizardPage = lazy(() => import('./pages/AdminInstallWizardPage').then(m => ({ default: m.AdminInstallWizardPage })));
+const AdminAuditLogPage = lazy(() => import('./pages/AdminAuditLogPage').then(m => ({ default: m.AdminAuditLogPage })));
 const SupportChatPage = lazy(() => import('./pages/SupportChatPage').then(m => ({ default: m.SupportChatPage })));
 const ContactPage = lazy(() => import('./pages/ContactPage').then(m => ({ default: m.ContactPage })));
 const BillingPage = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })));
@@ -134,6 +136,8 @@ function App() {
             <Route path="intake-forms" element={<AdminIntakeFormsPage />} />
             <Route path="specialist-requests" element={<AdminSpecialistRequestsPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
+            <Route path="install" element={<AdminInstallWizardPage />} />
+            <Route path="audit-log" element={<AdminAuditLogPage />} />
             <Route path="subscription-plans" element={<AdminSubscriptionPlansPage />} />
             <Route path="platform-subscription" element={<AdminPlatformSubscriptionPage />} />
             <Route path="drchrono" element={<AdminDrChronoHubPage />} />

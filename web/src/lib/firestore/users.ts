@@ -26,6 +26,7 @@ import { User, ApiResponse } from '../../types';
 import { isAdminRole } from '../roles';
 import logger from "../logger";
 import { errorMessage } from '../errors';
+import { audit } from "../audit";
 
 export type UserSortField = 'lastName' | 'createdAt';
 export type SortDirection = 'asc' | 'desc';
@@ -84,6 +85,12 @@ export const userOperations = {
       };
 
       await setDoc(userRef, newUser, { merge: true });
+      audit({
+        action: 'user.created',
+        resourceType: 'user',
+        resourceId: uid,
+        metadata: { role: newUser.role, isActive: newUser.isActive },
+      });
       return { success: true, data: newUser };
     } catch (error: unknown) {
       logger.error('Error creating user:', error);
@@ -126,6 +133,19 @@ export const userOperations = {
       if (!mapped) {
         return { success: false, error: 'User updated but could not be re-read' };
       }
+      // Audit only the field NAMES that changed; values may be PII.
+      const changedFields = Object.keys(updates).filter((k) => k !== 'updatedAt');
+      audit({
+        action: 'user.updated',
+        resourceType: 'user',
+        resourceId: uid,
+        metadata: {
+          changedFields,
+          // Status/role transitions are non-PII and worth surfacing for compliance.
+          ...(updates.role !== undefined ? { newRole: updates.role } : {}),
+          ...(updates.isActive !== undefined ? { newIsActive: updates.isActive } : {}),
+        },
+      });
       return { success: true, data: { ...mapped, id: uid } };
     } catch (error: unknown) {
       logger.error('Error updating user:', error);

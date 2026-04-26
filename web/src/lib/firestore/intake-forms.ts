@@ -15,6 +15,7 @@ import { collections, mapDoc } from './base';
 import { PatientIntakeForm, ApiResponse } from '../../types';
 import logger from "../logger";
 import { errorMessage } from '../errors';
+import { audit } from "../audit";
 
 // Patient intake form operations
 export const intakeFormOperations = {
@@ -51,6 +52,7 @@ export const intakeFormOperations = {
       };
 
       const docRef = await addDoc(collections.patientIntakeForms, newIntakeForm);
+      audit({ action: 'intake.created', resourceType: 'patient-intake-form', resourceId: docRef.id, metadata: { patientId } });
 
       // Read back to pick up server-resolved timestamps — beats hand-forging
       // the shape with `as unknown as Timestamp` casts.
@@ -134,6 +136,7 @@ export const intakeFormOperations = {
         completedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      audit({ action: 'intake.submitted', resourceType: 'patient-intake-form', resourceId: formId });
 
       return { success: true, data: true };
     } catch (error: unknown) {
@@ -169,6 +172,7 @@ export const intakeFormOperations = {
         reviewedBy,
         updatedAt: serverTimestamp(),
       });
+      audit({ action: 'intake.approved', resourceType: 'patient-intake-form', resourceId: formId, metadata: { reviewedBy } });
       return { success: true, data: true };
     } catch (error: unknown) {
       logger.error('Error approving intake form:', error);

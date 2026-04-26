@@ -13,6 +13,7 @@ import {
   Eye,
 } from 'lucide-react';
 import logger from '../../lib/logger';
+import { audit } from '../../lib/audit';
 import { Modal } from '../ui/Modal';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
@@ -85,6 +86,12 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
   const handleDownload = async (doc: PatientDocument) => {
     try {
       await downloadFile(doc.fileUrl, doc.fileName || doc.originalFileName || 'document');
+      audit({
+        action: 'document.downloaded',
+        resourceType: 'patient-document',
+        resourceId: doc.id,
+        metadata: { patientId: patient?.id, documentType: doc.documentType },
+      });
     } catch (error) {
       logger.error('Error downloading document:', error);
       setActionError('Failed to download document. Please try again.');
@@ -132,6 +139,12 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
 
   const handlePreview = (doc: PatientDocument) => {
     setPreviewDocument(doc);
+    audit({
+      action: 'document.viewed',
+      resourceType: 'patient-document',
+      resourceId: doc.id,
+      metadata: { patientId: patient?.id, documentType: doc.documentType, viewedBy: 'admin' },
+    });
   };
 
   const formatDate = (timestamp: unknown): string =>

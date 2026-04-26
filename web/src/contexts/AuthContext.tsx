@@ -50,6 +50,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // /auth lets the operator re-authenticate via whatever method they
     // normally use, and guarantees AuthContext starts clean.
     try {
+      // Audit BEFORE sign-out so the impersonated user's session is the
+      // actor on this end-event. The matching `auth.impersonation-started`
+      // event records the original operator + target identity at start.
+      audit({ action: 'auth.impersonation-ended' });
       sessionStorage.removeItem('impersonation');
       setImpersonating(false);
       await firebaseSignOut();

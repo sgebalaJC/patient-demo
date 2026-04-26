@@ -157,6 +157,25 @@ export const appointmentOperations = {
             if (!mapped) {
                 return { success: false, error: 'Appointment updated but could not be re-read' };
             }
+            // Discrete events for status transitions that affect patient
+            // care — easier to query in the audit log than scanning every
+            // `appointment.updated`. The generic update event is still
+            // emitted for catch-all coverage.
+            if (updates.status === 'confirmed') {
+                audit({
+                    action: 'appointment.confirmed',
+                    resourceType: 'appointment',
+                    resourceId: appointmentId,
+                    metadata: { previousStatus: mapped.status, patientId: mapped.patientId },
+                });
+            } else if (updates.status === 'cancelled') {
+                audit({
+                    action: 'appointment.cancelled',
+                    resourceType: 'appointment',
+                    resourceId: appointmentId,
+                    metadata: { patientId: mapped.patientId },
+                });
+            }
             audit({
                 action: 'appointment.updated',
                 resourceType: 'appointment',

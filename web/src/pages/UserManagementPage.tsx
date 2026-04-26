@@ -8,6 +8,7 @@ import { User } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
+import { audit } from '../lib/audit';
 import {
     Users,
     Plus,
@@ -135,6 +136,14 @@ export const UserManagementPage: React.FC = () => {
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     setIsFormOpen(true);
+    // HIPAA Right-to-Access trail: log every time an admin opens a patient
+    // profile (even just to view in the form).
+    audit({
+      action: 'user.viewed-by-admin',
+      resourceType: 'user',
+      resourceId: user.id,
+      metadata: { role: user.role },
+    });
   };
 
   const handleImpersonate = async (targetUser: User) => {
@@ -154,6 +163,15 @@ export const UserManagementPage: React.FC = () => {
         // simulation/native/users/<uid> — they don't exist in real users/.
         simulated,
       }));
+      // Audit BEFORE the auth swap: actor identity is still the operator's
+      // here. After signInWithCustomToken the actor becomes the impersonated
+      // user, so a post-swap audit would be misattributed.
+      audit({
+        action: 'auth.impersonation-started',
+        resourceType: 'user',
+        resourceId: targetUser.id,
+        metadata: { actor: userProfile?.email, targetRole: targetUser.role },
+      });
       try {
         await signInWithCustomToken(auth, res.data.token);
         // Full reload, not SPA navigate: AuthContext doesn't reset `loading`

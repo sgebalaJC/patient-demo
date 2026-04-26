@@ -259,6 +259,32 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ───────────────────────── Audit logs ─────────────────────────
+    //
+    // Append-only log of every action. Written exclusively by the
+    // `logAuditEvent` Cloud Function via Admin SDK (bypassing rules).
+    // Read-only for super-admins via the /admin/audit-log UI; admins
+    // do NOT see the log, since it includes their own actions and
+    // self-tampering would defeat the audit trail.
+    match /audit-logs/{logId} {
+      allow read, list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // ───────────────────────── Installed integrations ─────────────────────────
+    //
+    // Tracks which integration's Cloud Functions are currently deployed in
+    // this fork. Written by the `enableIntegration` callable + the inline
+    // Cloud Build step that runs `firebase deploy`. Read by the admin UI to
+    // show "deployed at <date> with bundle <version>" + by the maintainer's
+    // future cross-fork update tool to know which integrations to redeploy.
+    //
+    // Doc id = integrationId (e.g. `ehr-drchrono`, `signalwire`).
+    match /installed-integrations/{integrationId} {
+      allow read, list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+
     // Bootstrap-first-admin channel (WordPress-style): unauthenticated
     // clients submit a request when `system/settings.bootstrapped !== true`;
     // the `onBootstrapRequestCreated` trigger (Admin SDK) writes the custom

@@ -283,7 +283,12 @@ export const enableIntegration = onCall(async (request): Promise<BuildSubmitResp
             // otherwise corrupt the PATCH body and overwrite arbitrary
             // fields on installed-integrations.
             `RAW_VERSION=$(cat version.json 2>/dev/null | python3 -c 'import json,sys;print(json.load(sys.stdin).get("version",""))' 2>/dev/null || echo unknown)`,
-            `if echo "$RAW_VERSION" | grep -Eq '^[A-Za-z0-9._:T-]{1,80}$'; then BUNDLE_VERSION="$RAW_VERSION"; else BUNDLE_VERSION=invalid; fi`,
+            // Tight allowlist matches what 12b-package-source.ts emits:
+            // `<ISO-no-colons>-<sha>` like `2026-04-26T22-30-00-123Z-4f5208e`.
+            // Excludes `:` (the producer replaces it with `-`), all shell
+            // metachars, and quotes — so the value is safe to interpolate
+            // into the unescaped JSON body of the curl PATCH below.
+            `if echo "$RAW_VERSION" | grep -Eq '^[A-Za-z0-9._T-]{1,80}$'; then BUNDLE_VERSION="$RAW_VERSION"; else BUNDLE_VERSION=invalid; fi`,
             `echo "[deploy] bundle version: $BUNDLE_VERSION"`,
             // Pin firebase-tools so a future major bump can't take down
             // every fork's deploy at once. Bump intentionally with a tested
@@ -497,9 +502,21 @@ export const reconcileStuckIntegrationDeploys = onSchedule(
         .limit(50)
         .get();
     } catch (err) {
-      const msg = (err as Error).message ?? '';
-      if (msg.includes('FAILED_PRECONDITION') || msg.includes('failed-precondition') || msg.includes('index')) {
-        logger.warn(`[installer] reconcile skipped — composite index not ready: ${msg.slice(0, 200)}`);
+      // The Firestore Admin SDK exposes a stable `code` on errors:
+      // numeric `9` or string `'failed-precondition'` for "index missing".
+      // Match on those rather than substring-matching the message; a future
+      // unrelated error whose text happens to contain the word "index"
+      // (e.g. `"index out of bounds"`) shouldn't silently mask the run.
+      const e = err as {code?: unknown; message?: string};
+      const failedPrecondition =
+        e.code === 9 || e.code === "failed-precondition" ||
+        // Cover the rare case where the Admin SDK wraps the gRPC error
+        // and only surfaces the human message.
+        (typeof e.message === "string" &&
+          /index|FAILED_PRECONDITION/.test(e.message) &&
+          e.code === undefined);
+      if (failedPrecondition) {
+        logger.warn(`[installer] reconcile skipped — composite index not ready: ${(e.message ?? "").slice(0, 200)}`);
         return;
       }
       throw err;

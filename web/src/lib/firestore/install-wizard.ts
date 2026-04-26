@@ -51,8 +51,11 @@ export const installWizardOps = {
 };
 
 /**
- * Live branding overrides at `system/branding`. Read by ThemeSelector and
- * BrandLogo at runtime so the wizard can change colors without a deploy.
+ * Live branding overrides at `system/branding`. Currently only written by
+ * the install wizard's "Apply colors live" button and read back by the
+ * wizard itself; ThemeSelector and BrandLogo render from build-time
+ * branding (BRANDING export). The Firestore doc exists as the seam for
+ * a future runtime-override path. Rule: super-admin write, admin read.
  */
 const BRANDING_REF = doc(db, 'system', 'branding');
 

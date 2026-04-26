@@ -118,6 +118,10 @@ export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> =
         'enableIntegration',
       );
       const r = await enableFn({ integrationId });
+      // The component may have unmounted (or integrationId changed) while
+      // the callable was in flight. Don't update state in either case;
+      // the next mount's effect will run its own status check.
+      if (!aliveRef.current) return;
       const buildId = r.data?.buildId;
       if (!buildId || typeof buildId !== 'string' || buildId.length === 0) {
         throw new Error('enableIntegration returned no buildId');
@@ -156,9 +160,10 @@ export const IntegrationDeployControl: React.FC<IntegrationDeployControlProps> =
         }
       }, POLL_INTERVAL_MS);
     } catch (err) {
+      if (!aliveRef.current) return;
       setError(err instanceof Error ? err.message : 'Deploy failed to start');
     } finally {
-      setSubmitting(false);
+      if (aliveRef.current) setSubmitting(false);
     }
   };
 

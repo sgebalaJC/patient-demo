@@ -273,8 +273,14 @@ service cloud.firestore {
     // matching rules — if this `{docId}` block grants `isAdmin()` to ANY
     // doc, it ORs with the specific super-admin gates above and lets a
     // practice admin slip past. The `docId not in [...]` guard pins the
-    // catch-all to genuinely-other docs. Any future super-admin-only doc
-    // added above MUST also be added to this exclusion list.
+    // catch-all to genuinely-other docs.
+    //
+    // ⚠ MAINTENANCE: when adding a new specific super-admin-only or
+    // public-read /system/<doc> rule above, you MUST also add the doc id
+    // to the exclusion list below, otherwise the catch-all silently
+    // re-grants admin r/w access (privilege widening). There's no
+    // automated check for this — keep the lists in sync by hand and
+    // ideally pair-review any change to /system/* rules.
     match /system/{docId} {
       allow read, write: if isAdmin()
         && !(docId in ['installWizard', 'branding', 'settings']);

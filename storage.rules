@@ -14,23 +14,30 @@ service firebase.storage {
         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
 
-    // Patient documents — owner can read/write, admins can read.
-    // Writes capped at 25 MB with a content-type allowlist so a patient can't
-    // host arbitrary binaries or DoS storage cost via this path.
-    function patientDocContentTypeOk() {
+    // Shared content-type allowlist for any upload that lands in a path an
+    // admin (or another patient) might later open via signed URL. Without it,
+    // a patient can upload `evil.html` to chat-attachments / message
+    // attachments and serve it from the firebasestorage.googleapis.com origin
+    // — phishing / drive-by surface against admins. Same shape we already
+    // enforce on patient documents.
+    function uploadContentTypeOk() {
       return request.resource.contentType.matches('image/.*')
         || request.resource.contentType == 'application/pdf'
         || request.resource.contentType == 'application/msword'
         || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         || request.resource.contentType == 'text/plain';
     }
+
+    // Patient documents — owner can read/write, admins can read.
+    // Writes capped at 25 MB with a content-type allowlist so a patient can't
+    // host arbitrary binaries or DoS storage cost via this path.
     match /patients/{patientId}/documents/{allPaths=**} {
       allow read: if request.auth != null && request.auth.uid == patientId;
       allow read: if isAdmin();
       allow write: if request.auth != null
         && request.auth.uid == patientId
         && request.resource.size < 25 * 1024 * 1024
-        && patientDocContentTypeOk();
+        && uploadContentTypeOk();
     }
 
     // Message attachments — only thread participants (patient or admin) can access
@@ -41,6 +48,7 @@ service firebase.storage {
       );
       allow create: if request.auth != null
         && request.resource.size < 25 * 1024 * 1024
+        && uploadContentTypeOk()
         && (
           firestore.get(/databases/(default)/documents/message-threads/$(threadId)).data.patientId == request.auth.uid ||
           isAdmin()
@@ -58,7 +66,8 @@ service firebase.storage {
       );
       allow create: if request.auth != null
         && request.auth.uid == senderId
-        && request.resource.size < 25 * 1024 * 1024;
+        && request.resource.size < 25 * 1024 * 1024
+        && uploadContentTypeOk();
       allow delete: if request.auth != null && (
         request.auth.uid == senderId || isAdmin()
       );

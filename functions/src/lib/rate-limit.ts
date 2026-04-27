@@ -21,24 +21,30 @@ export async function checkRateLimit(
   const windowMs = windowMinutes * 60 * 1000;
   const rateLimitRef = db.collection("rate-limits").doc(`${uid}_${action}`);
 
-  const doc = await rateLimitRef.get();
-  if (doc.exists) {
-    const data = doc.data()!;
-    const windowStart = data.windowStart?.toMillis?.() || data.windowStart || 0;
-    const count = data.count || 0;
+  // Wrapped in a transaction so two concurrent callers can't both observe
+  // count<max and both increment past the cap. Without this, deliberate
+  // concurrent flooding drifts a 5-call limit to N+1 per batch, weakening
+  // the OTP brute-force defense.
+  await db.runTransaction(async (tx) => {
+    const doc = await tx.get(rateLimitRef);
+    if (doc.exists) {
+      const data = doc.data()!;
+      const windowStart = data.windowStart?.toMillis?.() || data.windowStart || 0;
+      const count = data.count || 0;
 
-    if (now - windowStart < windowMs) {
-      if (count >= maxCalls) {
-        throw new Error("Rate limit exceeded. Please wait before trying again.");
+      if (now - windowStart < windowMs) {
+        if (count >= maxCalls) {
+          throw new Error("Rate limit exceeded. Please wait before trying again.");
+        }
+        tx.update(rateLimitRef, {count: count + 1});
+        return;
       }
-      await rateLimitRef.update({count: count + 1});
-      return;
     }
-  }
 
-  await rateLimitRef.set({
-    windowStart: admin.firestore.Timestamp.fromMillis(now),
-    count: 1,
+    tx.set(rateLimitRef, {
+      windowStart: admin.firestore.Timestamp.fromMillis(now),
+      count: 1,
+    });
   });
 }
 

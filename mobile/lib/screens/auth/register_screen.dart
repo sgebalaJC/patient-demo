@@ -4,6 +4,7 @@ import '../../providers/app_settings_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/constants.dart';
 import '../../config/colors.dart';
+import '../../utils/phone.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -50,6 +51,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (mounted && auth.error == null) {
       Navigator.pop(context);
+    }
+  }
+
+  /// Mirror the canonical-form invariant on the client: free-text input is
+  /// fine, but it MUST reduce to a US 10-digit number. Empty stays empty
+  /// since the field is optional.
+  String? _validatePhone(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return null;
+    try {
+      normalizePhoneNumber(raw);
+      return null;
+    } on InvalidPhoneException {
+      return 'Enter a valid US phone number';
     }
   }
 
@@ -239,6 +254,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
                       maxLength: FieldLimits.phoneNumberMax,
+                      validator: _validatePhone,
                       decoration: InputDecoration(
                         labelText: 'Phone (optional)',
                         prefixIcon: const Icon(Icons.phone_outlined),

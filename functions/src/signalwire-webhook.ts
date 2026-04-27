@@ -238,16 +238,26 @@ async function handle(req: Request, res: Response): Promise<void> {
     }
   }
 
-  // ── Idempotency: skip if row already exists ───────────────────────────────
+  // ── Idempotency: claim the row atomically ────────────────────────────────
+  // `create()` fails with ALREADY_EXISTS if the doc is already there, which
+  // closes the read-then-create race that the prior `get()`+exists check had
+  // when SignalWire double-delivers concurrently. Downstream `docRef.set(...)`
+  // calls overwrite the claim with the full record.
   const docRef = db().collection("inbound-faxes").doc(faxSid);
-  const existing = await docRef.get();
-  if (existing.exists) {
-    logger.info("[fax] Row already exists, treating as duplicate", {
+  try {
+    await docRef.create({
       faxSid,
-      existingStatus: existing.data()?.status,
+      status: "claiming",
+      claimedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    res.status(200).json({ok: true, duplicate: true});
-    return;
+  } catch (err: any) {
+    // 6 = ALREADY_EXISTS in gRPC status codes; admin SDK surfaces it via .code
+    if (err?.code === 6 || /already exists/i.test(err?.message || "")) {
+      logger.info("[fax] Row already exists, treating as duplicate", {faxSid});
+      res.status(200).json({ok: true, duplicate: true});
+      return;
+    }
+    throw err;
   }
 
   // ── Only process completed/received faxes ─────────────────────────────────

@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/branding.dart';
 import '../models/user.dart';
+import '../utils/phone.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -59,13 +60,21 @@ class AuthService {
       );
     }
 
+    // Canonical 10-digit form per CLAUDE.md — every users.phoneNumber write
+    // must go through normalizePhoneNumber. Throws on malformed input so the
+    // caller surfaces a field error.
+    final normalizedPhone =
+        phoneNumber == null ? null : normalizePhoneNumber(phoneNumber);
+
     // Create user document in Firestore
     await _db.collection('users').doc(user.uid).set({
       'email': email,
       ...(firstName != null ? {'firstName': firstName} : {}),
       ...(lastName != null ? {'lastName': lastName} : {}),
       'displayName': [firstName, lastName].where((s) => s != null).join(' '),
-      ...(phoneNumber != null ? {'phoneNumber': phoneNumber} : {}),
+      ...(normalizedPhone != null && normalizedPhone.isNotEmpty
+          ? {'phoneNumber': normalizedPhone}
+          : {}),
       'role': 'patient',
       'isActive': false, // Requires admin activation in production
       'emailVerified': false,
@@ -101,12 +110,25 @@ class AuthService {
     final userDoc = await _db.collection('users').doc(user.uid).get();
     if (!userDoc.exists) {
       final nameParts = (user.displayName ?? '').split(' ');
+      // Google Sign-In rarely populates phoneNumber, but when it does it's
+      // E.164 — normalize defensively rather than store mixed canonical
+      // forms. Swallow InvalidPhoneException since this is a best-effort
+      // backfill, not a user-driven entry.
+      String? googlePhone;
+      try {
+        googlePhone = user.phoneNumber == null
+            ? null
+            : normalizePhoneNumber(user.phoneNumber);
+      } on InvalidPhoneException {
+        googlePhone = null;
+      }
       await _db.collection('users').doc(user.uid).set({
         'email': user.email,
         'firstName': nameParts.isNotEmpty ? nameParts.first : null,
         'lastName': nameParts.length > 1 ? nameParts.sublist(1).join(' ') : null,
         'displayName': user.displayName,
-        'phoneNumber': user.phoneNumber,
+        if (googlePhone != null && googlePhone.isNotEmpty)
+          'phoneNumber': googlePhone,
         'role': 'patient',
         'isActive': false,
         'emailVerified': user.emailVerified,

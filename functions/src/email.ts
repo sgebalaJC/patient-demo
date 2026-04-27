@@ -70,6 +70,29 @@ export async function sendEmail(opts: {
   }
 }
 
+// ── Escaping ─────────────────────────────────────────────────────────
+
+/**
+ * HTML-entity encode user/admin-controlled strings before they land in an
+ * email body. Patients can self-edit `firstName`/`lastName` per
+ * firestore.rules, so a name like `<img onerror=...>` would otherwise
+ * render as live HTML in the rendered email. Defense-in-depth — most
+ * mail clients sandbox HTML, but we don't want to rely on that.
+ */
+function esc(value: string | number | undefined | null): string {
+  if (value === undefined || value === null) return "";
+  return String(value).replace(/[&<>"']/g, (c) => {
+    switch (c) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case "\"": return "&quot;";
+      case "'": return "&#39;";
+      default: return c;
+    }
+  });
+}
+
 // ── Shared layout ────────────────────────────────────────────────────
 
 function wrap(body: string): string {
@@ -98,11 +121,11 @@ export function appointmentConfirmedEmail(
   return {
     subject: `Appointment Confirmed — ${date}`,
     html: wrap(`
-      <p>Hi ${patientName},</p>
+      <p>Hi ${esc(patientName)},</p>
       <p>Your appointment has been <strong>confirmed</strong>.</p>
       <table style="margin: 16px 0; border-collapse: collapse;">
-        <tr><td style="padding: 4px 12px 4px 0; color: #6b7280;">Date</td><td>${date}</td></tr>
-        <tr><td style="padding: 4px 12px 4px 0; color: #6b7280;">Time</td><td>${time}</td></tr>
+        <tr><td style="padding: 4px 12px 4px 0; color: #6b7280;">Date</td><td>${esc(date)}</td></tr>
+        <tr><td style="padding: 4px 12px 4px 0; color: #6b7280;">Time</td><td>${esc(time)}</td></tr>
       </table>
       <p>If you need to reschedule, please contact us.</p>
     `),
@@ -118,8 +141,8 @@ export function appointmentCancelledEmail(
   return {
     subject: `Appointment Cancelled — ${date}`,
     html: wrap(`
-      <p>Hi ${patientName},</p>
-      <p>Your appointment on <strong>${date}</strong> at <strong>${time}</strong> has been <strong>cancelled</strong>.</p>
+      <p>Hi ${esc(patientName)},</p>
+      <p>Your appointment on <strong>${esc(date)}</strong> at <strong>${esc(time)}</strong> has been <strong>cancelled</strong>.</p>
       <p>Please contact us if you would like to reschedule.</p>
     `),
     text: `Hi ${patientName}, your appointment on ${date} at ${time} has been cancelled. Please contact us to reschedule. — ${B.shortName}`,
@@ -130,11 +153,11 @@ export function welcomeEmail(patientName: string, portalUrl: string) {
   return {
     subject: `Welcome to ${B.practiceName}`,
     html: wrap(`
-      <p>Hi ${patientName},</p>
+      <p>Hi ${esc(patientName)},</p>
       <p>Welcome to ${B.practiceName}! Your patient account has been created.</p>
       <p>You can access your patient portal to manage appointments, messages, prescriptions, and more:</p>
       <p style="margin: 20px 0;">
-        <a href="${portalUrl}" style="background-color: #2563eb; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; display: inline-block;">Open Patient Portal</a>
+        <a href="${esc(portalUrl)}" style="background-color: #2563eb; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; display: inline-block;">Open Patient Portal</a>
       </p>
       <p>If you have any questions, don't hesitate to reach out.</p>
     `),
@@ -154,10 +177,10 @@ export function refillStatusEmail(
   return {
     subject: `Prescription Refill ${statusLabel} — ${medicationName}`,
     html: wrap(`
-      <p>Hi ${patientName},</p>
-      <p>Your refill request for <strong>${medicationName}</strong> has been
+      <p>Hi ${esc(patientName)},</p>
+      <p>Your refill request for <strong>${esc(medicationName)}</strong> has been
         <strong style="color: ${statusColor};">${statusLabel.toLowerCase()}</strong>.</p>
-      ${notes ? `<p style="background: #f9fafb; padding: 12px; border-radius: 6px; margin: 16px 0;"><em>${notes}</em></p>` : ""}
+      ${notes ? `<p style="background: #f9fafb; padding: 12px; border-radius: 6px; margin: 16px 0;"><em>${esc(notes)}</em></p>` : ""}
       <p>Please contact us if you have any questions.</p>
     `),
     text: `Hi ${patientName}, your refill request for ${medicationName} has been ${statusLabel.toLowerCase()}.${notes ? " Note: " + notes : ""} — ${B.shortName}`,

@@ -19,17 +19,22 @@ import { errorMessage } from '../errors';
  * Function (Admin SDK); read-only here. Super-admin gated by Firestore
  * rules — admins who can't pass `isSuperAdmin()` get permission-denied.
  *
- * Index coverage (firestore.indexes.json):
+ * Index coverage (firestore.indexes.json) — every subset of
+ * {actorId, action, resourceType, resourceId} ordered by timestamp:
  *   actorId                                          ✓
  *   action                                           ✓
  *   resourceType                                     ✓
- *   (resourceType, resourceId)                       ✓
+ *   resourceId                                       ✓
  *   (actorId, action)                                ✓
  *   (actorId, resourceType)                          ✓
- *   (action, resourceType)                           ✓
  *   (actorId, resourceId)                            ✓
+ *   (action, resourceType)                           ✓
  *   (action, resourceId)                             ✓
+ *   (resourceType, resourceId)                       ✓
  *   (actorId, action, resourceType)                  ✓
+ *   (actorId, action, resourceId)                    ✓
+ *   (actorId, resourceType, resourceId)              ✓
+ *   (action, resourceType, resourceId)               ✓
  *   (actorId, action, resourceType, resourceId)      ✓ (full 4-way)
  *
  * Filter combinations OUTSIDE the above set will fail at query time with

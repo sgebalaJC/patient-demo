@@ -409,6 +409,13 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Patient-billing Stripe webhook idempotency guard. Same posture as
+    // platform-stripe-events — write-once from the Cloud Function only.
+    match /stripe-events/{eventId} {
+      allow read, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     // ── Prior Authorization ────────────────────────────────────────────────
     //
     // Admin-only. Patients never see PA records. Policy data (payers,

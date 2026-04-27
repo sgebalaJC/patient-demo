@@ -22,3 +22,20 @@ export function toE164Lenient(raw: string): string {
   if (raw.startsWith("+") && digits.length >= 10) return `+${digits}`;
   return "";
 }
+
+/**
+ * Canonical 10-digit US form for `users.phoneNumber` writes — mirrors
+ * `functions/src/lib/phone.ts` and `web/src/lib/phone.ts`. Throws on
+ * anything that doesn't reduce to 10 digits so a malformed admin-api
+ * PATCH never lands in Firestore.
+ */
+export function normalizePhoneNumber(phoneNumber: string): string {
+  const trimmed = (phoneNumber || "").trim();
+  if (!trimmed) return "";
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 10) return digits;
+  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+  throw new Error(
+    `Invalid US phone number: ${JSON.stringify(trimmed)}. Expected 10 digits.`,
+  );
+}

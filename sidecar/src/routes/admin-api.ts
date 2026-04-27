@@ -15,6 +15,7 @@
 
 import { getDb } from "../lib/firebase.js";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { normalizePhoneNumber } from "../lib/phone.js";
 import { proxyDrChrono, assertDrChronoReady } from "../lib/drchrono.js";
 import { proxyAthena, assertAthenaReady } from "../lib/athena.js";
 import { proxyElation, assertElationReady } from "../lib/elation.js";
@@ -297,6 +298,23 @@ async function updatePatient(db: Db, id: string, req: Request): Promise<Response
   const updates: Record<string, any> = { updatedAt: FieldValue.serverTimestamp() };
   for (const key of allowed) {
     if (key in body) updates[key] = body[key];
+  }
+
+  // Phone numbers must land in canonical 10-digit form on `users.phoneNumber`
+  // — anything else breaks downstream lookups and toE164() conversions.
+  if ("phoneNumber" in updates) {
+    const raw = updates.phoneNumber;
+    if (raw === null || raw === "") {
+      updates.phoneNumber = "";
+    } else if (typeof raw !== "string") {
+      return error("phoneNumber must be a string", 400);
+    } else {
+      try {
+        updates.phoneNumber = normalizePhoneNumber(raw);
+      } catch (e: any) {
+        return error(e?.message ?? "Invalid phoneNumber", 400);
+      }
+    }
   }
 
   await (await nc(db, "users")).doc(id).update(updates);

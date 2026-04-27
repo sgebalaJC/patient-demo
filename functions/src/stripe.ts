@@ -187,6 +187,34 @@ export const stripeWebhook = onRequest(
 
     const db = admin.firestore();
 
+    // Idempotency: Stripe retries on 5xx and can also redeliver out-of-order
+    // on backoff. Without a guard, a delayed `subscription.updated` arriving
+    // after `subscription.deleted` would flip the patient subscription back
+    // to active. Claim the event id via a transaction; on duplicate, 200 so
+    // Stripe stops retrying. Mirrors the `platformStripeWebhook` pattern.
+    const eventRef = db.collection("stripe-events").doc(event.id);
+    try {
+      await db.runTransaction(async (tx) => {
+        const existing = await tx.get(eventRef);
+        if (existing.exists) {
+          throw new Error("DUPLICATE_EVENT");
+        }
+        tx.set(eventRef, {
+          type: event.type,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+    } catch (err: any) {
+      if (err?.message === "DUPLICATE_EVENT") {
+        logger.info("stripe webhook duplicate event ignored", {eventId: event.id});
+        res.status(200).send({received: true, duplicate: true});
+        return;
+      }
+      logger.error("stripe webhook idempotency guard failed", err);
+      res.status(500).send("idempotency guard failed");
+      return;
+    }
+
     try {
       switch (event.type) {
         case "checkout.session.completed": {

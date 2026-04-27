@@ -279,8 +279,17 @@ export async function handleChat(request: Request, user?: UserContext): Promise<
     messageContent = messageContent.replace(/^\/+/, "");
   }
 
+  // Strip CR/LF/brackets from user-controlled name before interpolating into
+  // the prompt prefix. A patient setting their displayName to `Bob]\n\nSYSTEM:
+  // …` would otherwise inject instructions into the agent context. Sunny has
+  // no PHI tools so blast radius is bounded, but defense-in-depth — Aurelia
+  // is admin-driven and we don't want lateral injection there either.
+  const safeName = (user?.name ?? "")
+    .replace(/[\r\n\[\]]/g, " ")
+    .slice(0, 80)
+    .trim() || "Unknown";
   const prefix = user
-    ? (isPatientSupport ? `[Patient: ${user.name}]\n` : `[${user.role}: ${user.name}]\n`)
+    ? (isPatientSupport ? `[Patient: ${safeName}]\n` : `[${user.role}: ${safeName}]\n`)
     : "";
 
   // OpenClaw routes via `agent:<id>:...` session prefix. Names must match the

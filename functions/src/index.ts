@@ -29,6 +29,7 @@ import {
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
+import * as crypto from "crypto";
 
 // Pin all functions to us-west1. This MUST run before any re-export below,
 // because `onCall`/`onRequest`/`onSchedule` snapshot the current default at
@@ -2743,10 +2744,16 @@ export const googleWorkspaceProxy = onRequest({
   timeoutSeconds: 60,
 }, async (req, res) => {
   try {
-    // Validate API key
+    // Validate API key with a constant-time compare. Network jitter dwarfs
+    // the timing signal in practice, but `===` is the wrong idiom for token
+    // checks and `timingSafeEqual` costs nothing.
     const apiKey = req.headers['x-api-key'] as string;
     const expectedKey = process.env.GOOGLE_WORKSPACE_API_KEY;
-    if (!apiKey || !expectedKey || apiKey !== expectedKey) {
+    if (!apiKey || !expectedKey || apiKey.length !== expectedKey.length) {
+      res.status(401).json({error: 'Missing or invalid X-Api-Key'});
+      return;
+    }
+    if (!crypto.timingSafeEqual(Buffer.from(apiKey), Buffer.from(expectedKey))) {
       res.status(401).json({error: 'Missing or invalid X-Api-Key'});
       return;
     }

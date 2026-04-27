@@ -30,10 +30,18 @@ service cloud.firestore {
     // `role`, `isActive`, `permissions`, `customClaims`, `stripeCustomerId`,
     // etc. are deliberately absent — `isAdmin()` reads `role` from this very
     // doc, so client-writable role would collapse RBAC.
+    //
+    // `email` / `emailVerified` / `phoneVerified` are also absent: they must
+    // stay in lockstep with Firebase Auth state. A patient who could rewrite
+    // them via direct Firestore would drift their stored email away from the
+    // Auth identity (admin views + outgoing welcome/refill emails read from
+    // here) and could self-attest verification, defeating any future
+    // verified-email gate. Email changes must go through a callable that
+    // updates Auth + Firestore atomically.
     function userSelfUpdateIsSafe() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'firstName', 'lastName', 'displayName', 'dateOfBirth', 'gender',
-        'phoneNumber', 'email', 'emailVerified', 'phoneVerified',
+        'phoneNumber',
         'address', 'emergencyContact', 'insuranceInfo',
         'allergies', 'medicalHistory',
         'fcmToken', 'fcmTokenUpdatedAt',
@@ -85,9 +93,26 @@ service cloud.firestore {
     // duplicate the same filter logic. If a new caller is added, it MUST pass
     // the same where() filter or the query will fail with permission-denied.
     match /message-threads/{threadId} {
-      allow read, list, write: if request.auth != null && (
+      // Update allowlist mirrors `web/src/lib/firestore/message-threads.ts`
+      // — message-send bookkeeping, mark-as-read, and admin-side status
+      // changes. `patientId`, `subject`, `createdAt` deliberately excluded:
+      // without this, the rule's `isOwner(resource.data.patientId)` check
+      // on the OLD doc lets a patient rewrite `patientId` in the new doc
+      // and hand the thread off to anyone.
+      function messageThreadUpdateIsSafe() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'lastMessage', 'lastMessageAt', 'lastMessageSenderId',
+          'unreadForAdmin', 'unreadForPatient',
+          'lastReadByAdminId', 'lastReadByAdminAt',
+          'status', 'updatedAt'
+        ]);
+      }
+      allow read, list, delete: if request.auth != null && (
         isOwner(resource.data.patientId) || isAdmin()
       );
+      allow update: if request.auth != null
+        && (isOwner(resource.data.patientId) || isAdmin())
+        && messageThreadUpdateIsSafe();
       allow create: if request.auth != null && (
         isOwner(request.resource.data.patientId) || isAdmin()
       );
@@ -159,7 +184,21 @@ service cloud.firestore {
     // ───────────────────────── Patient documents ─────────────────────────
 
     match /patient-documents/{documentId} {
-      allow read, write: if isOwner(resource.data.patientId) || isAdmin();
+      // Update allowlist mirrors the only client write surface today: the
+      // soft-delete flow in `web/src/lib/firestore/documents.ts:84-86` flips
+      // `isActive` + `updatedAt`. Without the constraint, an owner-patient
+      // can mutate `patientId` (orphaning the doc record) or `documentType`
+      // / `createdAt` (admin-UI confusion). Heavier updates must go through
+      // a callable. Admins are bounded by the same shape — if a future flow
+      // needs more, widen here intentionally.
+      function patientDocumentUpdateIsSafe() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'isActive', 'updatedAt'
+        ]);
+      }
+      allow read, delete: if isOwner(resource.data.patientId) || isAdmin();
+      allow update: if (isOwner(resource.data.patientId) || isAdmin())
+        && patientDocumentUpdateIsSafe();
       allow create: if isOwner(request.resource.data.patientId) || isAdmin();
     }
 

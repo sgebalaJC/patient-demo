@@ -19,7 +19,7 @@ import {
   SIDECAR_API_KEY_SECRET,
   sidecarUrlEnv,
   sidecarApiKeyEnv,
-  isValidSidecarUrl,
+  isSidecarConfigured,
 } from "./lib/sidecar.js";
 import {isSuperAdminEmail} from "./superAdmins.js";
 import {INCLUDE_SIM_MODE} from "./lib/sim-flag.js";
@@ -124,24 +124,17 @@ export const sidecarProxy = onRequest({
       return;
     }
 
+    // Pre-check: convert "missing/invalid env" into a clean 503 BEFORE we
+    // call the strict accessors. The strict accessors throw, and the catch
+    // block below also evaluates the env — re-throwing inside the error
+    // handler would leave the response unsent and surface as a generic 500.
+    if (!isSidecarConfigured()) {
+      logger.warn("[sidecarProxy] refusing to forward — SIDECAR_URL not yet configured or invalid");
+      res.status(503).json({error: "Sidecar not yet configured or invalid"});
+      return;
+    }
     const sidecarUrl = sidecarUrlEnv();
     const sidecarApiKey = sidecarApiKeyEnv();
-    if (!sidecarApiKey) {
-      res.status(503).json({error: "Sidecar not configured"});
-      return;
-    }
-    // Validate the URL shape BEFORE forwarding the bearer token. Without
-    // this, an admin (or a misconfigured Secret Manager rotation) who put
-    // an arbitrary URL into SIDECAR_URL would harvest the API key + every
-    // proxied request body. Validator lives in lib/sidecar.ts so this rule
-    // is shared with installerSyncAgentWorkspace and syncIntegrationSkill.
-    if (!isValidSidecarUrl(sidecarUrl)) {
-      logger.warn("[sidecarProxy] refusing to forward — SIDECAR_URL invalid", {
-        host: (() => { try { return new URL(sidecarUrl).hostname; } catch { return "unparseable"; } })(),
-      });
-      res.status(503).json({error: "Sidecar URL not yet configured or invalid"});
-      return;
-    }
 
     const userName = `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || "Unknown";
 
@@ -198,12 +191,15 @@ export const sidecarProxy = onRequest({
       res.status(sidecarRes.status).send(text);
     }
   } catch (error: any) {
+    // Read process.env directly here — the strict accessor throws on
+    // missing/invalid, and re-throwing INSIDE the catch handler would
+    // leave the response unsent. We just want to log what was attempted.
     logger.error("Sidecar proxy error:", {
       message: error.message,
       code: error.code,
       cause: error.cause?.message,
       stack: error.stack?.slice(0, 200),
-      sidecarUrl: sidecarUrlEnv(),
+      sidecarUrl: process.env.SIDECAR_URL,
     });
     res.status(502).json({error: "Sidecar unreachable"});
   }

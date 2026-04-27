@@ -24,6 +24,7 @@ import {
   SIDECAR_API_KEY_SECRET,
   sidecarUrlEnv,
   sidecarApiKeyEnv,
+  isSidecarConfigured,
   syncIntegrationSkill,
 } from "./lib/sidecar.js";
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
@@ -2201,13 +2202,15 @@ export const dailySidecarBackup = onSchedule({
   timeZone: 'America/Los_Angeles',
   secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
 }, async () => {
-  const sidecarUrl = sidecarUrlEnv();
-  const sidecarKey = sidecarApiKeyEnv();
-
-  if (!sidecarKey) {
-    logger.warn('SIDECAR_API_KEY not set, skipping backup');
+  // Scheduled backup — soft skip when unconfigured rather than crash the cron.
+  // The strict accessors throw on missing/invalid env, so guard with the
+  // configured-check first.
+  if (!isSidecarConfigured()) {
+    logger.warn('sidecar not configured, skipping backup');
     return;
   }
+  const sidecarUrl = sidecarUrlEnv();
+  const sidecarKey = sidecarApiKeyEnv();
 
   const headers = {
     'Content-Type': 'application/json',

@@ -14,7 +14,7 @@ import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
 import {GoogleAuth} from "google-auth-library";
 import {requireSuperAdmin} from "./lib/auth.js";
-import {SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET, sidecarUrlEnv, sidecarApiKeyEnv, syncIntegrationSkill, isValidSidecarUrl} from "./lib/sidecar.js";
+import {SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET, sidecarUrlEnv, syncIntegrationSkill, isSidecarConfigured} from "./lib/sidecar.js";
 
 interface SyncResult {
   ok: boolean;
@@ -53,14 +53,17 @@ export const installerSyncAgentWorkspace = onCall(
   async (request): Promise<SyncResult> => {
     requireSuperAdmin(request);
 
-    const url = sidecarUrlEnv();
-    const key = sidecarApiKeyEnv();
-    if (!key || !isValidSidecarUrl(url)) {
+    // Pre-check: this callable is intentionally invoked BEFORE step 12 of
+    // the installer sets SIDECAR_URL / SIDECAR_API_KEY in Secret Manager,
+    // so we must never call the strict accessors first — they would throw
+    // before we can return the helpful "Re-run step 12" message.
+    if (!isSidecarConfigured()) {
       throw new HttpsError(
         "failed-precondition",
         "SIDECAR_URL / SIDECAR_API_KEY not yet configured or invalid. Re-run the installer CLI through step 12 (deploy-first), which sets them.",
       );
     }
+    const url = sidecarUrlEnv();
 
     const details = {healthOk: false, skillsSynced: 0, skillsErrors: [] as string[]};
 

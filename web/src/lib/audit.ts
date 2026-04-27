@@ -30,8 +30,17 @@ export interface AuditEvent {
 }
 
 // Lowercased blocklist of object keys that get dropped from `metadata`
-// before the callable. Mirrors the server-side AUDIT_PII_FIELD_NAMES in
-// functions/src/lib/audit.ts — keep in sync if you add a name there.
+// before the callable. MUST stay byte-identical to the server-side
+// `AUDIT_PII_FIELD_NAMES` in `functions/src/lib/audit.ts`.
+//
+// Sync rule: when adding a name to either list, add it to BOTH and bump
+// `PII_BLOCKLIST_VERSION` on both sides. The server's logAuditEvent
+// callable enforces a defense-in-depth scrub even if a client falls
+// behind — but a client-side miss leaks PII into the wire transcript
+// (devtools, error monitoring, MITM debug proxies). The version field
+// gives a future automated drift check a fast equality path.
+const PII_BLOCKLIST_VERSION = 1;
+void PII_BLOCKLIST_VERSION;
 const CLIENT_PII_FIELD_NAMES = new Set([
   'email', 'name', 'firstname', 'lastname', 'phone', 'phonenumber',
   'dateofbirth', 'dob', 'address', 'ssn', 'content', 'message', 'body',

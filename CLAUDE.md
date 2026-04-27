@@ -142,6 +142,12 @@ Before first deploy to a new customer project:
      --role=roles/secretmanager.admin
    ```
    Sidecar SA needs `roles/secretmanager.secretAccessor` (or `admin` via the default compute SA). See [`docs/EHR_INTEGRATIONS.md`](docs/EHR_INTEGRATIONS.md#per-fork-setup) for details.
+7. **Audit-logs TTL policy** — every audit doc carries an `expiresAt` field set 90 days from write. Enable Firestore TTL on that field so old docs auto-prune (the 7-year HIPAA archive lives in GCS via the Cloud Logging sink; Firestore mirror only needs a UI-friendly window):
+   ```bash
+   gcloud firestore fields ttls update expiresAt \
+     --collection-group=audit-logs --enable-ttl --project=<PROJECT_ID>
+   ```
+   Without this, the collection grows unbounded and 12 composite indexes scale with it.
 
 ## Detailed docs
 

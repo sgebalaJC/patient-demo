@@ -22,7 +22,15 @@ import * as admin from "firebase-admin";
  * Centralized so every emit + the existing `logAuditEvent` callable get
  * the same scrub. Adding a name here transparently protects all call
  * sites. Lowercase: `scrubPii` lowercases keys before lookup.
+ *
+ * MUST stay byte-identical to the client-side `CLIENT_PII_FIELD_NAMES`
+ * in `web/src/lib/audit.ts`. The server scrub is the trust boundary —
+ * but a client-side miss leaks PII into the wire transcript before the
+ * callable lands. Bump `PII_BLOCKLIST_VERSION` on both sides when
+ * adding a name; the version field makes future drift detection trivial.
  */
+const PII_BLOCKLIST_VERSION = 1;
+void PII_BLOCKLIST_VERSION;
 const AUDIT_PII_FIELD_NAMES = new Set([
   "email", "name", "firstname", "lastname", "phone", "phonenumber",
   "dateofbirth", "dob", "address", "ssn", "content", "message", "body",
@@ -104,9 +112,26 @@ export interface AuditEmitInput {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Days an audit doc lives in Firestore before being TTL-pruned. The
+ * Cloud Logging archive sink retains the same events for 7 years (HIPAA
+ * minimum +1) — the Firestore mirror only needs a UI-friendly window.
+ *
+ * 90 days is a deliberate balance: long enough for ops review windows
+ * and most compliance dashboards, short enough that a busy practice's
+ * audit-logs collection doesn't grow into hundreds of thousands of docs
+ * (and 12 composite indexes scaling with it).
+ *
+ * Operator action: enable Firestore TTL policy on the `expiresAt` field
+ * via `gcloud firestore fields ttls update expiresAt --collection-group=audit-logs`.
+ * Without that, this field is just metadata.
+ */
+const AUDIT_TTL_DAYS = 90;
+
 export async function emitAudit(input: AuditEmitInput): Promise<void> {
   const safeMetadata = input.metadata ? (scrubPii(input.metadata) as Record<string, unknown>) : {};
   const timestamp = new Date().toISOString();
+  const expiresAtMs = Date.now() + AUDIT_TTL_DAYS * 24 * 60 * 60 * 1000;
   logger.info("[AUDIT]", {
     audit: true,
     actorId: input.actorId,
@@ -127,6 +152,7 @@ export async function emitAudit(input: AuditEmitInput): Promise<void> {
       metadata: safeMetadata,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       clientTimestamp: timestamp,
+      expiresAt: admin.firestore.Timestamp.fromMillis(expiresAtMs),
     });
   } catch (err) {
     logger.warn("[AUDIT] Firestore mirror failed:", {message: (err as Error).message});

@@ -78,10 +78,19 @@ export const deployFirstStep: Step = {
     // chars only). Anchoring to that drops trailing punctuation like `.` or
     // `,` that firebase-tools sometimes appends in human-readable log lines.
     const failureRe = /failed to create function (?:[\w-]+-)?([A-Za-z][\w]*)/g;
+    // Storage rules failures emit a different shape — match those separately
+    // so a deploy that exits 0 but silently failed to ship storage.rules
+    // (e.g. fresh project where the GCS bucket isn't fully provisioned)
+    // doesn't masquerade as success. Without this the operator's email
+    // never lands in production storage.rules even though step 10b
+    // rewrote the local file.
+    const storageFailureRe = /(?:failed to (?:deploy|update) storage|Error.*storage[: ]+rules)/i;
     const tryDeploy = (args: string[]) => {
       const r = run("firebase", args, {capture: true, allowFail: true});
       const out = `${r.stdout}\n${r.stderr}`;
       const failures = Array.from(out.matchAll(failureRe)).map((m) => m[1]);
+      const storageFailed = storageFailureRe.test(out);
+      if (storageFailed) failures.push("__storage_rules__");
       return {
         exitOk: r.exitCode === 0,
         noPartial: failures.length === 0,
@@ -95,7 +104,12 @@ export const deployFirstStep: Step = {
      * Cloud Functions create quota when a fork has 100+ functions.
      */
     const retryArgs = (failures: string[]) => {
-      const fnTokens = failures.map((f) => `functions:${f}`);
+      // Drop the storage-rules sentinel before mapping to function tokens —
+      // storage:rules is unconditionally retried by being in the base
+      // filter list below.
+      const fnTokens = failures
+        .filter((f) => f !== "__storage_rules__")
+        .map((f) => `functions:${f}`);
       const onlyRetry = ["firestore:rules", "firestore:indexes", "storage:rules", ...fnTokens].join(",");
       return [
         "deploy",

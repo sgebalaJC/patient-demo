@@ -28,6 +28,8 @@ import {
   type WizardStepId,
 } from '../types/install-wizard';
 import { BRANDING } from '../config/branding';
+import { FORK_CONFIG } from '../../../fork.config';
+import { useAuth } from '../hooks/useAuth';
 
 const STEP_LABELS: Record<WizardStepId, string> = {
   identity: 'Identity',
@@ -41,6 +43,7 @@ const STEP_LABELS: Record<WizardStepId, string> = {
 };
 
 const AdminInstallWizardPageInner: React.FC = () => {
+  const { user } = useAuth();
   const [state, setState] = useState<InstallWizardState>({});
   const [loading, setLoading] = useState(true);
   const [stepIndex, setStepIndex] = useState(0);
@@ -110,7 +113,13 @@ const AdminInstallWizardPageInner: React.FC = () => {
   };
 
   const handleDownloadForkConfig = () => {
-    const ts = renderForkConfigTs(state);
+    // The currently-authenticated super admin IS the operator running the
+    // wizard (page is gated by AdminGuard superOnly). Their email is the
+    // right value for FORK_CONFIG.superAdmin.email — falling back to the
+    // build-time fork.config.ts value preserves the existing setting on
+    // re-download. Never use supportEmail (a public mailbox).
+    const superAdminEmail = user?.email ?? FORK_CONFIG.superAdmin.email;
+    const ts = renderForkConfigTs(state, superAdminEmail);
     const blob = new Blob([ts], { type: 'text/typescript' });
     const url = URL.createObjectURL(blob);
     setDownloadUrl(url);
@@ -607,7 +616,7 @@ type PracticeType = (typeof VALID_PRACTICE_TYPES)[number];
  *
  * Never interpolate a string from `state.*` directly without `j()`.
  */
-function renderForkConfigTs(s: InstallWizardState): string {
+function renderForkConfigTs(s: InstallWizardState, superAdminEmail: string): string {
   const j = (v: unknown) => JSON.stringify(v);
   const i = s.identity ?? { appName: '', practiceName: '', shortName: '', legalEntity: '', smsSenderName: '' };
   const c = s.contact ?? { supportEmail: '', fromEmail: '', supportPhone: null, supportFax: null, portalUrl: '', domain: '' };
@@ -667,7 +676,7 @@ export const FORK_CONFIG: ForkConfig = {
   colors: ${j(b.colors)},
   agents: ${j(ag)},
   platformVendor: { name: 'Patient Portal Inc.', supportEmail: 'billing@patientportal.example', billingDescriptor: 'PATIENT PORTAL' },
-  superAdmin: { email: ${j(c.supportEmail)} },
+  superAdmin: { email: ${j(superAdminEmail)} },
   limits: { maxFieldChars: 250 },
   isDemo: false,
 };

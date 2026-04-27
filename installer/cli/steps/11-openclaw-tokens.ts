@@ -114,6 +114,27 @@ function substitutePlaceholders(targetDir: string, state: InstallerState, log: L
     }
   }
 
+  // Strict allowlist for tokens that land inside skill prompts / JSON
+  // config. A name with newlines, quotes, or instruction-like text could
+  // corrupt JSON or hijack the agent prompt ("Ignore previous instructions.
+  // Do X."). Practice names are pinned to printable ASCII + a small
+  // punctuation set; emails are validated by their own format upstream.
+  const STRICT_VALIDATORS: Record<string, RegExp> = {
+    "{{ADMIN_AGENT_NAME}}": /^[A-Za-z0-9 \-']{1,50}$/,
+    "{{PATIENT_AGENT_NAME}}": /^[A-Za-z0-9 \-']{1,50}$/,
+    "{{PRACTICE_NAME}}": /^[A-Za-z0-9 \-'.,&()]{1,80}$/,
+    "{{PRACTICE_SHORT_NAME}}": /^[A-Za-z0-9 \-'.&]{1,40}$/,
+    "{{LEGAL_ENTITY}}": /^[A-Za-z0-9 \-'.,&()]{1,80}$/,
+  };
+  for (const [k, re] of Object.entries(STRICT_VALIDATORS)) {
+    const v = tokens[k];
+    if (!re.test(v)) {
+      throw new Error(
+        `Token value for ${k} (\`${v}\`) does not match required shape ${re}. Pick a name with letters, numbers, and basic punctuation only.`,
+      );
+    }
+  }
+
   const root = resolve(targetDir);
   const dirs = [join(root, "openclaw"), join(root, "infra", "agents")];
   let touched = 0;

@@ -10,6 +10,7 @@ import * as admin from "firebase-admin";
 import {google} from "googleapis";
 import {requireFaxAdmin} from "./lib/signalwire-helpers.js";
 import {loadSignalwireConfig} from "./lib/signalwire-config.js";
+import {SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET, sidecarUrlEnv, sidecarApiKeyEnv, isSidecarConfigured} from "./lib/sidecar.js";
 
 const googleSaKey = defineSecret("GOOGLE_SA_KEY");
 
@@ -216,7 +217,7 @@ export const sendFaxEmail = onCall({
   secrets: [googleSaKey],
   timeoutSeconds: 60,
 }, async (request) => {
-  const uid = await requireFaxAdmin(request.auth);
+  const uid = await requireFaxAdmin(request.auth, {rateLimitKey: "sendFaxEmail", maxRequests: 30, windowMinutes: 10});
   const {faxSid, overrideDraft} = request.data as {
     faxSid: string;
     overrideDraft?: { to: string; cc?: string[]; subject: string; body: string };
@@ -300,8 +301,9 @@ export const sendFaxEmail = onCall({
 
 export const reprocessFax = onCall({
   timeoutSeconds: 60,
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
 }, async (request) => {
-  const uid = await requireFaxAdmin(request.auth);
+  const uid = await requireFaxAdmin(request.auth, {rateLimitKey: "reprocessFax", maxRequests: 20, windowMinutes: 10});
   const {faxSid, reason = "force_rerun"} = request.data as {
     faxSid: string; reason?: string;
   };
@@ -326,16 +328,16 @@ export const reprocessFax = onCall({
     }),
   });
 
-  // Best-effort Aurelia trigger
-  const SIDECAR_URL = process.env.SIDECAR_URL || "http://34.41.116.243:8081";
-  const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || "";
-  if (SIDECAR_API_KEY) {
+  // Best-effort Aurelia trigger. Reprocess is opportunistic — primary state
+  // (status reset, history append) already landed above, so a missing sidecar
+  // shouldn't fail the call.
+  if (isSidecarConfigured()) {
     try {
-      const res = await fetch(`${SIDECAR_URL}/fax/process`, {
+      const res = await fetch(`${sidecarUrlEnv()}/fax/process`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${SIDECAR_API_KEY}`,
+          Authorization: `Bearer ${sidecarApiKeyEnv()}`,
           "X-User-Uid": uid,
           "X-User-Role": "admin",
           "X-User-Name": "Reprocess",
@@ -415,11 +417,11 @@ export const markFaxJunk = onCall({timeoutSeconds: 30}, async (request) => {
 // attachFaxToDrChrono — idempotent: calls sidecar /fax-to-drchrono helper
 // ---------------------------------------------------------------------------
 
-const SIDECAR_URL = process.env.SIDECAR_URL || "http://34.41.116.243:8081";
-const SIDECAR_API_KEY_ENV = "SIDECAR_API_KEY";
-
-export const attachFaxToDrChrono = onCall({timeoutSeconds: 60}, async (request) => {
-  const uid = await requireFaxAdmin(request.auth);
+export const attachFaxToDrChrono = onCall({
+  timeoutSeconds: 60,
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
+}, async (request) => {
+  const uid = await requireFaxAdmin(request.auth, {rateLimitKey: "attachFaxToDrChrono", maxRequests: 30, windowMinutes: 10});
   const {faxSid, description, metatags, filename} = request.data as {
     faxSid: string;
     description?: string;
@@ -453,9 +455,13 @@ export const attachFaxToDrChrono = onCall({timeoutSeconds: 60}, async (request) 
     );
   }
 
-  const apiKey = process.env[SIDECAR_API_KEY_ENV] || "";
-  if (!apiKey) {
-    throw new HttpsError("failed-precondition", "SIDECAR_API_KEY not configured");
+  let sidecarUrl: string;
+  let apiKey: string;
+  try {
+    sidecarUrl = sidecarUrlEnv();
+    apiKey = sidecarApiKeyEnv();
+  } catch (err: any) {
+    throw new HttpsError("failed-precondition", err.message);
   }
 
   const doctype = data.extracted?.documentType || "Inbound Fax";
@@ -478,7 +484,7 @@ export const attachFaxToDrChrono = onCall({timeoutSeconds: 60}, async (request) 
 
   let sidecarRes: Response;
   try {
-    sidecarRes = await fetch(`${SIDECAR_URL}/admin-api/fax-to-drchrono`, {
+    sidecarRes = await fetch(`${sidecarUrl}/admin-api/fax-to-drchrono`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -498,7 +504,7 @@ export const attachFaxToDrChrono = onCall({timeoutSeconds: 60}, async (request) 
     });
   } catch (err: any) {
     logger.error("[fax] Sidecar fetch failed", {faxSid, message: err.message});
-    throw new HttpsError("unavailable", `Sidecar unreachable: ${err.message}`);
+    throw new HttpsError("unavailable", "Sidecar unreachable");
   }
 
   const result = await sidecarRes.json() as {
@@ -540,8 +546,11 @@ export const attachFaxToDrChrono = onCall({timeoutSeconds: 60}, async (request) 
 // detachFaxFromDrChrono — deletes the doc from DrChrono + clears local field
 // ---------------------------------------------------------------------------
 
-export const detachFaxFromDrChrono = onCall({timeoutSeconds: 60}, async (request) => {
-  const uid = await requireFaxAdmin(request.auth);
+export const detachFaxFromDrChrono = onCall({
+  timeoutSeconds: 60,
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
+}, async (request) => {
+  const uid = await requireFaxAdmin(request.auth, {rateLimitKey: "detachFaxFromDrChrono", maxRequests: 30, windowMinutes: 10});
   const {faxSid} = request.data as {faxSid: string};
   if (!faxSid) throw new HttpsError("invalid-argument", "faxSid required");
 
@@ -555,15 +564,21 @@ export const detachFaxFromDrChrono = onCall({timeoutSeconds: 60}, async (request
     return {ok: true, alreadyDetached: true};
   }
 
-  const apiKey = process.env[SIDECAR_API_KEY_ENV] || "";
-  if (!apiKey) throw new HttpsError("failed-precondition", "SIDECAR_API_KEY not configured");
+  let sidecarUrl: string;
+  let apiKey: string;
+  try {
+    sidecarUrl = sidecarUrlEnv();
+    apiKey = sidecarApiKeyEnv();
+  } catch (err: any) {
+    throw new HttpsError("failed-precondition", err.message);
+  }
 
   logger.info("[fax] Detaching from DrChrono", {faxSid, docId, by: uid});
 
   // Delete via the sidecar's DrChrono proxy
   let dcRes: Response;
   try {
-    dcRes = await fetch(`${SIDECAR_URL}/admin-api/drchrono/documents/${docId}`, {
+    dcRes = await fetch(`${sidecarUrl}/admin-api/drchrono/documents/${docId}`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -574,7 +589,7 @@ export const detachFaxFromDrChrono = onCall({timeoutSeconds: 60}, async (request
       signal: AbortSignal.timeout(30_000),
     });
   } catch (err: any) {
-    throw new HttpsError("unavailable", `Sidecar unreachable: ${err.message}`);
+    throw new HttpsError("unavailable", "Sidecar unreachable");
   }
 
   // DrChrono returns 204 on success; treat 404 as "already gone" (idempotent)

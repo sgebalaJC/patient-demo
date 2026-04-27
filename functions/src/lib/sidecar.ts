@@ -13,10 +13,43 @@ import {logger} from "firebase-functions";
 export const SIDECAR_URL_SECRET = defineSecret("SIDECAR_URL");
 export const SIDECAR_API_KEY_SECRET = defineSecret("SIDECAR_API_KEY");
 
-export const sidecarUrlEnv = (): string =>
-  process.env.SIDECAR_URL || "http://YOUR_VPS_IP:8081";
-export const sidecarApiKeyEnv = (): string =>
-  process.env.SIDECAR_API_KEY || "";
+/**
+ * Strict accessors. No fallback defaults — a missing or placeholder value
+ * means the function is misconfigured and we want loud failure (the caller's
+ * bearer token would otherwise be forwarded to whatever the default points
+ * at, which has historically been a demo VPS IP). Soft "skip if absent"
+ * paths must use {@link isSidecarConfigured} first.
+ */
+export function sidecarUrlEnv(): string {
+  const url = process.env.SIDECAR_URL;
+  if (!url) {
+    throw new Error("SIDECAR_URL is not set");
+  }
+  if (!isValidSidecarUrl(url)) {
+    throw new Error("SIDECAR_URL is invalid or a placeholder");
+  }
+  return url;
+}
+
+export function sidecarApiKeyEnv(): string {
+  const key = process.env.SIDECAR_API_KEY;
+  if (!key) {
+    throw new Error("SIDECAR_API_KEY is not set");
+  }
+  return key;
+}
+
+/**
+ * Non-throwing probe for fire-and-forget paths (skill sync, opportunistic
+ * Aurelia triggers from schedulers) where a missing sidecar must NOT fail
+ * the primary operation. Returns false when env is unset or invalid.
+ */
+export function isSidecarConfigured(): boolean {
+  const url = process.env.SIDECAR_URL;
+  const key = process.env.SIDECAR_API_KEY;
+  if (!url || !key) return false;
+  return isValidSidecarUrl(url);
+}
 
 /**
  * Validate that `SIDECAR_URL` looks like a sidecar before forwarding the
@@ -64,12 +97,12 @@ export async function syncIntegrationSkill(
   integrationId: string,
   enabled: boolean,
 ): Promise<void> {
-  const url = sidecarUrlEnv();
-  const key = sidecarApiKeyEnv();
-  if (!key || !isValidSidecarUrl(url)) {
+  if (!isSidecarConfigured()) {
     logger.info(`[skills] sidecar not configured / invalid URL, skipping sync for ${integrationId}`);
     return;
   }
+  const url = sidecarUrlEnv();
+  const key = sidecarApiKeyEnv();
   try {
     const res = await fetch(`${url}/skills/sync`, {
       method: "POST",

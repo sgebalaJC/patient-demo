@@ -26,10 +26,13 @@ export function loadState(targetDir: string): InstallerState | null {
  */
 export function saveState(targetDir: string, state: InstallerState): void {
   const p = statePath(targetDir);
-  mkdirSync(dirname(p), {recursive: true});
+  mkdirSync(dirname(p), {recursive: true, mode: 0o700});
   state.updatedAt = new Date().toISOString();
   const tmp = `${p}.${randomBytes(4).toString("hex")}.tmp`;
-  writeFileSync(tmp, JSON.stringify(state, null, 2) + "\n");
+  // Owner-only — state.json carries operator emails, project IDs, GCS bucket
+  // names, and integration IDs. Default umask leaves these world-readable on
+  // shared workstations; pin to 0o600 so a re-run doesn't loosen perms either.
+  writeFileSync(tmp, JSON.stringify(state, null, 2) + "\n", {mode: 0o600});
   renameSync(tmp, p);
 }
 

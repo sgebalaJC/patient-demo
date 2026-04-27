@@ -14,6 +14,7 @@
  */
 
 import * as admin from "firebase-admin";
+import * as crypto from "crypto";
 import {onCall, onRequest, HttpsError, CallableRequest} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {SignJWT, jwtVerify} from "jose";
@@ -27,10 +28,45 @@ import {syncIntegrationSkill, SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET} from "
 
 const FUNCTIONS_REGION = "us-west1";
 
-function stateSecret(): Uint8Array {
+function rawEncryptionKey(): string {
   const key = process.env.GOOGLE_WORKSPACE_ENCRYPTION_KEY;
   if (!key) throw new HttpsError("failed-precondition", "OAuth state secret not configured");
-  return new TextEncoder().encode(key);
+  return key;
+}
+
+function stateSecret(): Uint8Array {
+  return new TextEncoder().encode(rawEncryptionKey());
+}
+
+// AES-256-GCM token wrapper. Reuses GOOGLE_WORKSPACE_ENCRYPTION_KEY (already
+// required for the OAuth state JWT) so refresh tokens at rest in the private
+// subdoc are not exfil-ready if the Cloud Function service account is ever
+// compromised. SHA-256 derives a 32-byte key from any-length env input.
+function tokenCipherKey(): Buffer {
+  return crypto.createHash("sha256").update(rawEncryptionKey()).digest();
+}
+
+interface SealedToken {
+  iv: string;
+  ct: string;
+  tag: string;
+}
+
+function sealToken(plain: string): SealedToken {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", tokenCipherKey(), iv);
+  const ct = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return {iv: iv.toString("base64"), ct: ct.toString("base64"), tag: tag.toString("base64")};
+}
+
+function openToken(sealed: SealedToken): string {
+  const iv = Buffer.from(sealed.iv, "base64");
+  const ct = Buffer.from(sealed.ct, "base64");
+  const tag = Buffer.from(sealed.tag, "base64");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", tokenCipherKey(), iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
 }
 
 function db() {
@@ -144,9 +180,41 @@ interface PrivateCredentials {
   tokenExpiresAt?: admin.firestore.Timestamp;
 }
 
+interface StoredPrivateCredentials {
+  accessTokenEnc?: SealedToken;
+  refreshTokenEnc?: SealedToken;
+  // Legacy plaintext fields — read transparently, rewritten as encrypted on
+  // next refresh. Remove once every fork has rotated tokens.
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: admin.firestore.Timestamp;
+}
+
 async function loadPrivateCreds(configDoc: string): Promise<PrivateCredentials> {
   const snap = await privateCredsRef(configDoc).get();
-  return (snap.exists ? (snap.data() as PrivateCredentials) : {}) ?? {};
+  if (!snap.exists) return {};
+  const stored = (snap.data() as StoredPrivateCredentials) ?? {};
+  return {
+    accessToken: stored.accessTokenEnc ? openToken(stored.accessTokenEnc) : stored.accessToken,
+    refreshToken: stored.refreshTokenEnc ? openToken(stored.refreshTokenEnc) : stored.refreshToken,
+    tokenExpiresAt: stored.tokenExpiresAt,
+  };
+}
+
+function buildSealedTokenWrite(
+  accessToken: string,
+  refreshToken: string | null | undefined,
+  tokenExpiresAt: admin.firestore.Timestamp,
+): Record<string, unknown> {
+  return {
+    accessTokenEnc: sealToken(accessToken),
+    refreshTokenEnc: refreshToken ? sealToken(refreshToken) : null,
+    tokenExpiresAt,
+    // Always clear legacy plaintext on write so a sweep through every refresh
+    // path leaves no surface behind.
+    accessToken: admin.firestore.FieldValue.delete(),
+    refreshToken: admin.firestore.FieldValue.delete(),
+  };
 }
 
 export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
@@ -225,6 +293,11 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
   const authorize = onCall({}, async (request: CallableRequest<any>) => {
     assertSuperAdmin(request.auth);
     const uid = request.auth!.uid;
+
+    // Validate the state secret at click time so misconfiguration fails
+    // closed BEFORE we send the operator to the EHR auth URL — otherwise
+    // the failure surfaces only at callback, after a round-trip.
+    stateSecret();
 
     const snap = await db().doc(spec.configDoc).get();
     if (!snap.exists) {
@@ -319,12 +392,11 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
-      // Private doc: tokens only.
-      await privateCredsRef(spec.configDoc).set({
-        accessToken: tok.access_token,
-        refreshToken: tok.refresh_token ?? null,
-        tokenExpiresAt: expiresAt,
-      }, { merge: true });
+      // Private doc: tokens only, encrypted at rest.
+      await privateCredsRef(spec.configDoc).set(
+        buildSealedTokenWrite(tok.access_token, tok.refresh_token ?? null, expiresAt),
+        { merge: true },
+      );
 
       logger.info(`[${spec.provider}] OAuth connected`);
       res.redirect(`${back}&${statusKey}=connected`);
@@ -405,11 +477,14 @@ export function makeEhrOAuth(spec: EhrOAuthSpec): EhrOAuth {
       throw new Error(`${spec.provider} refresh failed: ${tokenRes.status} ${text.slice(0, 200)}`);
     }
     const tok = await tokenRes.json() as OAuthTokenResponse;
-    await privateCredsRef(spec.configDoc).set({
-      accessToken: tok.access_token,
-      refreshToken: tok.refresh_token ?? priv.refreshToken,
-      tokenExpiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + tok.expires_in * 1000),
-    }, { merge: true });
+    await privateCredsRef(spec.configDoc).set(
+      buildSealedTokenWrite(
+        tok.access_token,
+        tok.refresh_token ?? priv.refreshToken,
+        admin.firestore.Timestamp.fromMillis(Date.now() + tok.expires_in * 1000),
+      ),
+      { merge: true },
+    );
     await ref.set({
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });

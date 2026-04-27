@@ -31,8 +31,7 @@ import {
 // Re-export the secrets so existing imports from this module keep working.
 export {signalwireProjectId, signalwireAuthToken, signalwireSigningKey};
 
-const SIDECAR_URL = process.env.SIDECAR_URL || "";
-const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || "";
+import {SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET, sidecarUrlEnv, sidecarApiKeyEnv, isSidecarConfigured} from "./lib/sidecar.js";
 
 let _db: admin.firestore.Firestore;
 function db() {
@@ -134,16 +133,17 @@ async function downloadFaxMedia(
 // ---------------------------------------------------------------------------
 
 async function triggerAureliaProcessing(faxSid: string): Promise<void> {
-  if (!SIDECAR_API_KEY) {
-    logger.warn("[fax] SIDECAR_API_KEY not set — skipping Aurelia trigger", {faxSid});
+  // Public webhook path — must not 5xx if sidecar isn't configured yet.
+  if (!isSidecarConfigured()) {
+    logger.warn("[fax] sidecar not configured — skipping Aurelia trigger", {faxSid});
     return;
   }
   try {
-    const res = await fetch(`${SIDECAR_URL}/fax/process`, {
+    const res = await fetch(`${sidecarUrlEnv()}/fax/process`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${SIDECAR_API_KEY}`,
+        Authorization: `Bearer ${sidecarApiKeyEnv()}`,
         "X-User-Uid": "system",
         "X-User-Role": "admin",
         "X-User-Name": "Fax Pipeline",
@@ -439,7 +439,7 @@ async function handle(req: Request, res: Response): Promise<void> {
 
 export const signalwireFaxWebhook = onRequest(
   {
-    secrets: [signalwireProjectId, signalwireAuthToken, signalwireSigningKey],
+    secrets: [signalwireProjectId, signalwireAuthToken, signalwireSigningKey, SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
     timeoutSeconds: 60,
     memory: "512MiB",
   },

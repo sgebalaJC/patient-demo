@@ -205,6 +205,6 @@ export const sidecarProxy = onRequest({
       stack: error.stack?.slice(0, 200),
       sidecarUrl: sidecarUrlEnv(),
     });
-    res.status(502).json({error: `Sidecar unreachable: ${error.message}`});
+    res.status(502).json({error: "Sidecar unreachable"});
   }
 });

@@ -10,12 +10,10 @@
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
+import {SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET, sidecarUrlEnv, sidecarApiKeyEnv, isSidecarConfigured} from "./lib/sidecar.js";
 
 const MAX_ATTEMPTS = 5;
 const BACKOFF_MINUTES = [5, 15, 60, 4 * 60, 24 * 60];
-
-const SIDECAR_URL = process.env.SIDECAR_URL || "";
-const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || "";
 
 let _db: admin.firestore.Firestore;
 function db() {
@@ -24,16 +22,17 @@ function db() {
 }
 
 async function triggerAurelia(faxSid: string): Promise<boolean> {
-  if (!SIDECAR_API_KEY || !SIDECAR_URL) {
+  // Scheduled retry — soft skip when unconfigured rather than crash the cron.
+  if (!isSidecarConfigured()) {
     logger.warn("[fax-retry] sidecar not configured, cannot trigger", {faxSid});
     return false;
   }
   try {
-    const res = await fetch(`${SIDECAR_URL}/fax/process`, {
+    const res = await fetch(`${sidecarUrlEnv()}/fax/process`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${SIDECAR_API_KEY}`,
+        Authorization: `Bearer ${sidecarApiKeyEnv()}`,
         "X-User-Uid": "system",
         "X-User-Role": "admin",
         "X-User-Name": "Retry Cron",
@@ -51,6 +50,7 @@ async function triggerAurelia(faxSid: string): Promise<boolean> {
 export const retryFailedFaxes = onSchedule({
   schedule: "every 5 minutes",
   timeZone: "America/Los_Angeles",
+  secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET],
 }, async () => {
   const now = admin.firestore.Timestamp.now();
   const snap = await db().collection("inbound-faxes")

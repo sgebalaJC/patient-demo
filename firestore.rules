@@ -127,11 +127,28 @@ service cloud.firestore {
         let thread = get(/databases/$(database)/documents/message-threads/$(request.resource.data.threadId));
         return isOwner(thread.data.patientId) || isAdmin();
       }
+      // Mutable fields. `threadId`, `senderId`, `senderName`, `senderRole`,
+      // `createdAt` are pinned — anything else would let one party rewrite
+      // attribution or thread membership of an existing message.
+      function messageUpdateIsSafe() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'content', 'attachments', 'isEdited', 'editedAt', 'readBy'
+        ]);
+      }
 
-      allow read, list, write: if request.auth != null && hasThreadAccess();
+      allow read, list: if request.auth != null && hasThreadAccess();
       allow create: if request.auth != null
         && isOwner(request.resource.data.senderId)
         && hasCreateThreadAccess();
+      // Authors edit their own message body; admins can moderate any message.
+      // Patients on the thread who are not the author cannot mutate.
+      allow update: if request.auth != null
+        && hasThreadAccess()
+        && (isOwner(resource.data.senderId) || isAdmin())
+        && messageUpdateIsSafe();
+      allow delete: if request.auth != null
+        && hasThreadAccess()
+        && (isOwner(resource.data.senderId) || isAdmin());
     }
 
     // ───────────────── Status-bearing patient records ─────────────────

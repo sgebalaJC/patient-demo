@@ -40,11 +40,25 @@ export function computeSignalwireSignature(
  * Admin gate used by all fax callables. Super-admins (by email) are
  * allowed through before the Firestore role check so a bootstrap admin
  * can operate without a user doc. Throws `HttpsError` on failure.
+ *
+ * Optional rate-limit key throttles per-actor calls — used on callables
+ * that proxy to the sidecar (DrChrono upload, fax reprocess, etc.) so a
+ * compromised admin can't burn the SignalWire / DrChrono budget.
  */
 export async function requireFaxAdmin(
   auth: { uid: string; token?: { email?: string } } | undefined,
+  opts: { rateLimitKey?: string; maxRequests?: number; windowMinutes?: number } = {},
 ): Promise<string> {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Sign-in required");
+  if (opts.rateLimitKey) {
+    const {checkRateLimit} = await import("./rate-limit.js");
+    await checkRateLimit(
+      auth.uid,
+      opts.rateLimitKey,
+      opts.maxRequests ?? 20,
+      opts.windowMinutes ?? 10,
+    );
+  }
   const {isSuperAdminEmail} = await import("../superAdmins.js");
   if (isSuperAdminEmail(auth.token?.email)) return auth.uid;
   const userDoc = await admin.firestore().collection("users").doc(auth.uid).get();

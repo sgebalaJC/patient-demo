@@ -6,10 +6,9 @@ import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
 import type {PriorAuthStatus, PolicyStatus, CriteriaChecklistItem} from "./types.js";
+import {SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET, sidecarUrlEnv, sidecarApiKeyEnv} from "../lib/sidecar.js";
 
 const REGION = "us-west1";
-const SIDECAR_URL = process.env.SIDECAR_URL || "";
-const SIDECAR_API_KEY = process.env.SIDECAR_API_KEY || "";
 
 function db() {
   return admin.firestore();
@@ -17,8 +16,18 @@ function db() {
 
 async function requireAdmin(
   auth: {uid: string; token?: {email?: string}} | undefined,
+  opts: {rateLimitKey?: string; maxRequests?: number; windowMinutes?: number} = {},
 ): Promise<{uid: string; name: string}> {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Sign-in required");
+  if (opts.rateLimitKey) {
+    const {checkRateLimit} = await import("../lib/rate-limit.js");
+    await checkRateLimit(
+      auth.uid,
+      opts.rateLimitKey,
+      opts.maxRequests ?? 20,
+      opts.windowMinutes ?? 10,
+    );
+  }
   const {isSuperAdminEmail} = await import("../superAdmins.js");
   if (isSuperAdminEmail(auth.token?.email)) {
     return {uid: auth.uid, name: auth.token?.email || "Super Admin"};
@@ -40,7 +49,7 @@ async function requireAdmin(
 export const createPriorAuth = onCall(
   {region: REGION, memory: "512MiB", timeoutSeconds: 120},
   async (req) => {
-    const actor = await requireAdmin(req.auth);
+    const actor = await requireAdmin(req.auth, {rateLimitKey: "createPriorAuth", maxRequests: 20, windowMinutes: 10});
     const input = (req.data ?? {}) as {
       patientId: string;
       payerId: string;
@@ -309,9 +318,9 @@ export const submitPolicyReview = onCall(
 // run it manually.
 
 export const runChartGapCheck = onCall(
-  {region: REGION, memory: "512MiB", timeoutSeconds: 120},
+  {region: REGION, memory: "512MiB", timeoutSeconds: 120, secrets: [SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET]},
   async (req) => {
-    const actor = await requireAdmin(req.auth);
+    const actor = await requireAdmin(req.auth, {rateLimitKey: "runChartGapCheck", maxRequests: 15, windowMinutes: 10});
     const {paId} = (req.data ?? {}) as {paId: string};
     if (!paId) throw new HttpsError("invalid-argument", "paId required");
 
@@ -325,11 +334,13 @@ export const runChartGapCheck = onCall(
       criteriaChecklist: CriteriaChecklistItem[];
     };
 
-    if (!SIDECAR_API_KEY) {
-      throw new HttpsError(
-        "failed-precondition",
-        "Chart gap check not configured (missing SIDECAR_API_KEY). Run manually.",
-      );
+    let sidecarUrl: string;
+    let apiKey: string;
+    try {
+      sidecarUrl = sidecarUrlEnv();
+      apiKey = sidecarApiKeyEnv();
+    } catch (err: any) {
+      throw new HttpsError("failed-precondition", err.message);
     }
 
     const criteria = pa.criteriaChecklist.map((c) => ({
@@ -338,7 +349,7 @@ export const runChartGapCheck = onCall(
       description: c.description,
     }));
 
-    const url = `${SIDECAR_URL}/admin-api/prior-auth/chart-gap-check`;
+    const url = `${sidecarUrl}/admin-api/prior-auth/chart-gap-check`;
     const body = {
       paId,
       patientId: pa.patientId,
@@ -351,7 +362,7 @@ export const runChartGapCheck = onCall(
       const res = await fetch(url, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${SIDECAR_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),

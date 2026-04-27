@@ -93,12 +93,6 @@ run_remote "command -v pdftoppm >/dev/null && command -v convert >/dev/null && c
 echo "==> Uploading binary..."
 copy_to_remote "$SCRIPT_DIR/patient-sidecar" "/tmp/patient-sidecar.new"
 
-echo "==> Stopping remote sidecar..."
-run_remote "sudo systemctl stop patient-sidecar"
-
-echo "==> Moving binary into place..."
-run_remote "sudo mv /tmp/patient-sidecar.new $REMOTE_BIN && sudo chmod +x $REMOTE_BIN"
-
 # Ensure SIDECAR_API_KEY is in the OpenClaw gateway environment so the CLI inherits it
 echo "==> Provisioning CLI environment..."
 run_remote "sudo bash -c '
@@ -184,18 +178,95 @@ if [ -d "$SKILLS_DIR" ]; then
   fi
 fi
 
-echo "==> Starting remote sidecar..."
-run_remote "sudo systemctl start patient-sidecar"
+# Atomic binary swap + restart + health check + rollback. One SSH session for
+# everything that touches the running service. A connection drop here either
+# fails the script (set -e on the parent) or leaves the prior binary intact;
+# the partial-deploy footgun that bit us before — stop succeeded, ssh dropped,
+# start never ran — is closed because the remote script controls its own
+# completion.
+ATOMIC_SCRIPT='set -euo pipefail
+BIN=/root/patient-sidecar
+NEW=/tmp/patient-sidecar.new
+PREV=/tmp/patient-sidecar.prev
 
-echo "==> Verifying health..."
-sleep 2
-HEALTH=$(run_remote "curl -sf http://localhost:8081/healthz")
+if [ ! -f "$NEW" ]; then
+  echo "FATAL: $NEW missing — upload step did not complete" >&2
+  exit 2
+fi
 
-echo "$HEALTH"
+# Snapshot current binary so we can rollback on bad health.
+if [ -f "$BIN" ]; then
+  cp -f "$BIN" "$PREV"
+fi
 
-if echo "$HEALTH" | grep -q '"ok":true'; then
-  echo "==> Deploy successful!"
+mv "$NEW" "$BIN"
+chmod +x "$BIN"
+
+# `restart` is one operation, half the failure window of stop+start.
+systemctl restart patient-sidecar
+
+# Probe localhost so we measure the service itself, not the network in front
+# of it. The workstation-side check after this script does the network half.
+for i in 1 2 3 4 5; do
+  sleep 2
+  if curl -sf --max-time 4 http://localhost:8081/healthz 2>/dev/null | grep -q "\"ok\":true"; then
+    echo "[remote] healthz ok on attempt $i"
+    rm -f "$PREV"
+    exit 0
+  fi
+done
+
+echo "[remote] healthz failed after 5 tries — rolling back" >&2
+if [ -f "$PREV" ]; then
+  mv "$PREV" "$BIN"
+  systemctl restart patient-sidecar
+  sleep 2
+  if curl -sf --max-time 4 http://localhost:8081/healthz 2>/dev/null | grep -q "\"ok\":true"; then
+    echo "[remote] rollback healthz ok — previous binary restored" >&2
+  else
+    echo "[remote] rollback also unhealthy — operator intervention required" >&2
+  fi
+fi
+exit 1
+'
+
+# A transient SSH reset on the atomic step shouldn'"'"'t fail the deploy if a
+# retry would succeed. 3 attempts with a brief backoff covers Hetzner'"'"'s
+# occasional kex_exchange_identification drops without masking real failures
+# (each attempt is itself idempotent — the remote script handles missing
+# /tmp/patient-sidecar.new by failing fast).
+echo "==> Atomic swap + restart + health (with rollback)..."
+ATOMIC_OK=false
+for attempt in 1 2 3; do
+  if [[ "$TRANSPORT" == "ssh" ]]; then
+    if printf '%s' "$ATOMIC_SCRIPT" | ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "sudo bash -s"; then
+      ATOMIC_OK=true
+      break
+    fi
+  else
+    # gcloud compute ssh forwards stdin via the underlying ssh after `--`.
+    if printf '%s' "$ATOMIC_SCRIPT" | gcloud compute ssh "$GCE_VM" --zone="$GCE_ZONE" --project="$GCE_PROJECT" -- "sudo bash -s"; then
+      ATOMIC_OK=true
+      break
+    fi
+  fi
+  echo "    attempt $attempt failed — sleeping 5s before retry"
+  sleep 5
+done
+
+if [[ "$ATOMIC_OK" != "true" ]]; then
+  echo "==> FAIL: atomic swap exhausted retries"
+  exit 1
+fi
+
+# Workstation-side probe — verifies the public network path the agent +
+# Cloud Function proxy actually use, not just localhost on the VM.
+echo "==> Verifying health from workstation..."
+HEALTH_URL="http://${SIDECAR_HOST:-localhost}:8081/healthz"
+if curl -sf --max-time 10 "$HEALTH_URL" | grep -q '"ok":true'; then
+  echo "==> Deploy successful — sidecar healthy at $HEALTH_URL"
 else
-  echo "==> WARNING: Health check failed"
+  echo "==> WARNING: workstation-side healthz did not return ok"
+  echo "    (remote-side check passed; check firewall / port forwarding)"
   exit 1
 fi

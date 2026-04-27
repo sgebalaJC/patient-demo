@@ -220,115 +220,11 @@ export const setUserPassword = onCall({
  * HTTP Callable Functions for User Management
  */
 
-/**
- * PII field names dropped from audit metadata at any depth.
- *
- * Centralized so every [AUDIT] logger.info call (and future ones) gets the
- * same scrub. Adding a name here transparently protects all call sites.
- */
-const AUDIT_PII_FIELD_NAMES = new Set([
-  'email', 'name', 'firstname', 'lastname', 'phone', 'phonenumber',
-  'dateofbirth', 'dob', 'address', 'ssn', 'content', 'message', 'body',
-  'password', 'token', 'allergies', 'diagnosis', 'medication', 'medications',
-  'actor', 'operator', 'recipient', 'recipientemail', 'targetemail',
-  'realemail',
-  // Prototype-pollution hygiene: never copy these onto the scrubbed
-  // output even though Object.entries already filters inherited props.
-  // Keeps the resulting object's prototype chain clean for any consumer
-  // that uses `for...in` or has-own-property reflection on the audit doc.
-  '__proto__', 'constructor', 'prototype',
-]);
-
-/**
- * Recursively walk an audit-metadata value and drop any object key whose
- * lowercased name appears in `AUDIT_PII_FIELD_NAMES`. Arrays and primitives
- * pass through unchanged. Returns a new structure; input is not mutated.
- *
- * Why deep-walk: callers sometimes nest details one level down
- * (`metadata: { user: { email } }`); a top-level filter would leak `email`.
- *
- * Cycle + depth guards: `logAuditEvent` accepts arbitrary client metadata.
- * A self-referential object would otherwise stack-overflow the function;
- * a deeply-nested attacker payload could blow the call stack and deny the
- * audit logger to legitimate callers. The `seen` WeakSet kills cycles
- * and SCRUB_MAX_DEPTH caps adversarial nesting at a realistic ceiling.
- */
-const SCRUB_MAX_DEPTH = 8;
-
-export function scrubPii(input: unknown, depth = 0, seen?: WeakSet<object>): unknown {
-  if (depth > SCRUB_MAX_DEPTH) return null;
-  if (Array.isArray(input)) {
-    if (!seen) seen = new WeakSet();
-    if (seen.has(input)) return null;
-    seen.add(input);
-    return input.map((v) => scrubPii(v, depth + 1, seen));
-  }
-  if (input && typeof input === 'object') {
-    if (!seen) seen = new WeakSet();
-    if (seen.has(input as object)) return null;
-    seen.add(input as object);
-    const out: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-      if (AUDIT_PII_FIELD_NAMES.has(key.toLowerCase())) continue;
-      out[key] = scrubPii(value, depth + 1, seen);
-    }
-    return out;
-  }
-  return input;
-}
-
-/**
- * Common shape for audit emits. Every server-side audit point should use
- * `emitAudit(...)` instead of writing `logger.info('[AUDIT]', ...)` directly:
- * the helper applies the PII scrub AND mirrors to Firestore so the
- * AdminAuditLogPage shows the full server-side trail (not just client-driven
- * actions). Fire-and-forget mirror — Firestore failure must not block the
- * primary action's success.
- */
-interface AuditEmitInput {
-  actorId: string;
-  actorRole: string;
-  action: string;
-  resourceType?: string | null;
-  resourceId?: string | null;
-  metadata?: Record<string, unknown>;
-}
-
-export async function emitAudit(input: AuditEmitInput): Promise<void> {
-  const safeMetadata = input.metadata ? (scrubPii(input.metadata) as Record<string, unknown>) : {};
-  const timestamp = new Date().toISOString();
-  logger.info('[AUDIT]', {
-    audit: true,
-    actorId: input.actorId,
-    actorRole: input.actorRole,
-    action: input.action,
-    resourceType: input.resourceType ?? null,
-    resourceId: input.resourceId ?? null,
-    metadata: safeMetadata,
-    timestamp,
-  });
-  // Awaited Firestore mirror — adds ~50ms to the calling handler but
-  // guarantees durability. Cloud Functions v2 may tear down containers
-  // immediately after the response resolves, so an unawaited `add()` can be
-  // cancelled mid-flight; for HIPAA-classified audit entries that's not
-  // acceptable. Mirror failures still degrade gracefully (Cloud Logging is
-  // the primary archive via the audit sink) but get logged at warn so ops
-  // can investigate.
-  try {
-    await db.collection('audit-logs').add({
-      actorId: input.actorId,
-      actorRole: input.actorRole,
-      action: input.action,
-      resourceType: input.resourceType ?? null,
-      resourceId: input.resourceId ?? null,
-      metadata: safeMetadata,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      clientTimestamp: timestamp,
-    });
-  } catch (err) {
-    logger.warn('[AUDIT] Firestore mirror failed:', { message: (err as Error).message });
-  }
-}
+// emitAudit + scrubPii moved to lib/audit.ts so any function file
+// (signalwire-webhook, stripe, EHR adapters, …) can import without a
+// circular dep through index.ts's barrel re-exports.
+import {emitAudit, scrubPii} from "./lib/audit.js";
+export {emitAudit, scrubPii};
 
 /**
  * Audit Logging — writes structured, HIPAA-safe audit events to GCP Cloud Logging.
@@ -784,19 +680,24 @@ export const onBootstrapRequestCreated = onDocumentCreated({
 
       const token = await admin.auth().createCustomToken(userRecord.uid, { role: 'admin' });
 
+      await requestRef.update({
+        status: 'ready',
+        token,
+        uid: userRecord.uid,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Emit audit AFTER the requestRef.update succeeds so the audit trail
+      // never claims "bootstrap succeeded" while the rollback path actually
+      // ran. If the audit emit itself fails, the bootstrap is already
+      // committed (token in client's hands) — the warn-level fallback in
+      // emitAudit's catch covers that asymmetry.
       await emitAudit({
         actorId: 'bootstrap',
         actorRole: 'system',
         action: 'user.bootstrap',
         resourceType: 'user',
         resourceId: userRecord.uid,
-      });
-
-      await requestRef.update({
-        status: 'ready',
-        token,
-        uid: userRecord.uid,
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } catch (err: any) {
       // Atomic rollback: delete everything we created so the system returns
@@ -2139,6 +2040,16 @@ export const cleanupCancelledAppointments = onSchedule({
     await batch.commit();
 
     logger.info(`Cleaned up ${snapshot.size} cancelled appointments older than 2 weeks`);
+    // Bulk PHI deletion → HIPAA-auditable. The cleanup-cron is a system
+    // actor (not a user); recording the count + a high-level "scope" so
+    // the audit log shows the activity without listing 100s of resourceIds.
+    await emitAudit({
+      actorId: 'system:cron',
+      actorRole: 'system',
+      action: 'appointment.bulk_cleanup',
+      resourceType: 'appointment',
+      metadata: { deletedCount: snapshot.size, olderThanDays: 14, status: 'cancelled' },
+    });
   } catch (error: any) {
     logger.error('Error cleaning up cancelled appointments:', { message: error.message });
   }
@@ -2357,6 +2268,16 @@ export const dailySidecarBackup = onSchedule({
     }
 
     logger.info(`Daily backup complete. Cloud backups: ${Math.min(files.length, MAX_CLOUD_BACKUPS)}`);
+    // Bulk PHI export → HIPAA-auditable. Record name + size; the actual
+    // file lives in GCS at the path the metadata references.
+    await emitAudit({
+      actorId: 'system:cron',
+      actorRole: 'system',
+      action: 'sidecar.backup_completed',
+      resourceType: 'sidecar-backup',
+      resourceId: created.name,
+      metadata: { sizeMb: created.sizeMb, retainedCount: Math.min(files.length, MAX_CLOUD_BACKUPS) },
+    });
   } catch (error: any) {
     logger.error('Daily sidecar backup failed:', { message: error.message });
   }
@@ -3296,9 +3217,17 @@ export const impersonateUser = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'targetUid is required');
   }
   const token = await admin.auth().createCustomToken(targetUid);
-  logger.info('super admin impersonation', {
-    superAdminUid: context.uid,
-    targetUid,
+  // Super-admin impersonation is the highest-blast-radius action in the
+  // codebase. Route through emitAudit so it lands in BOTH Cloud Logging
+  // (with the audit:true tag → 7-year HIPAA archive sink) AND the
+  // Firestore audit-logs mirror visible to super-admins. A raw
+  // logger.info would be invisible to both.
+  await emitAudit({
+    actorId: context.uid,
+    actorRole: 'super_admin',
+    action: 'auth.impersonation_started',
+    resourceType: 'user',
+    resourceId: targetUid,
   });
   return {token};
 });

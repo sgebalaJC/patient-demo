@@ -20,6 +20,7 @@ import {logger} from "firebase-functions";
 import {onRequest} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import {emitAudit} from "./lib/audit.js";
 import {
   signalwireProjectId,
   signalwireAuthToken,
@@ -391,6 +392,18 @@ async function handle(req: Request, res: Response): Promise<void> {
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   logger.info("[fax] Row written, status=pending", {faxSid, emailMode});
+  // Inbound faxes carry PHI. HIPAA expects an audit event for receipt.
+  // Fax phone numbers (from/to) are PII and dropped automatically by the
+  // scrubPii recursion (`phone` is in the blocklist). Page count + size
+  // are non-PII metadata.
+  await emitAudit({
+    actorId: "system:webhook",
+    actorRole: "system",
+    action: "fax.received",
+    resourceType: "inbound-fax",
+    resourceId: faxSid,
+    metadata: {pageCount, byteSize: pdfBuffer.length, emailMode},
+  });
 
   // ── Admin notification ────────────────────────────────────────────────────
   await db().collection("notifications").add({

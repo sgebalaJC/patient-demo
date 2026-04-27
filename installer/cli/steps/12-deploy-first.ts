@@ -56,7 +56,12 @@ export const deployFirstStep: Step = {
     //    `firebase deploy --only functions:<group>` later (or admin UI deploys).
     const enabled = (state.inputs.enabledIntegrations ?? []) as GroupId[];
     const fnFilter = deployFilterFor(enabled);
-    const onlyFilter = ["firestore:rules", "firestore:indexes", ...fnFilter].join(",");
+    // storage:rules is critical: 10b-rewrite-superadmin.ts updates
+    // storage.rules with the operator's email, but without including
+    // storage:rules here, the deployed bucket keeps whatever default
+    // rules Firebase auto-emits — never picking up the rewrite. Without
+    // this, the template super-admin retains storage access on every fork.
+    const onlyFilter = ["firestore:rules", "firestore:indexes", "storage:rules", ...fnFilter].join(",");
     log.info(`Deploying ${fnFilter.length} functions (groups: core${enabled.length ? "+" + enabled.join("+") : ""}).`);
     const fullArgs = [
       "deploy",
@@ -91,7 +96,7 @@ export const deployFirstStep: Step = {
      */
     const retryArgs = (failures: string[]) => {
       const fnTokens = failures.map((f) => `functions:${f}`);
-      const onlyRetry = ["firestore:rules", "firestore:indexes", ...fnTokens].join(",");
+      const onlyRetry = ["firestore:rules", "firestore:indexes", "storage:rules", ...fnTokens].join(",");
       return [
         "deploy",
         "--only",

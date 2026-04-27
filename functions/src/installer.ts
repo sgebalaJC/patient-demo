@@ -14,7 +14,7 @@ import {logger} from "firebase-functions";
 import * as admin from "firebase-admin";
 import {GoogleAuth} from "google-auth-library";
 import {requireSuperAdmin} from "./lib/auth.js";
-import {SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET, sidecarUrlEnv, sidecarApiKeyEnv, syncIntegrationSkill} from "./lib/sidecar.js";
+import {SIDECAR_URL_SECRET, SIDECAR_API_KEY_SECRET, sidecarUrlEnv, sidecarApiKeyEnv, syncIntegrationSkill, isValidSidecarUrl} from "./lib/sidecar.js";
 
 interface SyncResult {
   ok: boolean;
@@ -28,44 +28,10 @@ interface SyncResult {
   };
 }
 
-/**
- * Validate that `SIDECAR_URL` looks like a sidecar.
- *
- * The sidecar API key is forwarded verbatim with every `/skills/sync` call.
- * If a misconfigured / hostile super-admin set `SIDECAR_URL` to an arbitrary
- * URL (`http://evil.example.com`), we'd leak the key to that host on the
- * first sync. Constrain the shape:
- *   - http or https only
- *   - host must be IPv4-like or a DNS-style hostname (no path separators)
- *   - port must be empty (default 80/443) OR one of {80, 443, 8081}
- *     — 8081 is the showmd-pattern default; HTTPS-fronted sidecars may
- *     terminate at 443; HTTP fallback at 80 is allowed but discouraged
- *   - never the placeholder strings step 07/12 seed
- *
- * Any failure returns false so the caller throws `failed-precondition`.
- */
-function isValidSidecarUrl(url: string): boolean {
-  const PLACEHOLDERS = ["YOUR_VPS_IP", "placeholder.invalid"];
-  if (PLACEHOLDERS.some((p) => url.includes(p))) return false;
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
-  if (parsed.port !== "" && !["80", "443", "8081"].includes(parsed.port)) return false;
-  // Hostname must be a plain IPv4 (digits + dots) OR a DNS-safe label set —
-  // no userinfo, no path other than `/`, no query.
-  const host = parsed.hostname;
-  const ipv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(host);
-  const dns = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/i.test(host);
-  if (!ipv4 && !dns) return false;
-  if (parsed.pathname && parsed.pathname !== "/" && parsed.pathname !== "") return false;
-  if (parsed.username || parsed.password) return false;
-  if (parsed.search || parsed.hash) return false;
-  return true;
-}
+// `isValidSidecarUrl` lives in `./lib/sidecar.ts` so it's also applied at
+// the long-lived `sidecarProxy` runtime path, not just here. Keep the rule
+// single-source — drift between this validator and the proxy's gate would
+// re-create the API-key-leak vector this check exists to prevent.
 
 /**
  * Wizard's "Sync agent workspace + ping gateway" button.

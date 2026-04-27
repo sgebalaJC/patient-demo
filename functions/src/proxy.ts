@@ -19,6 +19,7 @@ import {
   SIDECAR_API_KEY_SECRET,
   sidecarUrlEnv,
   sidecarApiKeyEnv,
+  isValidSidecarUrl,
 } from "./lib/sidecar.js";
 import {isSuperAdminEmail} from "./superAdmins.js";
 import {INCLUDE_SIM_MODE} from "./lib/sim-flag.js";
@@ -127,6 +128,18 @@ export const sidecarProxy = onRequest({
     const sidecarApiKey = sidecarApiKeyEnv();
     if (!sidecarApiKey) {
       res.status(503).json({error: "Sidecar not configured"});
+      return;
+    }
+    // Validate the URL shape BEFORE forwarding the bearer token. Without
+    // this, an admin (or a misconfigured Secret Manager rotation) who put
+    // an arbitrary URL into SIDECAR_URL would harvest the API key + every
+    // proxied request body. Validator lives in lib/sidecar.ts so this rule
+    // is shared with installerSyncAgentWorkspace and syncIntegrationSkill.
+    if (!isValidSidecarUrl(sidecarUrl)) {
+      logger.warn("[sidecarProxy] refusing to forward — SIDECAR_URL invalid", {
+        host: (() => { try { return new URL(sidecarUrl).hostname; } catch { return "unparseable"; } })(),
+      });
+      res.status(503).json({error: "Sidecar URL not yet configured or invalid"});
       return;
     }
 

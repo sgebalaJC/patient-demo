@@ -16,9 +16,11 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
+  Plus,
 } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AdminGuard } from '../components/ui/AdminGuard';
+import { AdminCreateReferralModal } from '../components/appointments/AdminCreateReferralModal';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatsGrid } from '../components/ui/StatsGrid';
 import { FilterTabs } from '../components/ui/FilterTabs';
@@ -47,6 +49,9 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
   // modal component.
   const [confirmingRequest, setConfirmingRequest] = useState<RequestWithPatient | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+
+  // Admin-composed referrals (skip the patient-create-then-confirm round trip).
+  const [showCreate, setShowCreate] = useState(false);
 
   const whereClauses = useMemo<WhereClause[] | undefined>(
     () => (filter === 'all' ? undefined : [['status', '==', filter]]),
@@ -120,6 +125,11 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
         iconColor="bg-primary-50 text-primary-700"
         title="Specialist Requests"
         subtitle="Manage patient specialist referral requests"
+        action={
+          <Button onClick={() => setShowCreate(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1.5" /> New Referral
+          </Button>
+        }
       />
 
       <StatsGrid items={[
@@ -271,6 +281,16 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
         message="Are you sure you want to cancel this specialist request?"
         confirmLabel="Cancel Request"
         variant="danger"
+      />
+
+      <AdminCreateReferralModal
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        onSuccess={() => {
+          setShowCreate(false);
+          refreshAll();
+          setFilter('confirmed');
+        }}
       />
     </div>
     </AdminGuard>

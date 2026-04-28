@@ -126,8 +126,9 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
         title="Specialist Requests"
         subtitle="Manage patient specialist referral requests"
         action={
-          <Button onClick={() => setShowCreate(true)} size="sm">
-            <Plus className="h-4 w-4 mr-1.5" /> New Referral
+          <Button onClick={() => setShowCreate(true)} className="flex items-center">
+            <Plus className="h-4 w-4 mr-2" />
+            New Referral
           </Button>
         }
       />

@@ -2082,7 +2082,12 @@ export const cleanupCancelledAppointments = onSchedule({
  *        Authorization: Bearer <firebase-id-token>
  */
 export const serveFile = onRequest({
-  cors: [...corsOptions, 'http://localhost:5173'],
+  // Vite dev origin is added only outside production. Leaving localhost:5173
+  // on the prod allow-list lets a malicious page running on a developer's
+  // machine (or any process binding that origin) negotiate CORS against the
+  // production endpoint — narrow the window even though the Bearer header
+  // isn't auto-attached cross-origin today.
+  cors: isProduction() ? corsOptions : [...corsOptions, 'http://localhost:5173'],
 }, async (req, res) => {
   try {
     // Verify auth token

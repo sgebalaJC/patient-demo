@@ -20,8 +20,16 @@ service firebase.storage {
     // attachments and serve it from the firebasestorage.googleapis.com origin
     // — phishing / drive-by surface against admins. Same shape we already
     // enforce on patient documents.
+    //
+    // Strict raster-only image allowlist. The previous `image/.*` wildcard
+    // accepted `image/svg+xml`, which renders as a top-level document with
+    // scripting enabled — a patient could upload `evil.svg`, an admin could
+    // hit "Open in new tab" in DocumentPreviewModal (which builds a blob:
+    // URL inheriting the SPA's origin), and the SVG's <script> would run
+    // with access to the admin's Firebase auth state in
+    // IndexedDB / localStorage → patient → admin account takeover.
     function uploadContentTypeOk() {
-      return request.resource.contentType.matches('image/.*')
+      return request.resource.contentType.matches('image/(jpeg|jpg|png|gif|webp|bmp|tiff|tif|heic|heif)')
         || request.resource.contentType == 'application/pdf'
         || request.resource.contentType == 'application/msword'
         || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'

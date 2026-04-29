@@ -119,36 +119,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             return;
           }
 
-          // Normal user or impersonating: load from Firestore. When the
-          // impersonation record is flagged `simulated`, the target was a
-          // seeded demo user (only exists at simulation/native/users/<uid>),
-          // so read from the sim collection instead of the real one — the
-          // banner + the rest of the app depend on having a profile to show.
-          let simProfile = false;
-          try {
-            const raw = sessionStorage.getItem('impersonation');
-            if (raw) simProfile = !!JSON.parse(raw)?.simulated;
-          } catch { /* ignore malformed flag */ }
-
+          // Normal user or impersonating: load from Firestore via
+          // `userOperations`, which routes through `collections.users` →
+          // sim-mode singleton. When sim is on (e.g. impersonating a seeded
+          // demo patient whose UID lives at `simulation/native/users/<uid>`),
+          // the singleton transparently maps to the sim collection. The
+          // singleton is hydrated from localStorage at module init so it's
+          // already correct on reloads after impersonation.
           await new Promise(resolve => setTimeout(resolve, 100));
 
-          let profileResponse = await userOperations.getUser(fbUser.uid, simProfile);
-          // Legacy impersonation records (set before we stamped `simulated`
-          // on them) skip the sim path and miss seeded users. Fall back to
-          // the sim collection when impersonating + real lookup fails — the
-          // banner depends on having a profile, so without this the user
-          // gets stuck unable to tell who they're signed in as on reload.
-          if (
-            !simProfile &&
-            isImpersonating &&
-            (!profileResponse.success || !profileResponse.data)
-          ) {
-            const fallback = await userOperations.getUser(fbUser.uid, true);
-            if (fallback.success && fallback.data) {
-              profileResponse = fallback;
-              simProfile = true;
-            }
-          }
+          const profileResponse = await userOperations.getUser(fbUser.uid);
           if (profileResponse.success && profileResponse.data && !profileResponse.data.role) {
             logger.warn('User document missing role, retrying...');
             await new Promise(resolve => setTimeout(resolve, 200));
@@ -160,7 +140,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               setUserProfile(profile);
               setLoading(false);
             },
-            simProfile,
           );
         } else {
           setUser(null);

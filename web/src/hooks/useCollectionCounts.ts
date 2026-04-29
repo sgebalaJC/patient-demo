@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useSimulationMode } from './useSimulationMode';
+import { simPath } from '../lib/sim-mode';
 
 type Predicate = [field: string, op: WhereFilterOp, value: unknown];
 
@@ -47,13 +48,15 @@ export function useCollectionCounts<K extends string>(
   opts: UseCollectionCountsOptions<K>,
 ): UseCollectionCountsResult<K> {
   const { real, sim, predicates, enabled = true } = opts;
+  // Subscribe to the sim singleton so the path memo recomputes when the flag
+  // flips. The actual path comes from `simPath()` (single source of truth);
+  // callers that pass `sim` get to override the default `simulation/native/*`
+  // mapping (e.g. faxes live at `simulation/faxes/inbound`).
   const { enabled: simulated } = useSimulationMode();
 
   const path = useMemo(() => {
     if (!simulated) return real;
-    // Mirror usePagedCollection — fall back to `simulation/native/<real>`
-    // (odd-segment collection path) when the caller doesn't provide `sim`.
-    return sim || `simulation/native/${real}`;
+    return sim || simPath(real);
   }, [simulated, real, sim]);
 
   const predicatesKey = useMemo(() => {

@@ -11,7 +11,6 @@ import { AccessDenied } from '../components/ui/AccessDenied';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../hooks/useAuth';
-import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
 import { formatDisplayName } from '../lib/user-helpers';
 import { subscribeToPriorAuth, appendNote, updateChecklist } from '../lib/firestore/prior-auths';
@@ -35,7 +34,6 @@ export const AdminPriorAuthDetailPage: React.FC = () => {
   const { paId } = useParams();
   const navigate = useNavigate();
   const { user, userProfile } = useAuth();
-  const { enabled: simulated } = useSimulationMode();
   const [noteText, setNoteText] = useState('');
   const [statusAction, setStatusAction] = useState<PriorAuthStatus | ''>('');
   const [statusMeta, setStatusMeta] = useState<Record<string, string>>({});
@@ -43,8 +41,8 @@ export const AdminPriorAuthDetailPage: React.FC = () => {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data: pa = null, loading, error: listenerError } = useFirestoreListener<PriorAuth | null>(
-    (onData, onError) => subscribeToPriorAuth(paId!, onData, onError, simulated),
-    { enabled: !!paId, initial: null, deps: [paId, simulated] },
+    (onData, onError) => subscribeToPriorAuth(paId!, onData, onError),
+    { enabled: !!paId, initial: null, deps: [paId] },
   );
   const error = actionError ?? (listenerError ? listenerError.message : null);
   const setError = setActionError;
@@ -52,7 +50,7 @@ export const AdminPriorAuthDetailPage: React.FC = () => {
   async function addNote(): Promise<void> {
     if (!paId || !user || !userProfile || !noteText.trim()) return;
     const name = formatDisplayName(userProfile, 'Admin');
-    await appendNote(paId, user.uid, name, noteText.trim(), simulated);
+    await appendNote(paId, user.uid, name, noteText.trim());
     setNoteText('');
   }
 
@@ -85,13 +83,13 @@ export const AdminPriorAuthDetailPage: React.FC = () => {
   async function toggleCriterion(idx: number, value: boolean | null): Promise<void> {
     if (!pa || !paId) return;
     const next = pa.criteriaChecklist.map((c, i) => (i === idx ? { ...c, met: value, manuallyOverridden: true } : c));
-    await updateChecklist(paId, next, simulated);
+    await updateChecklist(paId, next);
   }
 
   async function setEvidence(idx: number, evidence: string): Promise<void> {
     if (!pa || !paId) return;
     const next = pa.criteriaChecklist.map((c, i) => (i === idx ? { ...c, evidence } : c));
-    await updateChecklist(paId, next, simulated);
+    await updateChecklist(paId, next);
   }
 
   if (!isAdminRole(userProfile?.role)) return <AccessDenied />;

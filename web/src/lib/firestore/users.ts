@@ -16,12 +16,10 @@ import {
   DocumentSnapshot,
   QueryDocumentSnapshot,
   getCountFromServer,
-  collection,
   where,
   CollectionReference,
 } from 'firebase/firestore';
 import { collections, mapDocStrict } from './base';
-import { db } from '../firebase';
 import { User, ApiResponse } from '../../types';
 import { isAdminRole } from '../roles';
 import logger from "../logger";
@@ -41,14 +39,13 @@ export type SortDirection = 'asc' | 'desc';
  */
 export async function findUsersByPhones(
   phones: string[],
-  simulated = false,
 ): Promise<Map<string, User>> {
   const result = new Map<string, User>();
   const distinct = Array.from(new Set(phones.filter(Boolean)));
   if (distinct.length === 0) return result;
-  const usersRef = simulated
-    ? (collection(db, 'simulation/native/users') as CollectionReference)
-    : collections.users;
+  // collections.users routes through simPath() — sim-mode singleton decides
+  // whether this hits real `users` or `simulation/native/users`.
+  const usersRef = collections.users;
   for (let i = 0; i < distinct.length; i += 30) {
     const chunk = distinct.slice(i, i + 30);
     const snap = await getDocs(query(usersRef, where('phoneNumber', 'in', chunk)));
@@ -98,14 +95,12 @@ export const userOperations = {
     }
   },
 
-  // Get user by ID. When `simulated` is true (e.g. when a super-admin
-  // impersonates a seeded demo user that only exists at
-  // simulation/native/users/<uid>), reads from the sim collection instead.
-  async getUser(uid: string, simulated = false): Promise<ApiResponse<User>> {
+  // Get user by ID. Routes through `collections.users`, which the sim-mode
+  // singleton remaps to `simulation/native/users` when sim is on (e.g. for
+  // operators impersonating a seeded demo patient).
+  async getUser(uid: string): Promise<ApiResponse<User>> {
     try {
-      const ref = simulated
-        ? doc(collection(db, 'simulation/native/users') as CollectionReference, uid)
-        : doc(collections.users, uid);
+      const ref = doc(collections.users, uid);
       const userDoc = await getDoc(ref);
       const mapped = mapDocStrict<User>(userDoc, ['role'], 'users');
       if (mapped) {
@@ -153,13 +148,10 @@ export const userOperations = {
     }
   },
 
-  // Listen to user changes. `simulated` mirrors `getUser` — read from
-  // simulation/native/users/<uid> when the active session is impersonating
-  // a seeded demo user.
-  onUserChange(uid: string, callback: (user: User | null) => void, simulated = false) {
-    const ref = simulated
-      ? doc(collection(db, 'simulation/native/users') as CollectionReference, uid)
-      : doc(collections.users, uid);
+  // Listen to user changes. Routes through `collections.users` — the sim-mode
+  // singleton picks the physical path.
+  onUserChange(uid: string, callback: (user: User | null) => void) {
+    const ref = doc(collections.users, uid);
     return onSnapshot(
       ref,
       (snap) => {
@@ -186,7 +178,6 @@ export const userOperations = {
     sortDir: SortDirection = 'asc',
     cursorDoc?: DocumentSnapshot | null,
     direction: 'next' | 'prev' | 'first' = 'first',
-    simulated: boolean = false,
   ): Promise<ApiResponse<{
     users: User[];
     total: number;
@@ -197,9 +188,7 @@ export const userOperations = {
     lastDoc: DocumentSnapshot | null;
   }>> {
     try {
-      const usersRef: CollectionReference = simulated
-        ? collection(db, 'simulation/native/users')
-        : collections.users;
+      const usersRef: CollectionReference = collections.users;
 
       // Search mode: fetch all and filter client-side (unavoidable with Firestore)
       if (searchQuery && searchQuery.trim()) {

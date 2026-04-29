@@ -9,19 +9,10 @@ import {
   serverTimestamp,
   getDoc,
   getDocs,
-  collection,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '../firebase';
 import { collections, mapDocStrict } from './base';
 import { audit } from '../audit';
-
-// In simulation mode, prior-auth seed data lives at simulation/native/prior-auths.
-// Resolve the right collection ref so the detail page subscribes to the same
-// docs the list page reads.
-function priorAuthsRef(simulated: boolean) {
-  return simulated ? collection(db, 'simulation/native/prior-auths') : collections.priorAuths;
-}
 import type {
   PriorAuth,
   PayerPolicy,
@@ -34,10 +25,9 @@ export function subscribeToPriorAuth(
   paId: string,
   onChange: (pa: PriorAuth | null) => void,
   onError: (err: Error) => void,
-  simulated = false,
 ): Unsubscribe {
   return onSnapshot(
-    doc(priorAuthsRef(simulated), paId),
+    doc(collections.priorAuths, paId),
     (snap) => onChange(snap.exists() ? ({ id: snap.id, ...(snap.data() as Omit<PriorAuth, 'id'>) }) : null),
     (err) => onError(err as Error),
   );
@@ -52,9 +42,8 @@ export async function appendNote(
   authorId: string,
   authorName: string,
   text: string,
-  simulated = false,
 ): Promise<void> {
-  await updateDoc(doc(priorAuthsRef(simulated), paId), {
+  await updateDoc(doc(collections.priorAuths, paId), {
     notes: arrayUnion({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       authorId,
@@ -70,9 +59,8 @@ export async function appendNote(
 export async function updateChecklist(
   paId: string,
   checklist: CriteriaChecklistItem[],
-  simulated = false,
 ): Promise<void> {
-  await updateDoc(doc(priorAuthsRef(simulated), paId), {
+  await updateDoc(doc(collections.priorAuths, paId), {
     criteriaChecklist: checklist,
     updatedAt: serverTimestamp(),
   });

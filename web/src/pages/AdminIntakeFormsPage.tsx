@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { useSimulationMode } from '../hooks/useSimulationMode';
 import { useFeatures } from '../hooks/useFeatures';
 import { isAdminRole } from '../lib/roles';
 import { intakeFormOperations, prescriptionRefillOperations } from '../lib/firestore';
@@ -42,7 +41,6 @@ const SECTION_LABELS: Record<string, string> = {
 
 export const AdminIntakeFormsPage: React.FC = () => {
   const { user, userProfile } = useAuth();
-  const { enabled: simulated } = useSimulationMode();
   const { features } = useFeatures();
   const isAdminUser = !!user && isAdminRole(userProfile?.role);
   const [patientNames, setPatientNames] = useState<Record<string, { firstName: string; lastName: string }>>({});
@@ -96,12 +94,12 @@ export const AdminIntakeFormsPage: React.FC = () => {
   useEffect(() => {
     if (!idsToFetchKey) return;
     const ids = idsToFetchKey.split(',');
-    prescriptionRefillOperations.getPatientNamesByIds(ids, simulated).then((res) => {
+    prescriptionRefillOperations.getPatientNamesByIds(ids).then((res) => {
       if (res.success && res.data) {
         setPatientNames((prev) => ({ ...prev, ...res.data }));
       }
     }).catch((err) => logger.error('patient-name lookup failed', err));
-  }, [idsToFetchKey, simulated]);
+  }, [idsToFetchKey]);
 
   const refreshAll = () => { paged.refresh(); refreshCounts(); };
 

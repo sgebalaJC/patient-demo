@@ -6,10 +6,7 @@ import {
   query,
   where,
   serverTimestamp,
-  collection,
-  CollectionReference,
 } from 'firebase/firestore';
-import { db } from '../firebase';
 import { collections } from './base';
 import { PatientDocument, DocumentType, ApiResponse } from '../../types';
 import logger from '../logger';
@@ -43,18 +40,14 @@ export const documentOperations = {
     }
   },
 
-  // Get patient documents. Honors sim mode so admin views of seeded
-  // demo patients show the seeded patient-documents alongside everything else.
+  // Get patient documents. Routes through `collections.patientDocuments`;
+  // sim-mode singleton remaps to `simulation/native/patient-documents` when on.
   async getPatientDocuments(
     patientId: string,
-    simulated = false,
   ): Promise<ApiResponse<PatientDocument[]>> {
     try {
-      const docsRef = simulated
-        ? (collection(db, 'simulation/native/patient-documents') as CollectionReference)
-        : collections.patientDocuments;
       const documentsQuery = query(
-        docsRef,
+        collections.patientDocuments,
         where('isActive', '==', true),
         where('patientId', '==', patientId),
       );

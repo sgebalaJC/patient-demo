@@ -7,6 +7,7 @@ import {
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { simPath } from '../sim-mode';
 
 /**
  * Standard Firestore doc → typed object adapter. Use everywhere that
@@ -51,21 +52,10 @@ export const logAuthContext = (_operation: string) => {
   // Auth context logging removed for production
 };
 
-// Global sim-mode flag, kept in sync by AppSettingsProvider. When true, every
-// access through `collections.*` routes to `simulation/native/<name>` so the
-// patient-side pages (Dashboard / Refills / Appointments / etc.) see seeded
-// sandbox data transparently — same way the admin side already does via
-// usePagedCollection and the sidecar nc() helper.
-let simMode = false;
-export function setSimCollectionMode(on: boolean) {
-  simMode = on;
-}
-
-const simPath = (name: string) => (simMode ? `simulation/native/${name}` : name);
-
 // Collection references — implemented as getters so they re-resolve against
-// the current sim flag on every access. Firebase caches CollectionReference
-// internally so the repeated `collection(db, ...)` calls are cheap.
+// the current sim flag on every access. The flag lives in `lib/sim-mode.ts`
+// (single source of truth); firebase caches CollectionReference internally
+// so the repeated `collection(db, ...)` calls are cheap.
 export const collections = {
   get users() { return collection(db, simPath('users')); },
   get appointments() { return collection(db, simPath('appointments')); },

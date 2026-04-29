@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
-import { useSimulationMode } from '../hooks/useSimulationMode';
 import { useFeatures } from '../hooks/useFeatures';
 import { isAdminRole } from '../lib/roles';
 import {
@@ -31,7 +30,6 @@ import logger from '../lib/logger';
 
 export const AdminAppointmentsPage: React.FC = () => {
     const { user, userProfile } = useAuth();
-    const { enabled: simulated } = useSimulationMode();
     const { features } = useFeatures();
     const isAdminUser = !!user && isAdminRole(userProfile?.role);
     const [filter, setFilter] = useState<'all' | 'upcoming' | 'past' | 'today'>('upcoming');
@@ -97,12 +95,12 @@ export const AdminAppointmentsPage: React.FC = () => {
             (id) => !(id in patientNames),
         );
         if (ids.length === 0) return;
-        prescriptionRefillOperations.getPatientNamesByIds(ids, simulated).then((res) => {
+        prescriptionRefillOperations.getPatientNamesByIds(ids).then((res) => {
             if (res.success && res.data) {
                 setPatientNames((prev) => ({ ...prev, ...res.data }));
             }
         }).catch((err) => logger.error('patient-name lookup failed', err));
-    }, [paged.rows, patientNames, simulated]);
+    }, [paged.rows, patientNames]);
 
     const appointments: AdminAppointmentRowData[] = paged.rows.map((a) => {
         const n = patientNames[a.patientId];

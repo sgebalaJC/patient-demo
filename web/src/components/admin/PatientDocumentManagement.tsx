@@ -17,7 +17,6 @@ import { audit } from '../../lib/audit';
 import { Modal } from '../ui/Modal';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
-import { useSimulationMode } from '../../hooks/useSimulationMode';
 import { downloadFile, formatFileSize } from '../../lib/storage';
 import { formatDateTime, toDate } from '../../lib/date-helpers';
 import { DocumentPreviewModal } from '../documents/DocumentPreviewModal';
@@ -39,18 +38,16 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [previewDocument, setPreviewDocument] = useState<PatientDocument | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const { enabled: simulated } = useSimulationMode();
 
   useEffect(() => {
     if (isOpen && patient) {
       fetchDocuments();
     }
-    // fetchDocuments closes over `patient` + `simulated` (already in deps)
-    // and `setDocuments`/`setLoading`/`setActionError` (stable). Disable
-    // the rule because adding the function reference would re-run on
-    // every render.
+    // fetchDocuments closes over `patient` (already in deps) and
+    // `setDocuments`/`setLoading`/`setActionError` (stable). Disable the
+    // rule because adding the function reference would re-run on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, patient, simulated]);
+  }, [isOpen, patient]);
 
   const fetchDocuments = async () => {
     if (!patient) return;
@@ -60,7 +57,7 @@ export const PatientDocumentManagement: React.FC<PatientDocumentManagementProps>
       // PII intentionally not logged — UID + role only per CLAUDE.md.
       logger.log('[PatientDocumentManagement] Fetching documents', { patientId: patient.id });
 
-      const response = await documentOperations.getPatientDocuments(patient.id, simulated);
+      const response = await documentOperations.getPatientDocuments(patient.id);
 
       logger.log('[PatientDocumentManagement] API response', {
         success: response.success,

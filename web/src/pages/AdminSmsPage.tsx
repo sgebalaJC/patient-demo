@@ -78,11 +78,11 @@ export const AdminSmsPage: React.FC = () => {
     }
     let cancelled = false;
     const phones = rows.map((r) => (r.from || '').trim()).filter(Boolean);
-    findUsersByPhones(phones, simulated)
+    findUsersByPhones(phones)
       .then((m) => { if (!cancelled) setMatchedByPhone(m); })
       .catch((err) => { logger.error('SMS user-match failed', err); });
     return () => { cancelled = true; };
-  }, [tab, rows, simulated]);
+  }, [tab, rows]);
 
   async function handleInject() {
     setInjecting(true);

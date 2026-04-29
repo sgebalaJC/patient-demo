@@ -6,7 +6,6 @@ import { Input } from '../components/ui/Input';
 import { userOperations, UserSortField, SortDirection } from '../lib/firestore';
 import { User } from '../types';
 import { useAuth } from '../hooks/useAuth';
-import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
 import { audit } from '../lib/audit';
 import {
@@ -49,7 +48,6 @@ import logger from '../lib/logger';
 import { alert as modalAlert } from '../lib/modals';
 export const UserManagementPage: React.FC = () => {
   const { userProfile } = useAuth();
-  const { enabled: simulated } = useSimulationMode();
   const isAdminUser = isAdminRole(userProfile?.role);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -96,7 +94,7 @@ export const UserManagementPage: React.FC = () => {
     if (!isAdminUser || !searchQuery) { setSearchResults([]); return; }
     let cancelled = false;
     setSearchLoading(true);
-    userOperations.getAllUsers(500, 1, searchQuery, sortBy, sortDir, null, 'first', simulated).then((res) => {
+    userOperations.getAllUsers(500, 1, searchQuery, sortBy, sortDir, null, 'first').then((res) => {
       if (cancelled) return;
       if (res.success && res.data) setSearchResults(res.data.users);
       else setSearchResults([]);
@@ -106,7 +104,7 @@ export const UserManagementPage: React.FC = () => {
       if (!cancelled) setSearchLoading(false);
     });
     return () => { cancelled = true; };
-  }, [isAdminUser, searchQuery, sortBy, sortDir, simulated]);
+  }, [isAdminUser, searchQuery, sortBy, sortDir]);
 
   const users = searchQuery ? searchResults : paged.rows;
   const loading = searchQuery ? searchLoading : paged.loading;
@@ -119,7 +117,7 @@ export const UserManagementPage: React.FC = () => {
       // trigger via state — force by clearing+restoring
       setSearchResults([]);
       setSearchLoading(true);
-      userOperations.getAllUsers(500, 1, searchQuery, sortBy, sortDir, null, 'first', simulated).then((res) => {
+      userOperations.getAllUsers(500, 1, searchQuery, sortBy, sortDir, null, 'first').then((res) => {
         if (res.success && res.data) setSearchResults(res.data.users);
       }).finally(() => setSearchLoading(false));
     } else {
@@ -159,9 +157,6 @@ export const UserManagementPage: React.FC = () => {
       sessionStorage.setItem('impersonation', JSON.stringify({
         realEmail: userProfile?.email,
         targetName: `${targetUser.firstName} ${targetUser.lastName}`,
-        // Flag sim-seeded targets so AuthContext loads their profile from
-        // simulation/native/users/<uid> — they don't exist in real users/.
-        simulated,
       }));
       // Audit BEFORE the auth swap: actor identity is still the operator's
       // here. After signInWithCustomToken the actor becomes the impersonated

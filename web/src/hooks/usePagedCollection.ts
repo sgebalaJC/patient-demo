@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useSimulationMode } from './useSimulationMode';
-import { INCLUDE_SIM_MODE } from '../lib/sim-flag';
+import { simPath } from '../lib/sim-mode';
 
 export type WhereClause = [field: string, op: WhereFilterOp, value: unknown];
 
@@ -89,13 +89,12 @@ export function usePagedCollection<T>(
   const { enabled: simulated } = useSimulationMode();
 
   const path = useMemo(() => {
-    // Build-time tree-shake: when INCLUDE_SIM_MODE is false, Vite drops the
-    // entire branch — sim path strings and `simulation/native/${real}`
-    // template never ship in the bundle.
-    if (INCLUDE_SIM_MODE && simulated) {
-      return sim || `simulation/native/${real}`;
-    }
-    return real;
+    if (!simulated) return real;
+    // Caller-provided `sim` wins for collections that don't follow the default
+    // `simulation/native/*` convention (faxes, sms — those live under
+    // `simulation/faxes/*` etc.). Otherwise the singleton's `simPath()` is
+    // the canonical mapper.
+    return sim || simPath(real);
   }, [simulated, real, sim]);
 
   // Serialize whereClauses so the fetch effect re-runs when they change.

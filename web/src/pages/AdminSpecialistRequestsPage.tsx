@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
-import { useSimulationMode } from '../hooks/useSimulationMode';
 import { isAdminRole } from '../lib/roles';
 import {
   specialistRequestOperations,
@@ -39,7 +38,6 @@ import {
 
 export const AdminSpecialistRequestsPage: React.FC = () => {
   const { user, userProfile } = useAuth();
-  const { enabled: simulated } = useSimulationMode();
   const isAdminUser = !!user && isAdminRole(userProfile?.role);
   const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('pending');
   const [patientNames, setPatientNames] = useState<Record<string, { firstName: string; lastName: string }>>({});
@@ -86,12 +84,12 @@ export const AdminSpecialistRequestsPage: React.FC = () => {
       (id) => !(id in patientNames),
     );
     if (ids.length === 0) return;
-    prescriptionRefillOperations.getPatientNamesByIds(ids, simulated).then((res) => {
+    prescriptionRefillOperations.getPatientNamesByIds(ids).then((res) => {
       if (res.success && res.data) {
         setPatientNames((prev) => ({ ...prev, ...res.data }));
       }
     }).catch((err) => logger.error('patient-name lookup failed', err));
-  }, [paged.rows, patientNames, simulated]);
+  }, [paged.rows, patientNames]);
 
   const requestsPage: RequestWithPatient[] = paged.rows.map((r) => {
     const n = patientNames[r.patientId];

@@ -1,18 +1,18 @@
 import { useAppSettings } from '../contexts/AppSettingsContext';
-import { INCLUDE_SIM_MODE } from '../lib/sim-flag';
+import { isSimMode } from '../lib/sim-mode';
 
 /**
- * Simulation mode is a single global switch (`system/settings.simulationMode`).
- * When on, every UI read routes to the `simulation/*` sandbox and the sidecar
- * + Cloud Functions mirror writes there too. There is no per-session override.
+ * React-reactive view of the sim-mode singleton.
  *
- * INCLUDE_SIM_MODE is the build-time flag — installer-emitted forks ship with
- * it false, so this hook hard-returns `false` and Vite tree-shakes every
- * `if (enabled) { ... }` branch in the bundle.
+ * The actual flag lives in `lib/sim-mode.ts` — that module is the single
+ * source of truth for every read path (collections.*, simPath(), etc.).
+ * This hook subscribes to AppSettings so React re-renders when the Firestore
+ * `system/settings.simulationMode` flag flips, then returns the current
+ * singleton value (which has the build-time INCLUDE_SIM_MODE gate folded in).
  */
 export function useSimulationMode() {
-  const { settings } = useAppSettings();
-  if (!INCLUDE_SIM_MODE) return { enabled: false };
-  const enabled = !!settings.simulationMode;
-  return { enabled };
+  // Subscribe so React re-renders on flag changes; the value itself is read
+  // from the singleton to keep one canonical answer for everyone.
+  useAppSettings();
+  return { enabled: isSimMode() };
 }

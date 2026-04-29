@@ -72,6 +72,28 @@ FORK_ORIGINS=$(node -e '
   process.stdout.write(origins.join(","));
 ' 2>/dev/null || echo "")
 
+# Per-fork runtime env. Bun's --compile reads `process.env.X` at runtime, so
+# this is wired through the systemd EnvironmentFile (/root/sidecar.env), not
+# baked into the binary. We load it locally here for build-time visibility +
+# deploy-side upsert into /root/sidecar.env below.
+#
+# Mirrors functions/.env.<project-id> and web/apphosting.yaml — each fork's
+# build env is independently provisioned. Demo sets `INCLUDE_SIM_MODE=true`
+# in `sidecar/.env.<project-id>`; installer-emitted forks omit the file and
+# `isSimulationOn()` short-circuits to false on first call.
+PROJECT_ID=$(node -e '
+  try {
+    const c = require("fs").readFileSync("../.firebaserc", "utf8");
+    const m = JSON.parse(c).projects?.default;
+    if (m) process.stdout.write(m);
+  } catch {}
+' 2>/dev/null || echo "")
+SIDECAR_ENV_FILE="$SCRIPT_DIR/.env.${PROJECT_ID}"
+if [[ -n "$PROJECT_ID" && -f "$SIDECAR_ENV_FILE" ]]; then
+  echo "    loading $SIDECAR_ENV_FILE"
+  set -a; source "$SIDECAR_ENV_FILE"; set +a
+fi
+
 if [[ -n "$FORK_ORIGINS" ]]; then
   echo "    fork origins: $FORK_ORIGINS"
   bun build src/index.ts \
@@ -92,6 +114,20 @@ run_remote "command -v pdftoppm >/dev/null && command -v convert >/dev/null && c
 
 echo "==> Uploading binary..."
 copy_to_remote "$SCRIPT_DIR/patient-sidecar" "/tmp/patient-sidecar.new"
+
+# Upsert per-fork env keys into /root/sidecar.env so the systemd unit
+# (EnvironmentFile=/root/sidecar.env) picks them up on next restart. Today
+# this is just INCLUDE_SIM_MODE; if more keys land in sidecar/.env.<project>
+# extend the list here.
+SIM_VAL="${INCLUDE_SIM_MODE:-false}"
+echo "==> Syncing INCLUDE_SIM_MODE=${SIM_VAL} into /root/sidecar.env..."
+run_remote "sudo bash -c '
+  if grep -q \"^INCLUDE_SIM_MODE=\" /root/sidecar.env 2>/dev/null; then
+    sed -i \"s/^INCLUDE_SIM_MODE=.*/INCLUDE_SIM_MODE=${SIM_VAL}/\" /root/sidecar.env
+  else
+    echo \"INCLUDE_SIM_MODE=${SIM_VAL}\" >> /root/sidecar.env
+  fi
+'"
 
 # Ensure SIDECAR_API_KEY is in the OpenClaw gateway environment so the CLI inherits it
 echo "==> Provisioning CLI environment..."

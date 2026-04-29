@@ -430,6 +430,22 @@ service cloud.firestore {
       allow read: if isAdmin()
         || (request.auth != null && resource.data.patientId == request.auth.uid)
         || (request.auth != null && resource.data.userId == request.auth.uid);
+      // Impersonated sim patients run the real patient code paths, so they
+      // need to write threads / messages / appointments / refills / etc. to
+      // the same `simulation/native/*` mirror they read from. Granted to
+      // doc-owners (matches the real collections' owner semantic — see
+      // `match /message-threads`, `/appointments`, `/prescription-refills`,
+      // etc. above) and to admins. Field-level constraints from the real
+      // rules aren't replicated: this is a sandbox, the impersonation flow
+      // is super-admin-driven, and operators get there via the admin UI.
+      allow create: if isAdmin()
+        || (request.auth != null && request.resource.data.patientId == request.auth.uid)
+        || (request.auth != null && request.resource.data.userId == request.auth.uid)
+        || (request.auth != null && request.resource.data.senderId == request.auth.uid);
+      allow update, delete: if isAdmin()
+        || (request.auth != null && resource.data.patientId == request.auth.uid)
+        || (request.auth != null && resource.data.userId == request.auth.uid)
+        || (request.auth != null && resource.data.senderId == request.auth.uid);
     }
 
     // ───────────────────────── Subscriptions & billing ─────────────────────────

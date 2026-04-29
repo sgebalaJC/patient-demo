@@ -23,6 +23,7 @@ import { readConfig, patchConfig } from "./routes/config.js";
 import { handleCreate, handleList, handleRestore, handleDelete, handleDownload } from "./routes/backup.js";
 import { handleListSkills, handleReadSkill, handleSkillSync } from "./routes/skills.js";
 import { handleAdminApi } from "./routes/admin-api.js";
+import { handleMcp } from "./routes/mcp.js";
 import { handleSnapshot } from "./routes/snapshot.js";
 import {
   handleCronList, handleCronAdd, handleCronDelete, handleCronRun, handleCronRuns,
@@ -241,6 +242,16 @@ const ROUTES: Route[] = [
   {
     match: { prefix: "/admin-api" }, scope: "admin",
     handler: ({ request, url, path, method }) => handleAdminApi(method, path, url, request),
+  },
+
+  // ── MCP server (admin) ─────────────────────────────────────────────
+  // JSON-RPC over HTTP, exposes a curated subset of admin-api operations
+  // as typed tools for the openclaw agent. Same Bearer-auth scope as
+  // /admin-api; the agent passes its `SIDECAR_API_KEY` in the
+  // Authorization header so this transport reuses the existing gate.
+  {
+    match: "/mcp", method: ["POST"], scope: "admin",
+    handler: ({ request }) => handleMcp(request),
   },
 ];
 

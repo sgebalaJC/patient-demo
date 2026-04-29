@@ -117,6 +117,61 @@ Slack's Web API rejects browser preflight requests that carry an `Authorization`
 
 Typing `@bot_name` in Slack only becomes a real mention if you **select it from the autocomplete dropdown**. Plain text `@bot_name` does NOT trigger `app_mention` events. If the bot isn't responding to channel mentions, check the log for `gateway/channels/slack` entries — no events = plain-text mention.
 
+## MCP transport (preferred for new skills)
+
+The sidecar exposes admin-api operations to the agent via a Model Context Protocol server at `POST /mcp`. This is the same JSON-RPC 2.0 over HTTP that Claude Code / Codex CLI / openclaw all speak natively. The CLI scripts (`admin-api`, `patient-data`, `showmd`) are still supported for legacy skills, but new skill work should target MCP.
+
+**Why MCP is the right transport here.** The CLI required per-host wiring — PATH, env propagation, and (in the demo's case) `docker cp`-into-container glue because openclaw runs in a container while the sidecar runs on the host. MCP collapses all of that into one HTTP call to localhost (or `172.17.0.1` from inside Docker). It also gives typed schemas — the agent can't send malformed args because the call is rejected before it leaves the client — and avoids the bash spawn overhead per call.
+
+**Endpoint:** `POST /mcp`, gated by the same Bearer auth (`SIDECAR_API_KEY`) as everything under `admin` scope. Implementation: `sidecar/src/routes/mcp.ts`.
+
+**Tool surface:** ~17 curated typed tools (patients_*, appointments_*, refills_*, messages_*, documents_*, intake_*, specialist_*) plus one `admin_api_raw` escape hatch. Curated tools enforce per-arg schema validation (IDs match `^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`, enums are checked, length-capped strings). The escape hatch is fenced: path must start with `/admin-api/`, no `..` segments, GET/POST/PATCH only (no DELETE), `authorize: true` is rejected — destructive ops MUST go through a curated tool so call shape and operator-confirmation language are explicit.
+
+**Security posture:**
+1. Bearer auth gate at the dispatcher (same SIDECAR_API_KEY).
+2. Content-Type pin (must be `application/json`) — refuses confused-deputy POSTs from browser contexts.
+3. Per-arg type/length/enum/regex validation; never inlines user input into a path.
+4. Escape-hatch fences listed above.
+5. One-line stderr audit log per tool call: `[mcp] tool=<name> method=<m> authorize=<bool> status=<code>`. Visible in `journalctl` on the host. Bodies are not logged (PHI risk).
+
+**Openclaw config (for reference, not yet wired in this repo):**
+
+```jsonc
+// /home/openclaw/.openclaw/openclaw.json — bind-mounted into the container
+"mcpServers": {
+  "patient-sidecar": {
+    "transport": "http",
+    "url": "http://172.17.0.1:8081/mcp",      // bare-host: http://localhost:8081/mcp
+    "headers": { "Authorization": "Bearer <SIDECAR_API_KEY>" }
+  }
+}
+```
+
+The bearer can be inlined at deploy time by reading `/root/sidecar.env` and patching `openclaw.json` via `jq`. Dropping CLI install steps + `docker cp` blocks from `sidecar/deploy.sh` is the eventual goal once all skills migrate.
+
+**Skill migration shape.** Old skill markdown:
+```
+admin-api PATCH /refills/abc123 '{"status":"approved","doctorNotes":"OK"}'
+```
+becomes:
+```
+patient_sidecar.refills_update({refillId: "abc123", status: "approved", doctorNotes: "OK"})
+```
+Lower per-call token cost, no shell-quoting hell, structured errors instead of stderr text.
+
+### Porting MCP to the showmd fork
+
+The sister fork lives at `~/Projects/BLASKO/patient-showmd`. It runs openclaw bare-host (no Docker) on the GCE VM `openclaw` (`us-central1-a`, project `showmd-patient`), which actually makes MCP wiring simpler than the demo. Steps when we're ready:
+
+1. **Copy MCP server.** `cp sidecar/src/routes/mcp.ts ~/Projects/BLASKO/patient-showmd/sidecar/src/routes/mcp.ts`. Same code — the tool list maps to the showmd-sidecar's admin-api routes (which are nearly identical to demo's).
+2. **Mount in showmd's index.ts.** Add the `import` and the `{ match: "/mcp", method: ["POST"], scope: "admin", handler: ({ request }) => handleMcp(request) }` route. Showmd's dispatcher is structurally the same.
+3. **Verify tool surface fits.** Showmd's CLI has `showmd` (admin-api wrapper) and `patient-data` (read-only convenience). The MCP tool set covers both — `patient-data <id> profile` ≡ `patients_get`, `patient-data <id> appointments` ≡ `appointments_list_for_patient`, etc.
+4. **Openclaw config on the showmd VM.** Edit `/root/.openclaw/openclaw.json` directly (showmd writes there, not `/home/openclaw/.openclaw/`), add the `mcpServers` block with `url: http://localhost:8081/mcp` (bare-host, not the docker bridge address). Bearer comes from `/root/sidecar.env`. Restart openclaw-gateway via the existing `pkill -TERM -f openclaw-gateway && setsid /usr/bin/openclaw gateway` pattern in showmd's `sidecar/deploy.sh:117`.
+5. **Migrate skills.** showmd skills under `openclaw/workspace/skills/` — search-and-replace `showmd <METHOD> <path>` and `patient-data <id> <resource>` with the matching MCP tool calls.
+6. **Drop CLI installs.** Once skills are migrated and verified, remove the `showmd` CLI install block (`patient-showmd/sidecar/deploy.sh:73-80`) and the `patient-data` script. Both stay in git history for rollback.
+
+Net code touched per fork: ~1 new file (`mcp.ts`, copied), ~5 lines in `index.ts`, ~15 lines in deploy.sh, plus skill markdown edits.
+
 ## Sidecar
 
 Bun binary on the host (`sidecar/`). HTTP API for chat proxy, file ops, config read/PATCH, backups, process lifecycle.

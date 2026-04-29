@@ -3,7 +3,8 @@
 # admin-api — Generic CLI for the Admin Agent API
 #
 # Thin wrapper around curl for the sidecar admin API.
-# Installed at /usr/local/bin/admin-api on the agent host.
+# Installed at /usr/local/bin/admin-api on both the agent host and inside
+# the openclaw-gateway container (the agent runs in the container).
 #
 # Usage:
 #   admin-api <METHOD> <path> [json-body]
@@ -19,12 +20,59 @@
 #   admin-api --authorize PATCH /appointments/abc123 '{"status":"cancelled"}'
 #   admin-api --authorize PATCH /patients/abc123 '{"isActive":false}'
 #
-# Environment:
-#   SIDECAR_API_KEY  — required, the sidecar Bearer token
-#   SIDECAR_URL      — optional, defaults to http://localhost:8081
+# Environment (in priority order):
+#   1. Process env: SIDECAR_API_KEY, SIDECAR_URL
+#   2. Sidecar env file: /home/node/.openclaw/sidecar.env (in-container,
+#      bind-mounted from /home/openclaw/.openclaw/sidecar.env on host) or
+#      /root/sidecar.env on bare-host installs.
+#
+# SIDECAR_URL defaults to the docker-bridge gateway address
+# (http://172.17.0.1:8081) when running inside the container, or
+# http://localhost:8081 on the host. The agent shouldn't have to know which
+# context it's in — it just runs `admin-api`.
 #
 
 set -euo pipefail
+
+# Source credentials from the sidecar env file when not already in the
+# process env. The container has bind-mounted /home/node/.openclaw, so the
+# host's /home/openclaw/.openclaw/sidecar.env is visible at the same path
+# inside; bare-host installs put it at /root/sidecar.env.
+if [ -z "${SIDECAR_API_KEY:-}" ] || [ -z "${SIDECAR_URL:-}" ]; then
+  for env_file in \
+    "/home/node/.openclaw/sidecar.env" \
+    "/home/openclaw/.openclaw/sidecar.env" \
+    "/root/sidecar.env"
+  do
+    if [ -r "$env_file" ]; then
+      # Read only known keys; ignore everything else so unrelated content
+      # in sidecar.env (URLs, feature flags, etc.) can't shadow caller intent.
+      while IFS='=' read -r key val; do
+        case "$key" in
+          SIDECAR_API_KEY)
+            [ -z "${SIDECAR_API_KEY:-}" ] && export SIDECAR_API_KEY="${val%\"}"
+            SIDECAR_API_KEY="${SIDECAR_API_KEY#\"}"
+            ;;
+          SIDECAR_URL)
+            [ -z "${SIDECAR_URL:-}" ] && export SIDECAR_URL="${val%\"}"
+            SIDECAR_URL="${SIDECAR_URL#\"}"
+            ;;
+        esac
+      done < "$env_file"
+      break
+    fi
+  done
+fi
+
+# Default URL: container reaches the host sidecar via docker0; bare-host
+# uses localhost. Probe /.dockerenv to pick the right default.
+if [ -z "${SIDECAR_URL:-}" ]; then
+  if [ -f /.dockerenv ]; then
+    SIDECAR_URL="http://172.17.0.1:8081"
+  else
+    SIDECAR_URL="http://localhost:8081"
+  fi
+fi
 
 # Parse --authorize flag
 AUTHORIZED="false"
@@ -48,10 +96,10 @@ if [ -z "$METHOD" ] || [ -z "$ENDPOINT" ]; then
   exit 1
 fi
 
-API="${SIDECAR_URL:-http://localhost:8081}/admin-api"
+API="${SIDECAR_URL}/admin-api"
 
 if [ -z "${SIDECAR_API_KEY:-}" ]; then
-  echo "Error: SIDECAR_API_KEY environment variable is not set" >&2
+  echo "Error: SIDECAR_API_KEY not set in env and no sidecar.env file found" >&2
   exit 1
 fi
 

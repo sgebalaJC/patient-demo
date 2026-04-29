@@ -111,6 +111,40 @@ if [ -f "$CLI_SCRIPT" ]; then
   echo "==> Deploying admin-api CLI..."
   copy_to_remote "$CLI_SCRIPT" "/tmp/admin-api-cli"
   run_remote "sudo mv /tmp/admin-api-cli /usr/local/bin/admin-api && sudo chmod +x /usr/local/bin/admin-api"
+
+  # Aurelia runs inside the openclaw-gateway docker container, which has
+  # its own /usr/local/bin and its own env — copying the CLI to the host
+  # alone is invisible to her. Two pieces here:
+  #   1. `docker cp` admin-api into the running container so PATH resolves
+  #      it. Survives until the container is recreated; on next openclaw
+  #      restart the container is rebuilt and we re-cp via this same step
+  #      on the next sidecar deploy.
+  #   2. Drop a sidecar.env file into the bind-mounted state dir
+  #      (/home/openclaw/.openclaw on host → /home/node/.openclaw in
+  #      container) so the script can source SIDECAR_API_KEY/SIDECAR_URL
+  #      regardless of container env. The script auto-defaults SIDECAR_URL
+  #      to the docker-bridge gateway when running in-container.
+  echo "==> Wiring admin-api into the openclaw-gateway container..."
+  run_remote "sudo bash -c '
+    set -e
+    if docker ps --format \"{{.Names}}\" | grep -q \"^openclaw-gateway\$\"; then
+      docker cp /usr/local/bin/admin-api openclaw-gateway:/usr/local/bin/admin-api
+      docker exec openclaw-gateway chmod +x /usr/local/bin/admin-api
+      KEY=\$(grep \"^SIDECAR_API_KEY=\" /root/sidecar.env 2>/dev/null | cut -d= -f2-)
+      if [ -n \"\$KEY\" ] && [ -d /home/openclaw/.openclaw ]; then
+        cat > /home/openclaw/.openclaw/sidecar.env <<EOF
+SIDECAR_API_KEY=\$KEY
+SIDECAR_URL=http://172.17.0.1:8081
+EOF
+        chown openclaw:openclaw /home/openclaw/.openclaw/sidecar.env
+        chmod 600 /home/openclaw/.openclaw/sidecar.env
+        echo \"  sidecar.env written to bind-mounted state dir\"
+      fi
+      echo \"  admin-api installed in container\"
+    else
+      echo \"  openclaw-gateway container not running — skipped\"
+    fi
+  '"
 fi
 
 SKILLS_DIR="$SCRIPT_DIR/../openclaw/workspace/skills"

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { appSettingsOperations, AppSettings, APP_SETTINGS_DEFAULTS } from '../lib/firestore/app-settings';
 import { setSimCollectionMode } from '../lib/firestore/base';
+import { INCLUDE_SIM_MODE } from '../lib/sim-flag';
 
 interface AppSettingsState {
   settings: AppSettings;
@@ -35,7 +36,12 @@ export const AppSettingsProvider: React.FC<AppSettingsProviderProps> = ({ childr
       // settings doc. Patient-facing Firestore ops use `collections.users`
       // etc. directly; without this, they'd always hit real paths even when
       // sim mode is on, so impersonated sim patients saw empty dashboards.
-      setSimCollectionMode(next.simulationMode === true);
+      // Gated by INCLUDE_SIM_MODE so installer-emitted forks (build flag off)
+      // can never route real reads through sim collections if a stale
+      // simulationMode flag is left on in Firestore.
+      if (INCLUDE_SIM_MODE) {
+        setSimCollectionMode(next.simulationMode === true);
+      }
       setLoading(false);
     });
     return unsubscribe;

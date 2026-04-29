@@ -38,6 +38,12 @@ env:
   # App config
   - variable: VITE_APP_ENV
     value: demo
+
+  # Demo fork ships the simulation layer. Real customer forks omit this var
+  # entirely so vite tree-shakes every `if (INCLUDE_SIM_MODE) …` branch.
+  # Read by web/vite.config.ts at build time → __INCLUDE_SIM_MODE__ define.
+  - variable: INCLUDE_SIM_MODE
+    value: "true"
   # ★ PER-FORK: replace with the practice's Stripe publishable key (pk_live_…
   # in production, pk_test_… for staging). This is a public key so `value:`
   # is fine; only the secret key goes through Secret Manager.

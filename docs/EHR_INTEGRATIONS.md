@@ -59,6 +59,10 @@ Factories merge all three at read time: `loadConfig` in `ehr-provider.ts` (sidec
 
 Disconnecting an integration deletes all three stores. The `<provider>Disconnect` callable (super-admin only) removes the public doc, the private subdoc, and the SM secret in one go. Direct `deleteDoc` from the browser is no longer used (would orphan the subdoc + SM secret).
 
+### 401 auto-recovery (proxy)
+
+`makeEhrProvider`'s `proxy` handles 401s where the locally-stored access token still looks fresh (`tokenExpiresAt` in the future) but the upstream rejects it — typical when the token was revoked vendor-side, rotated by a parallel session, or the sidecar's clock skewed past the upstream's. On 401 the proxy calls `getAccessToken(true)` once (force-refresh, bypasses the 5-min expiry buffer) and re-issues the request. A second 401 surfaces the upstream response unchanged — at that point the refresh token itself is dead and the practice needs to re-authorize. This shares the same retry budget as the existing 429 backoff (5 attempts total, single 401 retry inside that).
+
 ## Security posture
 
 - **Callables** — `saveCredentials`, `authorize`, `setEnabled` all enforce `assertSuperAdmin`. Practice admins cannot save or toggle integrations.

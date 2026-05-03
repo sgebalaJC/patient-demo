@@ -102,13 +102,13 @@ export function makeEhrProvider<C extends BaseEhrConfig>(spec: EhrProviderSpec<C
     spec.extraReadyChecks?.(cfg);
   }
 
-  async function getAccessToken(): Promise<string> {
+  async function getAccessToken(force = false): Promise<string> {
     const cfg = await loadConfig();
     if (!cfg.enabled) throw new Error(`${spec.providerName} integration is disabled`);
     if (!cfg.accessToken) throw new Error(`${spec.providerName} not authorized`);
 
     const expiresAtMs = cfg.tokenExpiresAt ? cfg.tokenExpiresAt.toMillis() : 0;
-    if (Date.now() > expiresAtMs - 5 * 60 * 1000) {
+    if (force || Date.now() > expiresAtMs - 5 * 60 * 1000) {
       return refreshAccessToken(cfg);
     }
     return cfg.accessToken;
@@ -192,6 +192,7 @@ export function makeEhrProvider<C extends BaseEhrConfig>(spec: EhrProviderSpec<C
       }
     }
 
+    let unauthorizedRetried = false;
     for (let attempt = 0; attempt < 5; attempt++) {
       const token = await getAccessToken();
       const ctrl = new AbortController();
@@ -215,6 +216,15 @@ export function makeEhrProvider<C extends BaseEhrConfig>(spec: EhrProviderSpec<C
         if (res.status === 429) {
           const retryAfter = Number(res.headers.get("Retry-After")) || 2 ** attempt;
           await new Promise((r) => setTimeout(r, retryAfter * 1000));
+          continue;
+        }
+        // 401 with a locally-fresh token usually means the upstream token was
+        // revoked or rotated by a parallel session — force a refresh once and
+        // retry. If the second attempt still 401s, the refresh token itself is
+        // bad and we surface the upstream response.
+        if (res.status === 401 && !unauthorizedRetried) {
+          unauthorizedRetried = true;
+          await getAccessToken(true);
           continue;
         }
         const resCT = res.headers.get("content-type") || accept;
